@@ -11,7 +11,7 @@
   },
   "guardBlocked": [],
   "bundleApiOrigins": [
-    "https://grace-sitting-vegas-tulsa.trycloudflare.com (redirected to http://localhost:8797)"
+    "https://<demo-tunnel>.trycloudflare.com (redirected to http://localhost:8797)"
   ],
   "logBox": [
     ":host {\n      all: initial;\n      direction: ltr;\n      position: absolute;\n    }\n  .lAubBq_container {\n  bottom: calc(6px + env(safe-area-inset-bottom, 0px));\n"
