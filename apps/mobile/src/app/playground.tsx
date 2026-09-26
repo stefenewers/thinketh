@@ -10,6 +10,7 @@ import { api, DEMO_USER_ID } from "@/api";
 import { playground, PLAYGROUND_AVAILABLE, PlaygroundError } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
+import { StageSteps } from "@/components/StageSteps";
 import { Button, Divider } from "@/components/ui";
 import { useApi, useReducedMotion } from "@/lib/hooks";
 import { fmt2 } from "@/lib/knowledge";
@@ -606,12 +607,6 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
   );
 }
 
-const STAGES = [
-  { key: "reading", label: "Source" },
-  { key: "mapping", label: "Concepts" },
-  { key: "comparing", label: "Your Mind" },
-  { key: "done", label: "Delta" },
-] as const;
 
 /** Figma 1:376: same source, a different delta for each Mind. */
 function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: string; busy: boolean; onEnd: () => void }) {
@@ -642,16 +637,8 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
           <View key={s.userId} style={{ width: colW, paddingRight: space.m }}>
             <T variant="label">{upper(nameOf(room, s.userId))}</T>
             {s.status === "processing" ? (
-              <View style={{ marginTop: space.m, gap: 6 }}>
-                {STAGES.map((st, i) => {
-                  const at = STAGES.findIndex((x) => x.key === (s.stage ?? "reading"));
-                  return (
-                    <T key={st.key} variant="meta" style={{ color: i < at ? color.ink2 : i === at ? color.coral : color.ink3, fontFamily: i === at ? font.sansSemibold : font.sansMedium }}>
-                      {i < at ? "✓ " : i === at ? "→ " : "   "}
-                      {st.label}
-                    </T>
-                  );
-                })}
+              <View style={{ marginTop: space.m }}>
+                <StageSteps stage={s.stage} compact />
               </View>
             ) : s.status === "failed" ? (
               <T variant="support" style={{ marginTop: space.m }}>

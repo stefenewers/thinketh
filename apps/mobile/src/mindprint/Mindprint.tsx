@@ -25,6 +25,7 @@ export type MindRegion = {
  * 2.5D is expressed through each node's depth: scale, opacity, edge weight.
  */
 export function Mindprint({ width, height, regions, underlay, children }: { width: number; height: number; regions: MindRegion[]; underlay?: ReactNode; children?: ReactNode }) {
+  if (width <= 0 || height <= 0) return null;
   // Two passes so anything drawn between the Minds (a transfer trace) sits under every label.
   return (
     <Svg width={width} height={height}>

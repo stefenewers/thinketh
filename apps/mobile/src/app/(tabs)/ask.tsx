@@ -29,7 +29,7 @@ export default function Ask() {
   const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<(AskResponse & { question: string; developmentId?: string }) | null>(null);
+  const [answer, setAnswer] = useState<(AskResponse & { question: string; developmentId?: string; mode?: AskMode }) | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   // Names for related concepts.
@@ -43,7 +43,7 @@ export default function Ask() {
     setFailed(null);
     setAnswer(null);
     try {
-      setAnswer({ ...(await api.ask({ question: text, ...(developmentId ? { developmentId } : {}), mode: asMode })), question: text, developmentId });
+      setAnswer({ ...(await api.ask({ question: text, ...(developmentId ? { developmentId } : {}), mode: asMode })), question: text, developmentId, mode: asMode });
     } catch {
       setFailed(text);
     } finally {
@@ -113,7 +113,9 @@ export default function Ask() {
             <Gutter>
               <T variant="section">{answer.question}</T>
             </Gutter>
-            {answer.sections ? (
+            {answer.sections && answer.mode === "quick" ? (
+              <QuickAnswer sections={answer.sections} />
+            ) : answer.sections ? (
               <>
                 <AnswerBlock label="What the sources say" lines={answer.sections.sourcesSay} rule={color.ink} />
                 <AnswerBlock label="What Thinketh infers" lines={answer.sections.thinkethInfers} rule={color.ink3} />
@@ -225,6 +227,33 @@ export default function Ask() {
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+/** Quick answer: the answer first; the trust layers behind "Why this answer?". */
+function QuickAnswer({ sections }: { sections: NonNullable<AskResponse["sections"]> }) {
+  const [open, setOpen] = useState(false);
+  const short = sections.thinkethInfers.length ? sections.thinkethInfers.join(" ") : (sections.sourcesSay[0] ?? sections.stillUncertain[0] ?? "");
+  return (
+    <>
+      <Gutter style={{ marginTop: space.xl }}>
+        <T variant="body" style={{ fontSize: 18, lineHeight: 28 }}>
+          {short}
+        </T>
+        <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.inlineLink}>
+          <T variant="meta" style={{ color: color.ink }}>
+            {open ? "Hide the reasoning" : "Why this answer?"}
+          </T>
+        </Pressable>
+      </Gutter>
+      {open ? (
+        <>
+          <AnswerBlock label="What the sources say" lines={sections.sourcesSay} rule={color.ink} />
+          <AnswerBlock label="What you already understand" lines={sections.youAlreadyUnderstand} rule={color.edge} />
+          <AnswerBlock label="Still uncertain" lines={sections.stillUncertain} rule={color.edge} muted />
+        </>
+      ) : null}
+    </>
   );
 }
 

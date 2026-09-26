@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { openExternal } from "@/lib/links";
+import { StageSteps } from "@/components/StageSteps";
 import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
 import { color, font, space } from "@/theme/tokens";
 
@@ -70,6 +71,9 @@ function Processing({ resource }: { resource: Resource }) {
       <T variant="title" style={{ marginTop: space.s }} numberOfLines={3}>
         {resource.title}
       </T>
+      <View style={{ marginTop: space.xxl }}>
+        <StageSteps stage={resource.stage} />
+      </View>
       <View style={styles.stage} accessibilityLiveRegion="polite">
         <ActivityIndicator color={color.coral} />
         <T variant="body">{resource.sourceType === "video" && resource.stage === "reading" ? "Reading the transcript…" : STAGE_COPY[resource.stage]}</T>
@@ -214,7 +218,12 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
       ) : null}
 
       <Gutter style={{ marginTop: space.x3 }}>
-        {!lesson ? (
+        {!lesson && r.newToYou.length === 0 ? (
+          // No delta, nothing to teach: say so instead of offering an empty lesson.
+          <T variant="support" style={{ textAlign: "center" }}>
+            {r.relevance?.level === "outside" ? "This sits outside what you're learning, and there's nothing new for you in it." : "You already have what this source offers."}
+          </T>
+        ) : !lesson ? (
           <>
             <Button kind="decisive" label={teaching ? "Finding the actual delta…" : "Teach me the delta"} icon="arrow" loading={teaching} onPress={teach} />
             <T variant="support" style={{ marginTop: space.m, textAlign: "center" }}>
