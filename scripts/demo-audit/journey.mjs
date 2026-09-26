@@ -53,6 +53,8 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 const redirected = new Set();
 const guardBlocked = [];
 const API_ORIGIN = new URL(API_URL).origin;
+// Screenshots mask the public tunnel host (Demo controls prints it): evidence is committed.
+const TUNNEL_TEXT = /trycloudflare\.com/;
 const SHARED_API = (u) => /trycloudflare\.com$/.test(u.hostname) || u.port === "8787" || u.pathname.startsWith("/functions/v1/api");
 const isApi = (url) => { const u = new URL(url); return u.origin === API_ORIGIN || SHARED_API(u); };
 const apiPath = (url) => new URL(url).pathname.replace(/^\/functions\/v1\/api/, "");
@@ -117,7 +119,7 @@ async function step(id, env, title, expected, fn, { needs = [] } = {}) {
   }
   await dismissLogBox();
   const shot = `${String(rec.n).padStart(2, "0")}-${id}.jpg`;
-  await page.screenshot({ path: join(shotsDir, shot), type: "jpeg", quality: 80 }).catch(() => {});
+  await page.screenshot({ path: join(shotsDir, shot), type: "jpeg", quality: 80, mask: [page.getByText(TUNNEL_TEXT)] }).catch(() => {});
   rec.screenshot = `screens/${shot}`;
   rec.ms = Date.now() - t0;
   rec.sponsors = diffCounters(before, await adapterCounters());
@@ -180,7 +182,7 @@ async function scrollShots(prefix, max = 4) {
 }
 async function tap(name, timeout = 15000) { await dismissLogBox(); const b = await visible(byLabel(name), timeout); await b.scrollIntoViewIfNeeded(); await b.click(); }
 async function tapText(re, timeout = 15000) { await dismissLogBox(); const b = await visible(page.getByText(re).first(), timeout); await b.scrollIntoViewIfNeeded(); await b.click(); }
-async function shoot(name) { name = name.replace(/\.png$/, ".jpg"); await page.screenshot({ path: join(shotsDir, name), type: "jpeg", quality: 80 }).catch(() => {}); return `screens/${name}`; }
+async function shoot(name) { name = name.replace(/\.png$/, ".jpg"); await page.screenshot({ path: join(shotsDir, name), type: "jpeg", quality: 80, mask: [page.getByText(TUNNEL_TEXT)] }).catch(() => {}); return `screens/${name}`; }
 function waitResponse(re, timeout = 30000) {
   const p = page.waitForResponse((r) => isApi(r.url()) && re.test(apiPath(r.url())) && r.request().method() !== "OPTIONS", { timeout });
   p.catch(() => {}); // a step that fails before awaiting it must not crash the run
@@ -575,7 +577,7 @@ await step("demo-controls", "browser", "Demo controls (read-only)", "Dev demo sc
 
 // ---------------------------------------------------------------- Write evidence
 await browser.close();
-const summary = { runId, auditUser, web: WEB_URL, api: API_URL, finishedAt: new Date().toISOString(), counts: count(), guardBlocked, bundleApiOrigins: [...redirected].map((o) => `${o} (redirected to ${API_URL})`), logBox: [...new Set(logBox)], steps, allConsole: consoleLog.filter((c) => !/deprecated|shadow\*/i.test(c.text)).map(({ t, ...c }) => ({ at: new Date(t).toISOString(), ...c })), apiErrors: network.filter((x) => x.status === 0 || x.status >= 400) };
+const summary = { runId, auditUser, web: WEB_URL, api: API_URL, finishedAt: new Date().toISOString(), counts: count(), guardBlocked, bundleApiOrigins: [...redirected].map((o) => `${o.replace(/^https:\/\/[^.]+\.trycloudflare\.com/, "https://<demo-tunnel>.trycloudflare.com")} (redirected to ${API_URL})`), logBox: [...new Set(logBox)], steps, allConsole: consoleLog.filter((c) => !/deprecated|shadow\*/i.test(c.text)).map(({ t, ...c }) => ({ at: new Date(t).toISOString(), ...c })), apiErrors: network.filter((x) => x.status === 0 || x.status >= 400) };
 writeFileSync(join(evidenceDir, "journey.json"), JSON.stringify(summary, null, 2));
 console.log(`\n${JSON.stringify(summary.counts)}\nevidence: ${join(evidenceDir, "journey.json")}`);
 
