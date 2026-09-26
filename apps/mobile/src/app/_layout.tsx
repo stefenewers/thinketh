@@ -44,6 +44,9 @@ export default function RootLayout() {
         <Stack.Screen name="make-it-stick/[id]" options={{ presentation: "modal" }} />
         <Stack.Screen name="voice" options={{ presentation: "fullScreenModal" }} />
         <Stack.Screen name="demo" options={{ presentation: "modal" }} />
+        <Stack.Screen name="onboarding" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
+        <Stack.Screen name="profile" options={{ presentation: "modal" }} />
+        <Stack.Screen name="storyline/[id]" />
       </Stack>
     </SafeAreaProvider>
   );

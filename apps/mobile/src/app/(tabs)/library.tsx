@@ -90,6 +90,10 @@ export default function Library() {
           <T variant="body">All concepts</T>
           <T variant="support">Everything in your knowledge state, grouped by strength.</T>
         </Row>
+        <Row onPress={() => router.push("/profile")}>
+          <T variant="body">Learning profile</T>
+          <T variant="support">What you follow, what you&apos;re optimizing for, and how you like to learn.</T>
+        </Row>
       </View>
     </Screen>
   );
