@@ -99,9 +99,29 @@ Measured between two browser sessions on one room: arrival reached the host in a
 
 ## Knowledge transfer lifecycle
 
-`waiting → arrival → (comparing) → overview → peer_teaching → transfer → knowledge_moved → shared_gap → resource → ended`
+`waiting → arrival → overview → peer_teaching → transfer → knowledge_moved → shared_gap → resource → ended`
 
 The coral trace runs from the teacher's concept to the learner's while they teach. When the transfer is verified, it draws once and leaves a ring on the learner's concept. Then it goes quiet.
+
+## The room on screen (one continuous canvas)
+
+One canvas (`MindVenn`) stays mounted from the overview through teaching, transfer, the outcome and the shared gap. What it shows is derived by `apps/mobile/src/lib/roomStory.ts` from the room the server returns, plus the request this device has in flight. No timer ever advances a step.
+
+| Beat | Driven by | On the canvas |
+|---|---|---|
+| Difference found | `delta_ready` (actor **thinketh**) and the plan's next peer move | The same concept is lit in both Minds, with one word each ("verified", "starting out") and a faint dashed route. Numbers and rule are behind the rail. |
+| Muse choosing | this device's `conduct` request in flight | Muse mark pulses; "Muse is choosing the next move from Thinketh's plan…", then after 8 s an honest note that the planner steps in if Muse can't. |
+| Muse's move | `teacher_assigned` with `data.by` = `muse` or `fallback` | Muse anchors above the teacher → learner path, labelled "Muse" or "Planner". |
+| Teaching | scene `peer_teaching` | The coral path travels 42% of the way and breathes. The explanation is a perspective, not proof. |
+| Evidence checkpoint | `transfer_question` (scene `transfer`) | A gate sits at the learner's side of the path; the path stops at 64%. |
+| Grading | this device's `answer` request in flight | The head at the gate breathes; "Thinketh is grading…". |
+| Verified | `transfer_verified` (actor **thinketh**) with the recorded transition | The path completes (the only beat that reaches 100%), the learner's concept changes, and the real before → after is shown. The halo and haptic play once per verified event on this device (keyed by room id + event seq), never on a refetch or remount. |
+| Not yet | `transfer_not_verified` | The path turns grey and stays at the gate. There's no head, halo or haptic, and the next move is offered. |
+| Shared gap | `shared_gap_taught` | Both concepts lit, Muse between the Minds, no path. |
+
+The **What just happened** rail lists the current exchange from the recorded events: Thinketh found a teaching gap → Muse (or Planner) assigned the teacher → the teacher explained → Thinketh asked for transfer → answer verified / not verified → Mind updated / recorded. Tap it for each step's recorded detail (rule and numbers, the move's conductor, the explanation, the challenge and its source, the grader's feedback, the transition and its reason). It never shows invented agent thoughts. "Following Muse" can be stopped at any time; exploring shows the full two-Mind canvas with pan and pinch. There, a teaching route is dashed and only a verified one is solid. In one-device mode the persona's input says plainly that it's a demo persona typed on this phone.
+
+The comparison is Thinketh's: `compare_started` is a Thinketh event, and there's no longer a timed "Muse is comparing" checklist.
 
 ## Resource dual delta
 
