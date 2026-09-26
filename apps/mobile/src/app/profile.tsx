@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { T } from "@/components/Text";
 import { Button, Divider, Gutter, ModalHeader, Row, Screen, SectionLabel } from "@/components/ui";
 import { DEMO_PROFILE, useProfile } from "@/lib/profile";
-import { color, font, space } from "@/theme/tokens";
+import { color, font, layout, space } from "@/theme/tokens";
 
 // What Thinketh knows about you as a learner (set in onboarding). Mastery is not
 // here: that lives in your Mind and only changes on evidence.
@@ -37,11 +37,11 @@ export default function ProfileScreen() {
           </Gutter>
         ))}
 
-        <Gutter style={{ marginTop: space.x3 }}>
+        <Gutter style={{ marginTop: layout.sectionGap }}>
           <Button kind="secondary" label="Edit" onPress={() => router.push("/onboarding")} />
         </Gutter>
 
-        <View style={{ marginTop: space.x3 }}>
+        <View style={{ marginTop: layout.sectionGap }}>
           <Divider />
           <Row
             onPress={() => {

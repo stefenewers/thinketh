@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { color, font, gutter, radius, space } from "@/theme/tokens";
+import { color, font, gutter, layout, radius, space } from "@/theme/tokens";
 import { T } from "./Text";
 import { Icon } from "./Icon";
 
@@ -27,14 +27,14 @@ export function Screen({
   contentStyle?: StyleProp<ViewStyle>;
 }) {
   const insets = useSafeAreaInsets();
-  const pad = { paddingTop: topInset ? insets.top + space.l : space.l };
+  const pad = { paddingTop: topInset ? insets.top + layout.pageTop : layout.pageTop };
   if (!scroll) {
     return <View style={[styles.screen, pad, contentStyle]}>{children}</View>;
   }
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[pad, { paddingBottom: space.x5 }, contentStyle]}
+      contentContainerStyle={[pad, { paddingBottom: space.x4 }, contentStyle]}
       showsVerticalScrollIndicator={false}
     >
       {children}
@@ -78,7 +78,7 @@ export function Button({ label, kind = "primary", icon, loading, style, disabled
         kind === "secondary" && { borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel },
         kind === "quiet" && { paddingHorizontal: 0, minHeight: 44 },
         (disabled || loading) && { opacity: 0.4 },
-        pressed && { opacity: 0.75 },
+        pressed && styles.pressed,
         style,
       ]}
       {...rest}
@@ -112,7 +112,7 @@ export function Row({
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && onPress ? { backgroundColor: color.fog } : null, style]}
+      style={({ pressed }) => [styles.row, pressed && onPress ? { backgroundColor: color.surfaceMuted } : null, style]}
     >
       <View style={{ flex: 1 }}>{children}</View>
       {onPress ? <Icon name="chevron" size={16} color={color.ink3} /> : null}
@@ -122,7 +122,7 @@ export function Row({
 
 export function SectionLabel({ children, tone }: { children: string; tone?: "coral" }) {
   return (
-    <T variant="label" tone={tone === "coral" ? "coral" : undefined} style={{ marginBottom: space.m }}>
+    <T variant="label" tone={tone === "coral" ? "coral" : undefined} style={{ marginBottom: space.s }}>
       {children}
     </T>
   );
@@ -194,13 +194,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingLeft: gutter,
     paddingRight: space.s,
-    minHeight: 56,
+    minHeight: layout.chromeH,
     backgroundColor: color.ground,
   },
   screen:{ flex: 1, backgroundColor: color.ground },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: color.edge },
   button: {
-    minHeight: 48,
+    minHeight: 46,
     paddingHorizontal: space.xl,
     borderRadius: radius.pill,
     flexDirection: "row",
@@ -209,17 +209,19 @@ const styles = StyleSheet.create({
     gap: space.s,
   },
   buttonLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20 },
+  // Tactile, not flashy: a slight press-in on every button.
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.m,
-    minHeight: 56,
-    paddingVertical: space.l,
+    minHeight: layout.rowMin,
+    paddingVertical: space.m,
     paddingHorizontal: gutter,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: color.edge,
   },
-  state: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl, minHeight: 320 },
+  state: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl, minHeight: 280 },
   backBar: {
     flexDirection: "row",
     alignItems: "center",

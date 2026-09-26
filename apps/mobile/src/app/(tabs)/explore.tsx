@@ -5,7 +5,7 @@ import { T } from "@/components/Text";
 import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
 import { buildGroups, type Pick } from "@/lib/explore";
 import { useApi } from "@/lib/hooks";
-import { font, space } from "@/theme/tokens";
+import { font, layout, space } from "@/theme/tokens";
 
 function open(item: Pick) {
   if (item.resourceId) router.push({ pathname: "/resource/[id]", params: { id: item.resourceId } });
@@ -36,7 +36,7 @@ export default function Explore() {
       </Gutter>
 
       {(data ?? []).map((group) => (
-        <View key={group.reason} style={{ marginTop: space.x3 }}>
+        <View key={group.reason} style={{ marginTop: layout.sectionGap }}>
           <Gutter>
             <SectionLabel>{group.reason}</SectionLabel>
           </Gutter>

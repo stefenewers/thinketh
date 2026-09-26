@@ -9,7 +9,7 @@ import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { improvedTodayIds } from "@/lib/knowledge";
 import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, layout, radius, shadow, space } from "@/theme/tokens";
 
 export default function Library() {
   const { data } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
@@ -56,7 +56,7 @@ export default function Library() {
       </Gutter>
 
       {/* Save to learn: resources waiting to become part of what you understand. */}
-      <View style={{ marginTop: space.x3 }}>
+      <View style={{ marginTop: layout.sectionGap }}>
         <Gutter style={styles.sectionHead}>
           <SectionLabel>Learning queue</SectionLabel>
           {resources.length ? (
@@ -103,7 +103,7 @@ export default function Library() {
         )}
       </View>
 
-      <Gutter style={{ marginTop: space.x3 }}>
+      <Gutter style={{ marginTop: layout.sectionGap }}>
         <SectionLabel>Storyline</SectionLabel>
         <Pressable
           onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: agentMemoryStoryline.id } })}
@@ -161,11 +161,12 @@ export default function Library() {
 
 const styles = StyleSheet.create({
   preview: {
-    backgroundColor: color.panel,
+    backgroundColor: color.surfaceRaised,
     borderRadius: radius.surface,
     padding: space.l,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: color.edge,
+    ...shadow.raised,
   },
   previewLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.m, minHeight: 32 },
   sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },

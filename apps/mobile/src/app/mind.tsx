@@ -15,7 +15,7 @@ import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, SectionLabe
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { evidenceLabel, fmt2, improved, improvedTodayIds, levelLabel, misconceptionLabel, observationLabel, relativeTime, shortDate, todaysTransitions } from "@/lib/knowledge";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, gutter, layout, radius, shadow, space } from "@/theme/tokens";
 
 export default function MindScreen() {
   const { concept } = useLocalSearchParams<{ concept?: string }>();
@@ -61,12 +61,12 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
   };
 
   return (
-    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 }} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x4 }} showsVerticalScrollIndicator={false}>
       <Gutter>
         <T variant="display" accessibilityRole="header">
           Your Mind
         </T>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.s }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.xs }}>
           <T variant="support">A living map of what you understand.</T>
           <Pressable onPress={() => router.push("/playground")} accessibilityRole="button" accessibilityLabel="Learn together in the Playground" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
             <T variant="meta" style={{ color: color.ink }}>
@@ -90,14 +90,14 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
         ) : changedToday ? (
           <ChangedCard transition={changedToday} name={concepts.find((c) => c.id === changedToday.conceptId)?.name ?? ""} onPress={() => select(changedToday.conceptId)} />
         ) : (
-          <T variant="meta" style={{ textAlign: "center" }}>
+          <T variant="meta" style={styles.hint}>
             Pinch to explore · tap a concept
           </T>
         )}
       </Gutter>
 
       {panelConcept && panelState ? (
-        <Gutter style={{ marginTop: space.x3 }}>
+        <Gutter style={{ marginTop: layout.sectionGap }}>
           <View onLayout={(e) => setDetailY(e.nativeEvent.layout.y)}>
             <ConceptPanel
               concept={panelConcept}
@@ -109,7 +109,7 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
         </Gutter>
       ) : null}
 
-      <View style={{ marginTop: space.x3 }}>
+      <View style={{ marginTop: layout.sectionGap }}>
         {BANDS.map((band) => {
           const inBand = concepts
             .map((c) => ({ c, s: stateOf.get(c.id) }))
@@ -117,7 +117,7 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
             .sort((a, b) => b.s.mastery - a.s.mastery);
           if (!inBand.length) return null;
           return (
-            <View key={band} style={{ marginBottom: space.xl }}>
+            <View key={band} style={{ marginBottom: space.l }}>
               <Gutter>
                 <SectionLabel>{levelLabel[band]}</SectionLabel>
               </Gutter>
@@ -142,7 +142,7 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
                       <T variant="meta">{evidenceLabel(s.uncertainty)}</T>
                     )}
                   </View>
-                  <View style={{ marginTop: space.s }}>
+                  <View style={{ marginTop: 6 }}>
                     <MasteryBar mastery={s.mastery} uncertainty={s.uncertainty} highlight={updatedIds.has(c.id)} />
                   </View>
                 </Pressable>
@@ -177,7 +177,7 @@ function MindMap({
   onSelect: (id: string | null) => void;
 }) {
   const { width } = useWindowDimensions();
-  const height = Math.min(440, Math.round(width * 1.02));
+  const height = Math.min(380, Math.round(width * 0.88));
   const [lod, setLod] = useState<"overview" | "normal">("normal");
   const nodes = useMemo(() => nodesFromKnowledge(items, changedIds), [items, changedIds]);
   const layout = useMemo(
@@ -191,7 +191,7 @@ function MindMap({
   );
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   return (
-    <View style={{ marginTop: space.l }} accessible accessibilityLabel={`Map of ${nodes.length} concepts. Filled: strong evidence. Hollow: developing.`}>
+    <View style={{ marginTop: space.s }} accessible accessibilityLabel={`Map of ${nodes.length} concepts. Filled: strong evidence. Hollow: developing.`}>
       <MindCanvas
         width={width}
         height={height}
@@ -213,7 +213,7 @@ function ChangedCard({ transition, name, onPress }: { transition: KnowledgeState
       <T variant="meta" tone="coral">
         {name} changed today
       </T>
-      <T variant="section" style={{ marginTop: space.s, fontFamily: font.serifRegular, fontSize: 21, lineHeight: 28 }}>
+      <T variant="section" style={{ marginTop: space.xs, fontFamily: font.serifRegular }}>
         {changeSentence(transition)}
       </T>
       <View style={styles.pill}>
@@ -245,17 +245,17 @@ function SelectedSheet({
       <T variant="meta" tone={transition ? "coral" : undefined} style={{ marginTop: space.xs }}>
         {levelLabel[level]} · {transition ? "evidence strengthened today" : evidenceLabel(state.uncertainty).toLowerCase()}
       </T>
-      <Divider style={{ marginVertical: space.l }} />
+      <Divider style={{ marginVertical: space.m }} />
       <T variant="label">{transition ? "What changed" : "What it is"}</T>
-      <T variant="body" style={{ marginTop: space.s }}>
+      <T variant="body" style={{ marginTop: space.xs }}>
         {transition ? changeSentence(transition) : concept.description}
       </T>
       <Button
         label="Ask Thinketh"
-        style={{ marginTop: space.xl }}
+        style={{ marginTop: space.l, alignSelf: "flex-start" }}
         onPress={() => router.push({ pathname: "/ask", params: { q: `Explain ${concept.name} based on what I already know.` } })}
       />
-      <Pressable onPress={onMore} accessibilityRole="button" hitSlop={8} style={{ marginTop: space.m, alignSelf: "center", minHeight: 44, justifyContent: "center" }}>
+      <Pressable onPress={onMore} accessibilityRole="button" hitSlop={8} style={{ marginTop: space.xs, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }}>
         <T variant="meta">History · sources · related concepts</T>
       </Pressable>
     </View>
@@ -288,13 +288,13 @@ function ConceptPanel({
       <T variant="label" tone={justImproved ? "coral" : undefined}>
         {justImproved ? "Just improved" : concept.domain}
       </T>
-      <T variant="title" style={{ marginTop: space.s }}>
+      <T variant="title" style={{ marginTop: space.xs }}>
         {concept.name}
       </T>
       <T variant="support" style={{ marginTop: space.xs }}>
         {levelLabel[level]} · {evidenceLabel(state.uncertainty).toLowerCase()}
       </T>
-      <View style={{ marginTop: space.l }}>
+      <View style={{ marginTop: space.m }}>
         <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />
       </View>
       <View style={styles.stats}>
@@ -307,7 +307,7 @@ function ConceptPanel({
           {numbersOpen ? `Mastery ${fmt2(state.mastery)} · uncertainty ${fmt2(state.uncertainty)} · confidence ${fmt2(state.confidence)}` : "See the numbers"}
         </T>
       </Pressable>
-      <T variant="body" style={{ marginTop: space.l, color: color.ink2 }}>
+      <T variant="body" style={{ marginTop: space.m, color: color.ink2 }}>
         {concept.description}
       </T>
       {state.misconceptionFlags.length ? (
@@ -323,7 +323,7 @@ function ConceptPanel({
         </View>
       ) : null}
 
-      <T variant="label" style={{ marginTop: space.xl, marginBottom: space.m }}>
+      <T variant="label" style={{ marginTop: space.l, marginBottom: space.s }}>
         How it changed
       </T>
       {loading && !history ? (
@@ -383,7 +383,7 @@ function History({ transitions }: { transitions: KnowledgeStateTransition[] }) {
           </Svg>
         ) : null}
       </View>
-      <View style={{ marginTop: space.m }}>
+      <View style={{ marginTop: space.s }}>
         {latest.slice(0, 4).map((t) => (
           <View key={t.id} style={styles.historyRow}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", gap: space.m }}>
@@ -407,7 +407,7 @@ function History({ transitions }: { transitions: KnowledgeStateTransition[] }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ minWidth: "22%" }}>
-      <T variant="meta" style={{ fontSize: 12 }}>
+      <T variant="meta" style={{ color: color.ink3 }}>
         {label}
       </T>
       <T variant="body" style={{ fontFamily: font.sansSemibold, fontVariant: ["tabular-nums"], marginTop: 2 }}>
@@ -419,27 +419,30 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: color.panel,
-    borderRadius: radius.feature,
-    padding: space.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.edge,
-  },
-  pill: { alignSelf: "flex-start", marginTop: space.l, backgroundColor: color.ink, borderRadius: radius.pill, paddingHorizontal: space.l, paddingVertical: space.s + 2 },
-  panel: {
-    backgroundColor: color.panel,
+    backgroundColor: color.surfaceRaised,
     borderRadius: radius.surface,
-    padding: space.xl,
+    padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: color.edge,
+    ...shadow.raised,
   },
-  stats: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.m, marginTop: space.l },
-  flag: { marginTop: space.l, padding: space.m, backgroundColor: color.fog, borderRadius: radius.control },
-  historyRow: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
-  askLink: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.m },
+  hint: { textAlign: "center", color: color.ink3, marginTop: -space.xs },
+  pill: { alignSelf: "flex-start", marginTop: space.m, backgroundColor: color.ink, borderRadius: radius.pill, paddingHorizontal: space.l, paddingVertical: space.s + 2 },
+  panel: {
+    backgroundColor: color.surfaceRaised,
+    borderRadius: radius.surface,
+    padding: layout.cardPad,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.edge,
+    ...shadow.raised,
+  },
+  stats: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.s, marginTop: space.m },
+  flag: { marginTop: space.m, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.control },
+  historyRow: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.lineSoft },
+  askLink: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.xs },
   conceptRow: {
-    paddingHorizontal: space.xl,
-    paddingVertical: space.l,
+    paddingHorizontal: gutter,
+    paddingVertical: space.m,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: color.edge,
   },

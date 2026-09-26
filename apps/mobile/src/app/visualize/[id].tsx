@@ -30,7 +30,7 @@ export default function VisualizeScreen() {
             <View style={{ marginTop: space.xxl }}>
               <DiagramView spec={spec} />
             </View>
-            <T variant="statement" style={{ marginTop: space.xxl, fontSize: 19, lineHeight: 28 }}>
+            <T variant="statement" style={{ marginTop: space.xl, fontSize: 19, lineHeight: 27 }}>
               {spec.caption}
             </T>
             {/* Seeing the new model is not the same as having it: close the loop. */}

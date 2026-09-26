@@ -9,7 +9,7 @@ import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen
 import { openExternal } from "@/lib/links";
 import { StageSteps } from "@/components/StageSteps";
 import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
-import { color, font, space } from "@/theme/tokens";
+import { color, font, layout, space } from "@/theme/tokens";
 
 const POLL_MS = 1200;
 
@@ -66,7 +66,7 @@ export default function ResourceScreen() {
 
 function Processing({ resource }: { resource: Resource }) {
   return (
-    <Gutter style={{ paddingTop: space.x4 }}>
+    <Gutter style={{ paddingTop: space.xl }}>
       <T variant="meta">{hostOf(resource.url)}</T>
       <T variant="title" style={{ marginTop: space.s }} numberOfLines={3}>
         {resource.title}
@@ -87,7 +87,7 @@ function Processing({ resource }: { resource: Resource }) {
 
 function Failed({ resource }: { resource: Resource }) {
   return (
-    <Gutter style={{ paddingTop: space.x4 }}>
+    <Gutter style={{ paddingTop: space.xl }}>
       <T variant="meta">{hostOf(resource.url)}</T>
       <T variant="title" style={{ marginTop: space.s }}>
         Thinketh couldn&apos;t reliably read this source yet.
@@ -129,7 +129,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
     <Screen topInset={false} contentStyle={{ paddingTop: space.s }}>
       <Gutter>
         <SectionLabel>{SOURCE_TYPE_LABEL[r.sourceType]}</SectionLabel>
-        <T variant="title" style={{ fontSize: 28, lineHeight: 35 }} accessibilityRole="header">
+        <T variant="title" style={{ fontSize: 26, lineHeight: 32 }} accessibilityRole="header">
           {r.title}
         </T>
         <T variant="meta" style={{ marginTop: space.s }}>
@@ -176,7 +176,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
         ) : null}
       </Gutter>
 
-      <Gutter style={{ marginTop: space.x3 }}>
+      <Gutter style={{ marginTop: layout.sectionGap }}>
         {r.alreadyUnderstood.length ? (
           <IdeaList label="You already understand" ideas={r.alreadyUnderstood} name={name} />
         ) : null}
@@ -190,18 +190,18 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
       </Gutter>
 
       {r.whyNow ? (
-        <Gutter style={{ marginTop: space.x3 }}>
+        <Gutter style={{ marginTop: layout.sectionGap }}>
           <T variant="label" style={{ marginBottom: space.m }}>
             Why this matters
           </T>
-          <T variant="statement" style={{ fontSize: 22, lineHeight: 31 }}>
+          <T variant="statement">
             {r.whyNow}
           </T>
         </Gutter>
       ) : null}
 
       {r.relevantConnections.length ? (
-        <View style={{ marginTop: space.x3 }}>
+        <View style={{ marginTop: layout.sectionGap }}>
           <Gutter>
             <SectionLabel>Connects to your Mind</SectionLabel>
           </Gutter>
@@ -217,7 +217,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
         </View>
       ) : null}
 
-      <Gutter style={{ marginTop: space.x3 }}>
+      <Gutter style={{ marginTop: layout.sectionGap }}>
         {!lesson && r.newToYou.length === 0 ? (
           // No delta, nothing to teach: say so instead of offering an empty lesson.
           <T variant="support" style={{ textAlign: "center" }}>
@@ -302,10 +302,10 @@ function Lesson({ lesson }: { lesson: TeachDeltaResponse }) {
 }
 
 const styles = StyleSheet.create({
-  stage: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.xxl },
+  stage: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.xl },
   original: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "flex-start" },
-  times: { flexDirection: "row", gap: space.x3, marginTop: space.l },
-  minutes: { fontSize: 30, lineHeight: 36, marginTop: space.xs },
+  times: { flexDirection: "row", gap: space.xxl, marginTop: space.m },
+  minutes: { fontSize: 30, lineHeight: 36, marginTop: space.xs, fontVariant: ["tabular-nums"] },
   rule: { borderLeftWidth: 2, paddingLeft: space.l },
   relevance: { borderLeftWidth: 2, borderLeftColor: color.coral, paddingLeft: space.m, marginTop: space.l },
 });

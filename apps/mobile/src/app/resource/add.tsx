@@ -36,7 +36,7 @@ export default function AddResource() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ModalHeader title="Add a resource" onClose={() => router.back()} />
       <Gutter style={{ paddingTop: space.xl }}>
-        <T variant="display" accessibilityRole="header" style={{ fontSize: 32, lineHeight: 39 }}>
+        <T variant="display" accessibilityRole="header" style={{ fontSize: 30, lineHeight: 36 }}>
           Save to learn.
         </T>
         <T variant="support" style={{ marginTop: space.m }}>
@@ -80,7 +80,7 @@ export default function AddResource() {
 const styles = StyleSheet.create({
   input: {
     marginTop: space.xxl,
-    minHeight: 52,
+    minHeight: 46,
     paddingHorizontal: space.l,
     borderRadius: radius.surface,
     borderWidth: 1,

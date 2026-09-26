@@ -19,7 +19,7 @@ import { DuoMind } from "@/mindprint/DuoMind";
 import { MindCanvas } from "@/mindprint/MindCanvas";
 import { Mindprint } from "@/mindprint/Mindprint";
 import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
-import { color, font, gutter, radius, space } from "@/theme/tokens";
+import { color, font, gutter, layout, radius, shadow, space } from "@/theme/tokens";
 
 /** The device owner's name in the room (the demo persona's human). */
 const HOST_NAME = "Stefen";
@@ -119,7 +119,7 @@ export default function PlaygroundScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={[styles.header, { paddingTop: insets.top + space.s }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
         <View style={styles.headerLeft}>
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
             <Icon name="back" size={18} color={color.ink2} />
@@ -163,7 +163,7 @@ export default function PlaygroundScreen() {
         <Offline />
       ) : (
         <FollowContext.Provider value={followMuse || !following}>
-        <ScrollView contentContainerStyle={{ paddingBottom: space.x5 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: space.x4 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {scene === "waiting" ? (
             <Waiting
               room={room}
@@ -241,7 +241,7 @@ function Duo({ room, focus, trace, muse, changed }: { room: PlaygroundRoom; focu
     />
   );
   return (
-    <View style={{ alignItems: "center", marginTop: space.l }}>
+    <View style={{ alignItems: "center", marginTop: space.m }}>
       {followingMuse ? duo : <MindCanvas width={w} height={256} hits={[]}>{duo}</MindCanvas>}
     </View>
   );
@@ -290,7 +290,7 @@ function Waiting({
   }, [data, w]);
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.xl }}>
+      <T variant="display" style={{ marginTop: space.m }}>
         Learn together.
       </T>
       <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
@@ -307,7 +307,7 @@ function Waiting({
               Invite a collaborator
             </T>
           </Pressable>
-          <T variant="meta" style={{ marginTop: space.x3, color: color.ink3 }}>
+          <T variant="meta" style={{ marginTop: space.xl, color: color.ink3 }}>
             Nothing is shared until you invite someone.
           </T>
           {joining ? (
@@ -336,7 +336,7 @@ function Waiting({
       ) : (
         <View style={styles.inviteCard}>
           <T variant="label">Room code</T>
-          <T style={{ fontFamily: font.serif, fontSize: 34, letterSpacing: 6, marginTop: space.s, color: color.ink }} selectable>
+          <T style={{ fontFamily: font.serif, fontSize: 30, letterSpacing: 6, marginTop: space.xs, color: color.ink }} selectable>
             {room.code}
           </T>
           <T variant="support" style={{ marginTop: space.s }}>
@@ -399,7 +399,7 @@ function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
             </View>
           ))}
         </View>
-        <T variant="meta" style={{ marginTop: space.x4, color: color.ink2 }}>
+        <T variant="meta" style={{ marginTop: space.xl, color: color.ink2 }}>
           Muse directs the room. Thinketh evaluates evidence.
         </T>
       </View>
@@ -420,13 +420,13 @@ function Overview({ room, busy, onStart }: { room: PlaygroundRoom; me: string; b
   const words = ["No", "One", "Two", "Three"][items.length] ?? String(items.length);
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.xl }}>
+      <T variant="display" style={{ marginTop: space.m }}>
         {items.length ? "You can teach each other." : "You're closely matched."}
       </T>
       <T variant="support" style={{ marginTop: space.s, color: color.ink3 }}>
         {words} useful difference{items.length === 1 ? "" : "s"} in your current evidence.
       </T>
-      <View style={{ marginTop: space.x3 }}>
+      <View style={{ marginTop: space.xl }}>
         {items.map((x, i) => (
           <DeltaRow key={x.item.conceptId + x.item.kind} tag={x.tag} coral={x.coral} item={x.item} names={{ [d.aId]: aName, [d.bId]: bName }} last={i === items.length - 1} />
         ))}
@@ -453,7 +453,7 @@ function DeltaRow({ tag, coral, item, names, last }: { tag: string; coral: boole
       <T variant="label" tone={coral ? "coral" : undefined}>
         {tag}
       </T>
-      <T variant="section" style={{ marginTop: space.m, fontSize: 23, lineHeight: 29 }}>
+      <T variant="section" style={{ marginTop: space.s, fontSize: 21, lineHeight: 27 }}>
         {sentence(item.conceptName)}
       </T>
       <T variant="support" style={{ marginTop: space.xs }}>
@@ -495,10 +495,10 @@ function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me:
       </View>
       <Duo room={room} focus={t.conceptId} trace={{ conceptId: t.conceptId, from, mode: "teaching" }} />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 18 }}>
+        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23 }}>
           {room.museLine ?? `${teacher}, teach this in your own words.`}
         </T>
-        <T variant="body" style={{ marginTop: space.m, color: color.ink2, fontSize: 17, lineHeight: 26 }}>
+        <T variant="body" style={{ marginTop: space.s, color: color.ink2, fontSize: 16, lineHeight: 24 }}>
           {t.prompt}
         </T>
         {canSpeak ? (
@@ -611,7 +611,7 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
-        <T variant="display" style={{ marginTop: space.xl }}>
+        <T variant="display" style={{ marginTop: space.m }}>
           {verified ? "Knowledge moved." : "Not yet."}
         </T>
         <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
@@ -628,7 +628,7 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
         <T variant="label" tone={verified ? "coral" : undefined}>
           {upper(t?.conceptName ?? "")}
         </T>
-        <T variant="section" style={{ marginTop: space.m, fontSize: 25, lineHeight: 31 }}>
+        <T variant="section" style={{ marginTop: space.s, fontSize: 23, lineHeight: 29 }}>
           {verified ? "New connection verified" : "Recorded, not verified"}
         </T>
         <T variant="support" style={{ marginTop: space.m, fontSize: 16, lineHeight: 24 }}>
@@ -678,7 +678,7 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
       </View>
       <Duo room={room} focus={g.conceptId} muse />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 18 }}>
+        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23 }}>
           Neither Mind has strong evidence here.
         </T>
         <T variant="support" style={{ marginTop: space.m, fontSize: 16 }}>
@@ -687,7 +687,7 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
         {typeof source === "string" ? (
           <View style={styles.resourceSmall}>
             <T variant="label">Resource</T>
-            <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.s, fontSize: 17 }}>
+            <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.s, fontSize: 16 }}>
               {source}
             </T>
           </View>
@@ -726,7 +726,7 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
   return (
     <View style={{ paddingHorizontal: gutter }}>
       <View style={styles.sourceCard}>
-        <T variant="title" style={{ fontSize: 25, lineHeight: 31 }}>
+        <T variant="title" style={{ fontSize: 23, lineHeight: 29 }}>
           {res.title}
         </T>
         <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
@@ -751,7 +751,7 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
               </T>
             ) : (
               <>
-                <T style={{ fontFamily: font.serif, fontSize: 34, lineHeight: 42, color: color.coral, marginTop: space.m }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
+                <T style={{ fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.coral, marginTop: space.s, fontVariant: ["tabular-nums"] }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
                 <T variant="support">useful for {s.userId === me ? "you" : nameOf(room, s.userId)}</T>
                 <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.m }}>
                   {s.newIdeas} new idea{s.newIdeas === 1 ? "" : "s"}
@@ -766,13 +766,13 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
           </View>
         ))}
       </View>
-      <T variant="title" style={{ marginTop: space.x3, fontSize: 25 }}>
+      <T variant="title" style={{ marginTop: space.xl, fontSize: 23, lineHeight: 29 }}>
         {!ready || differs ? "Same source. Different delta." : "Same source. A similar delta."}
       </T>
       {res.note ? (
         <View style={{ marginTop: space.xl }}>
           <T variant="label">Muse</T>
-          <T style={{ fontFamily: font.serif, fontSize: 19, lineHeight: 27, color: color.ink, marginTop: space.s }}>{res.note}</T>
+          <T style={{ fontFamily: font.serif, fontSize: 18, lineHeight: 25, color: color.ink, marginTop: space.xs }}>{res.note}</T>
         </View>
       ) : (
         <T variant="support" style={{ marginTop: space.m }}>
@@ -789,7 +789,7 @@ function Ended({ room, me }: { room: PlaygroundRoom; me: string }) {
   const verified = room.transfer?.verified;
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.xl }}>
+      <T variant="display" style={{ marginTop: space.m }}>
         Session complete.
       </T>
       <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
@@ -818,7 +818,7 @@ function PresenceLine({ room, me, present }: { room: PlaygroundRoom; me: string;
 /** Honest provenance: who conducted, how the room syncs. */
 function Provenance({ room, live }: { room: PlaygroundRoom; live: boolean }) {
   return (
-    <T variant="meta" style={{ marginHorizontal: gutter, marginTop: space.x3, color: color.ink3, fontSize: 11 }}>
+    <T variant="meta" style={{ marginHorizontal: gutter, marginTop: space.xl, color: color.ink3, fontSize: 11 }}>
       Conductor: {room.conductor.mode === "muse" ? room.conductor.detail : "deterministic fallback"} · Sync: {live ? "Supabase Realtime + polling" : "polling"} · Room {room.code}
     </T>
   );
@@ -827,7 +827,7 @@ function Provenance({ room, live }: { room: PlaygroundRoom; live: boolean }) {
 function Offline() {
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.xl }}>
+      <T variant="display" style={{ marginTop: space.m }}>
         Learn together.
       </T>
       <T variant="support" style={{ marginTop: space.m }}>
@@ -838,23 +838,23 @@ function Offline() {
 }
 
 const styles = StyleSheet.create({
-  conceptTitle: { marginTop: space.m, fontSize: 31, lineHeight: 38 },
+  conceptTitle: { marginTop: space.s, fontSize: 28, lineHeight: 34 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
-  soloName: { fontFamily: font.serif, fontSize: 22, lineHeight: 28, color: color.ink, textAlign: "center", marginTop: space.x3 },
+  soloName: { fontFamily: font.serif, fontSize: 22, lineHeight: 28, color: color.ink, textAlign: "center", marginTop: space.xl },
   joinBox: { marginTop: space.l, alignSelf: "stretch", alignItems: "center" },
   codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.serif, fontSize: 28, letterSpacing: 6, color: color.ink, borderBottomWidth: 1, borderBottomColor: color.edge, paddingVertical: space.s },
   plus: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel, alignItems: "center", justifyContent: "center" },
-  inviteCard: { marginTop: space.xl, padding: space.xl, backgroundColor: color.panel, borderRadius: radius.feature, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge },
-  pill: { alignSelf: "flex-start", marginTop: space.xl, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 52 },
-  privateMind: { width: "100%", height: 200, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, borderStyle: "dashed", alignItems: "center", justifyContent: "center", padding: space.m },
+  inviteCard: { marginTop: space.l, padding: layout.cardPad, backgroundColor: color.surfaceRaised, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
+  pill: { alignSelf: "flex-start", marginTop: space.l, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 46 },
+  privateMind: { width: "100%", height: 168, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, borderStyle: "dashed", alignItems: "center", justifyContent: "center", padding: space.m },
   check: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: color.edge, alignItems: "center", justifyContent: "center" },
-  why: { marginTop: space.m, padding: space.m, backgroundColor: color.fog, borderRadius: radius.control, gap: 2 },
-  speak: { flexDirection: "row", alignItems: "center", marginTop: space.xl, minHeight: 72, paddingLeft: space.l, paddingRight: space.m, borderRadius: radius.feature, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel },
-  speakInput: { flex: 1, fontFamily: font.sans, fontSize: 16, lineHeight: 22, color: color.ink, paddingVertical: space.m, maxHeight: 140 },
-  speakBtn: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: color.coral, backgroundColor: color.coralTint, alignItems: "center", justifyContent: "center", marginLeft: space.s },
+  why: { marginTop: space.s, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.control, gap: 2 },
+  speak: { flexDirection: "row", alignItems: "center", marginTop: space.l, minHeight: 60, paddingLeft: space.l, paddingRight: space.s, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
+  speakInput: { flex: 1, fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: color.ink, paddingVertical: space.m, maxHeight: 140 },
+  speakBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: color.coral, backgroundColor: color.coralTint, alignItems: "center", justifyContent: "center", marginLeft: space.s },
   quote: { marginTop: space.l, paddingLeft: space.m, borderLeftWidth: 2, borderLeftColor: color.coralTint },
-  answer: { marginTop: space.xl, minHeight: 110, padding: space.l, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel, fontFamily: font.sans, fontSize: 16, lineHeight: 23, color: color.ink, textAlignVertical: "top" },
-  resourceSmall: { marginTop: space.xl, padding: space.l, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel },
-  sourceCard: { marginTop: space.l, padding: space.xl, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel },
+  answer: { marginTop: space.l, minHeight: 96, padding: space.m, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink, textAlignVertical: "top" },
+  resourceSmall: { marginTop: space.l, padding: space.m, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
+  sourceCard: { marginTop: space.m, padding: layout.cardPad, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
 });

@@ -13,25 +13,42 @@ export const color = {
   coral: "#C0553A",
   coralTint: "#F5EAE7",
   onInk: "#FFFFFF",
+  // Semantic surfaces. Raised = cards and sheets; muted = explanation panels
+  // inside a surface; lineSoft = separators inside raised surfaces.
+  surfaceRaised: "#FFFFFF",
+  surfaceMuted: "#F3F0EB",
+  lineSoft: "#EDE9E3",
+  overlay: "rgba(26,25,24,0.22)",
 } as const;
 
-// 4-point scale from the design spec.
+// 4-point scale from the design spec; the upper steps are compact for mobile
+// (was 24/32/40/48/64), so section rhythm lands at 20-28 and hero pauses at 32-40.
 export const space = {
   xs: 4,
   s: 8,
   m: 12,
   l: 16,
-  xl: 24,
-  xxl: 32,
-  x3: 40,
-  x4: 48,
-  x5: 64,
+  xl: 20,
+  xxl: 28,
+  x3: 32,
+  x4: 40,
+  x5: 48,
+} as const;
+
+// Layout aliases for the compact system.
+export const layout = {
+  pageX: 20,
+  pageTop: space.m,
+  sectionGap: 24,
+  cardPad: 18,
+  rowMin: 48,
+  chromeH: 48,
 } as const;
 
 export const radius = {
   control: 8,
   surface: 14,
-  feature: 24,
+  feature: 20,
   pill: 999,
 } as const;
 
@@ -52,4 +69,10 @@ export const motion = {
   transition: 1400,
 } as const;
 
-export const gutter = space.xl;
+// Layered surfaces: a hairline border plus this, never a heavy border.
+export const shadow = {
+  raised: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  sheet: { shadowColor: color.ink, shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 12 },
+} as const;
+
+export const gutter = layout.pageX;

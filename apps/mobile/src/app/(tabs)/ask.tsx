@@ -8,7 +8,7 @@ import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Divider, Gutter, LoadingState, Row, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, layout, radius, space } from "@/theme/tokens";
 
 const SUGGESTED = [
   "What changed in agent memory this week?",
@@ -73,7 +73,7 @@ export default function Ask() {
     >
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ paddingTop: insets.top + space.l, paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingTop: insets.top + layout.pageTop, paddingBottom: space.xxl }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -109,7 +109,7 @@ export default function Ask() {
         {asking ? (
           <LoadingState message={MODES.find((m) => m.key === mode)!.loading} />
         ) : answer ? (
-          <View style={{ marginTop: space.xxl }}>
+          <View style={{ marginTop: space.xl }}>
             <Gutter>
               <T variant="section">{answer.question}</T>
             </Gutter>
@@ -123,13 +123,13 @@ export default function Ask() {
                 <AnswerBlock label="Still uncertain" lines={answer.sections.stillUncertain} rule={color.edge} muted />
               </>
             ) : (
-              <Gutter style={{ marginTop: space.xl }}>
+              <Gutter style={{ marginTop: space.m }}>
                 <T variant="body">{answer.answer}</T>
               </Gutter>
             )}
 
             {answer.memoryUsed.length ? (
-              <Gutter style={{ marginTop: space.xxl }}>
+              <Gutter style={{ marginTop: space.xl }}>
                 <View style={styles.memory}>
                   <T variant="label" style={{ marginBottom: space.s }}>
                     What Thinketh remembered about you
@@ -144,7 +144,7 @@ export default function Ask() {
             ) : null}
 
             {answer.citations.length ? (
-              <View style={{ marginTop: space.x3 }}>
+              <View style={{ marginTop: layout.sectionGap }}>
                 <Gutter>
                   <SectionLabel>Sources</SectionLabel>
                 </Gutter>
@@ -158,7 +158,7 @@ export default function Ask() {
             ) : null}
 
             {answer.relatedConceptIds.length ? (
-              <View style={{ marginTop: space.x3 }}>
+              <View style={{ marginTop: layout.sectionGap }}>
                 <Gutter>
                   <SectionLabel>In your Mind</SectionLabel>
                 </Gutter>
@@ -171,7 +171,7 @@ export default function Ask() {
               </View>
             ) : null}
 
-            <Gutter style={{ marginTop: space.xl }}>
+            <Gutter style={{ marginTop: space.m }}>
               <Pressable onPress={() => setAnswer(null)} accessibilityRole="button" style={styles.inlineLink}>
                 <T variant="meta" style={{ color: color.ink }}>
                   Ask something else
@@ -236,51 +236,56 @@ function QuickAnswer({ sections }: { sections: NonNullable<AskResponse["sections
   const short = sections.thinkethInfers.length ? sections.thinkethInfers.join(" ") : (sections.sourcesSay[0] ?? sections.stillUncertain[0] ?? "");
   return (
     <>
-      <Gutter style={{ marginTop: space.xl }}>
-        <T variant="body" style={{ fontSize: 18, lineHeight: 28 }}>
+      <Gutter style={{ marginTop: space.m }}>
+        <T variant="body" style={{ fontSize: 17, lineHeight: 26 }}>
           {short}
         </T>
-        <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.inlineLink}>
+        <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={[styles.inlineLink, styles.disclosure]}>
           <T variant="meta" style={{ color: color.ink }}>
             {open ? "Hide the reasoning" : "Why this answer?"}
           </T>
+          <View style={{ transform: [{ rotate: open ? "-90deg" : "90deg" }] }}>
+            <Icon name="chevron" size={12} color={color.ink2} />
+          </View>
         </Pressable>
+        {open ? (
+          <View style={styles.reasoning}>
+            <AnswerBlock inPanel label="What the sources say" lines={sections.sourcesSay} rule={color.ink} />
+            <AnswerBlock inPanel label="What you already understand" lines={sections.youAlreadyUnderstand} rule={color.edge} />
+            <AnswerBlock inPanel label="Still uncertain" lines={sections.stillUncertain} rule={color.edge} muted />
+          </View>
+        ) : null}
       </Gutter>
-      {open ? (
-        <>
-          <AnswerBlock label="What the sources say" lines={sections.sourcesSay} rule={color.ink} />
-          <AnswerBlock label="What you already understand" lines={sections.youAlreadyUnderstand} rule={color.edge} />
-          <AnswerBlock label="Still uncertain" lines={sections.stillUncertain} rule={color.edge} muted />
-        </>
-      ) : null}
     </>
   );
 }
 
-function AnswerBlock({ label, lines, rule, muted }: { label: string; lines: string[]; rule: string; muted?: boolean }) {
+function AnswerBlock({ label, lines, rule, muted, inPanel }: { label: string; lines: string[]; rule: string; muted?: boolean; inPanel?: boolean }) {
   if (!lines.length) return null;
-  return (
-    <Gutter style={{ marginTop: space.xl }}>
-      <View style={{ borderLeftWidth: 2, borderLeftColor: rule, paddingLeft: space.l }}>
-        <T variant="label" style={{ marginBottom: space.s }}>
-          {label}
+  const block = (
+    <View style={{ borderLeftWidth: 2, borderLeftColor: rule, paddingLeft: space.m }}>
+      <T variant="label" style={{ marginBottom: space.xs }}>
+        {label}
+      </T>
+      {lines.map((l) => (
+        <T key={l} variant={inPanel ? "support" : "body"} style={[{ marginBottom: space.xs }, inPanel && { color: color.ink }, muted && { color: color.ink2 }]}>
+          {l}
         </T>
-        {lines.map((l) => (
-          <T key={l} variant="body" style={[{ marginBottom: space.s }, muted && { color: color.ink2 }]}>
-            {l}
-          </T>
-        ))}
-      </View>
-    </Gutter>
+      ))}
+    </View>
   );
+  // Inside the "Why this answer?" panel the blocks stack tightly; on their own they get section rhythm.
+  return inPanel ? block : <Gutter style={{ marginTop: space.l }}>{block}</Gutter>;
 }
 
 const styles = StyleSheet.create({
   modes: { flexDirection: "row", gap: space.l, marginTop: space.l },
   mode: { minHeight: 32, justifyContent: "center", borderBottomWidth: 1.5, borderBottomColor: "transparent" },
   modeOn: { borderBottomColor: color.ink },
-  memory: { padding: space.l, backgroundColor: color.fog, borderRadius: radius.surface },
+  memory: { padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.surface },
   inlineLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
+  disclosure: { flexDirection: "row", alignItems: "center", gap: 6 },
+  reasoning: { padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.surface, gap: space.m },
   composer: {
     flexDirection: "row",
     alignItems: "center",
@@ -300,7 +305,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.panel,
     paddingHorizontal: space.l,
     fontFamily: font.sans,
-    fontSize: 16,
+    fontSize: 15,
     color: color.ink,
   },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },

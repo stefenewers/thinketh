@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { color, radius, space } from "@/theme/tokens";
+import { color, layout, radius, shadow, space } from "@/theme/tokens";
 import { Icon } from "./Icon";
 import { T } from "./Text";
 
@@ -21,7 +21,7 @@ export function Sheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + space.xl }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + space.l }]}>
           <View style={styles.grabber} />
           <View style={styles.header}>
             <T variant="section" style={{ flex: 1 }}>
@@ -39,19 +39,16 @@ export function Sheet({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(26,25,24,0.28)" },
+  root: { flex: 1, justifyContent: "flex-end", backgroundColor: color.overlay },
   sheet: {
     maxHeight: "82%",
     backgroundColor: color.ground,
     borderTopLeftRadius: radius.feature,
     borderTopRightRadius: radius.feature,
-    paddingHorizontal: space.xl,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 12,
+    paddingHorizontal: layout.pageX,
+    ...shadow.sheet,
   },
-  grabber: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: color.edge, marginTop: space.s },
-  header: { flexDirection: "row", alignItems: "center", paddingTop: space.l, paddingBottom: space.l },
+  grabber: { alignSelf: "center", width: 36, height: 5, borderRadius: 3, backgroundColor: color.edge, marginTop: space.s },
+  header: { flexDirection: "row", alignItems: "center", paddingTop: space.s, paddingBottom: space.s },
   close: { width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" },
 });

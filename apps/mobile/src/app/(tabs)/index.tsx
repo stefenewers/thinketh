@@ -23,7 +23,7 @@ import {
   todaysTransitions,
   understoodDevelopmentIds,
 } from "@/lib/knowledge";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, layout, radius, shadow, space } from "@/theme/tokens";
 
 const SKIP_DEFINITIONS: Record<string, string> = {
   duplicate: "Several sources covering the same event. You see the strongest version once.",
@@ -103,7 +103,7 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
   if (!hero) {
     return (
       <Screen>
-        <Gutter style={{ paddingTop: space.x4 }}>
+        <Gutter style={{ paddingTop: space.xl }}>
           <T variant="display">Nothing changed enough to interrupt you.</T>
           <T variant="support" style={{ marginTop: space.l }}>
             Thinketh reviewed {brief.skippedCount ?? 0} items. Your knowledge is current.
@@ -227,7 +227,7 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
         </Gutter>
       ) : null}
 
-      <Gutter style={{ marginTop: space.x3 }}>
+      <Gutter style={{ marginTop: layout.sectionGap }}>
         <SectionLabel>Lead development</SectionLabel>
         <Pressable
           onPress={() => router.push({ pathname: "/development/[id]", params: { id: hero.id } })}
@@ -259,7 +259,7 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
         </Pressable>
       </Gutter>
 
-      <View style={{ marginTop: space.x3 }}>
+      <View style={{ marginTop: layout.sectionGap }}>
         <Gutter>
           <SectionLabel>Also worth knowing</SectionLabel>
         </Gutter>
@@ -336,7 +336,7 @@ function UnderstoodTag() {
 }
 
 const styles = StyleSheet.create({
-  stats: { flexDirection: "row", gap: space.x3, marginTop: space.xl },
+  stats: { flexDirection: "row", gap: space.xxl, marginTop: space.l },
   statValue: { fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.ink, fontVariant: ["tabular-nums"] },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   mindButton: {
@@ -359,12 +359,13 @@ const styles = StyleSheet.create({
   },
   inlineLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.m },
   hero: {
-    backgroundColor: color.panel,
+    backgroundColor: color.surfaceRaised,
     borderRadius: radius.surface,
-    padding: space.xl,
+    padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: color.edge,
+    ...shadow.raised,
   },
   heroMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  skipRow: { paddingVertical: space.l, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
+  skipRow: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
 });
