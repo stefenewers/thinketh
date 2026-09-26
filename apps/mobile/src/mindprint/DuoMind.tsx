@@ -101,7 +101,7 @@ export function DuoMind({
 function NameOver({ x, name }: { x: number; name: string }) {
   return (
     <View style={[styles.name, { left: x - 70 }]}>
-      <T style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, letterSpacing: -0.3, color: color.ink, textAlign: "center" }} numberOfLines={1}>
+      <T style={{ fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink, textAlign: "center" }} numberOfLines={1}>
         {name}
       </T>
     </View>
@@ -156,7 +156,7 @@ function Trace({
   return (
     <G>
       <AnimatedCircle r={mode === "teaching" ? 8 : 5} fill={color.coral} animatedProps={dotProps} />
-      {mode === "moved" ? <AnimatedCircle cx={b.x} cy={b.y} fill={color.coralTint} stroke={color.coral} strokeWidth={2} animatedProps={ringProps} /> : null}
+      {mode === "moved" ? <AnimatedCircle cx={b.x} cy={b.y} fill={color.canvas} fillOpacity={0} stroke={color.coral} strokeWidth={1.5} animatedProps={ringProps} /> : null}
     </G>
   );
 }

@@ -88,7 +88,7 @@ function Diagnostic({
     <Screen topInset={false}>
       <Gutter>
         <T variant="label">{concept?.name ?? "Your understanding"}</T>
-        <T variant="section" style={{ marginTop: space.m, fontSize: 22, lineHeight: 31 }} accessibilityRole="header">
+        <T variant="section" style={{ marginTop: space.m, fontSize: 20, lineHeight: 28 }} accessibilityRole="header">
           {question.prompt}
         </T>
 
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.surface,
     borderWidth: 1,
     borderColor: color.edge,
-    backgroundColor: color.panel,
+    backgroundColor: color.canvas,
   },
   choiceSelected: { borderColor: color.ink, borderWidth: 1.5 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: color.ink3, alignItems: "center", justifyContent: "center" },
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.surface,
     borderWidth: 1,
     borderColor: color.edge,
-    backgroundColor: color.panel,
+    backgroundColor: color.canvas,
     padding: space.l,
     fontFamily: font.sans,
     fontSize: 16,

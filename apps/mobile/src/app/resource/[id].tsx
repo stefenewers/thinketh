@@ -1,17 +1,29 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Resource, ResourceIdea, TeachDeltaResponse } from "@thinketh/contracts";
 import { api } from "@/api";
-import { Icon } from "@/components/Icon";
+import { BriefRow, BriefSection, DotLine, TextureHeader } from "@/components/brief/Brief";
 import { T } from "@/components/Text";
-import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
+import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
+import { AppTopBar, ListCard, SegmentedTabs } from "@/components/system";
+import { imageFor } from "@/content/imagery";
 import { openExternal } from "@/lib/links";
 import { StageSteps } from "@/components/StageSteps";
 import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
-import { color, font, layout, space } from "@/theme/tokens";
+import { color, font, space } from "@/theme/tokens";
 
 const POLL_MS = 1200;
+
+type Tab = "summary" | "new" | "delta" | "sources";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "summary", label: "Summary" },
+  { key: "new", label: "What's new" },
+  { key: "delta", label: "Your delta" },
+  { key: "sources", label: "Sources" },
+];
+
+const goBack = () => (router.canGoBack() ? router.back() : router.replace("/library"));
 
 export default function ResourceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,9 +58,10 @@ export default function ResourceScreen() {
     };
   }, [id, attempt]);
 
+  const briefing = !!resource && (resource.status === "ready" || resource.status === "learned");
   return (
-    <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <BackBar onBack={() => (router.canGoBack() ? router.back() : router.replace("/library"))} />
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      {!briefing ? <AppTopBar onBack={goBack} /> : null}
       {failed && !resource ? (
         <ErrorState onRetry={() => setAttempt((n) => n + 1)} />
       ) : !resource ? (
@@ -66,17 +79,19 @@ export default function ResourceScreen() {
 
 function Processing({ resource }: { resource: Resource }) {
   return (
-    <Gutter style={{ paddingTop: space.xl }}>
-      <T variant="meta">{hostOf(resource.url)}</T>
-      <T variant="title" style={{ marginTop: space.s }} numberOfLines={3}>
+    <Gutter style={{ paddingTop: space.l }}>
+      <T style={styles.typeLabel}>{hostOf(resource.url)}</T>
+      <T style={styles.title} numberOfLines={3} accessibilityRole="header">
         {resource.title}
       </T>
-      <View style={{ marginTop: space.xxl }}>
+      <View style={styles.processCard}>
         <StageSteps stage={resource.stage} />
-      </View>
-      <View style={styles.stage} accessibilityLiveRegion="polite">
-        <ActivityIndicator color={color.coral} />
-        <T variant="body">{resource.sourceType === "video" && resource.stage === "reading" ? "Reading the transcript…" : STAGE_COPY[resource.stage]}</T>
+        <View style={styles.stage} accessibilityLiveRegion="polite">
+          <ActivityIndicator color={color.ink3} />
+          <T variant="body" style={{ flex: 1 }}>
+            {resource.sourceType === "video" && resource.stage === "reading" ? "Reading the transcript…" : STAGE_COPY[resource.stage]}
+          </T>
+        </View>
       </View>
       <T variant="support" style={{ marginTop: space.m }}>
         Thinketh is working out which parts you already understand and which are genuinely new.
@@ -87,9 +102,9 @@ function Processing({ resource }: { resource: Resource }) {
 
 function Failed({ resource }: { resource: Resource }) {
   return (
-    <Gutter style={{ paddingTop: space.xl }}>
-      <T variant="meta">{hostOf(resource.url)}</T>
-      <T variant="title" style={{ marginTop: space.s }}>
+    <Gutter style={{ paddingTop: space.l }}>
+      <T style={styles.typeLabel}>{hostOf(resource.url)}</T>
+      <T style={styles.title} accessibilityRole="header">
         Thinketh couldn&apos;t reliably read this source yet.
       </T>
       {resource.error && resource.error !== "Thinketh couldn't reliably read this source yet." ? (
@@ -99,7 +114,7 @@ function Failed({ resource }: { resource: Resource }) {
       ) : null}
       <View style={{ marginTop: space.xxl, gap: space.m }}>
         <Button label="Try another link" onPress={() => router.replace("/resource/add")} />
-        <Button kind="quiet" label="Open the original" style={{ alignSelf: "center" }} onPress={() => openExternal(resource.url)} />
+        <Button kind="secondary" label="Open the original" onPress={() => openExternal(resource.url)} />
       </View>
     </Gutter>
   );
@@ -107,16 +122,20 @@ function Failed({ resource }: { resource: Resource }) {
 
 function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concept[] }) {
   const name = (id?: string) => concepts.find((c) => c.id === id)?.name;
+  const [tab, setTab] = useState<Tab>("summary");
   const [lesson, setLesson] = useState<TeachDeltaResponse | null>(null);
   const [teaching, setTeaching] = useState(false);
   const [teachError, setTeachError] = useState(false);
   const date = sourceDate(r.publishedAt);
+  const publisher = r.publisher ?? hostOf(r.url);
+  const openOriginal = () => openExternal(r.canonicalUrl ?? r.url);
 
   const teach = async () => {
     setTeaching(true);
     setTeachError(false);
     try {
       setLesson(await api.teachResource(r.id));
+      setTab("delta");
     } catch {
       setTeachError(true);
     } finally {
@@ -124,152 +143,175 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
     }
   };
   const checkConcept = lesson?.conceptId ?? r.newToYou.find((i) => i.conceptId)?.conceptId ?? r.matchedConceptIds[0];
+  const nothingNew = r.newToYou.length === 0;
+
+  // The one primary action: teach the delta (hidden when there is none), then check it.
+  const teachBlock =
+    !lesson && nothingNew ? (
+      // No delta, nothing to teach: say so instead of offering an empty lesson.
+      <T variant="support" style={{ textAlign: "center" }}>
+        {r.relevance?.level === "outside" ? "This sits outside what you're learning, and there's nothing new for you in it." : "You already have what this source offers."}
+      </T>
+    ) : !lesson ? (
+      <>
+        <Button label={teaching ? "Finding the actual delta…" : "Teach me the delta"} icon="arrow" loading={teaching} onPress={teach} />
+        <T variant="support" style={{ marginTop: space.s, textAlign: "center" }}>
+          {teachError ? "Couldn't prepare the lesson just now. Try again." : "Skips what you already know. About as long as the useful part."}
+        </T>
+      </>
+    ) : null;
+
+  const checkButton =
+    lesson && checkConcept ? (
+      <Button label="Check my understanding" icon="arrow" onPress={() => router.push({ pathname: "/diagnostic", params: { conceptId: checkConcept } })} />
+    ) : null;
 
   return (
-    <Screen topInset={false} contentStyle={{ paddingTop: space.s }}>
-      <Gutter>
-        <SectionLabel>{SOURCE_TYPE_LABEL[r.sourceType]}</SectionLabel>
-        <T variant="title" style={{ fontSize: 26, lineHeight: 32 }} accessibilityRole="header">
+    <Screen topInset={false} contentStyle={{ paddingTop: 0 }}>
+      <TextureHeader source={imageFor(r.matchedConceptIds)} onBack={goBack} />
+      <Gutter style={{ marginTop: -space.x4 }}>
+        <T style={styles.typeLabel}>{SOURCE_TYPE_LABEL[r.sourceType]}</T>
+        <T style={styles.title} accessibilityRole="header">
           {r.title}
         </T>
-        <T variant="meta" style={{ marginTop: space.s }}>
-          {[r.publisher ?? hostOf(r.url), r.author, date].filter(Boolean).join(" · ")}
+        <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+          {[publisher, r.author, date, r.estimatedReadMinutes ? `${r.estimatedReadMinutes} min ${consumeVerb(r)}` : undefined].filter(Boolean).join(" · ")}
         </T>
-        <Pressable onPress={() => openExternal(r.canonicalUrl ?? r.url)} accessibilityRole="link" style={styles.original} hitSlop={6}>
-          <T variant="meta" style={{ color: color.ink }}>
-            Open original source
-          </T>
-          <Icon name="external" size={13} color={color.ink} />
-        </Pressable>
+        <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} style={{ marginTop: space.xl, justifyContent: "space-between", gap: 0 }} />
 
-        {r.relevance ? (
-          <View style={[styles.relevance, r.relevance.level === "outside" && { borderLeftColor: color.ink3 }]}>
-            <T variant="label" tone={r.relevance.level === "core" ? "coral" : undefined}>
-              {RELEVANCE_LABEL[r.relevance.level]}
-            </T>
-            <T variant="support" style={{ marginTop: 2 }}>
-              {r.relevance.reason}
-            </T>
-          </View>
-        ) : null}
-
-        <View style={styles.times}>
+        {tab === "summary" ? (
           <View>
-            <T variant="label">Full {consumeVerb(r)}</T>
-            <T variant="display" style={styles.minutes}>
-              ~{r.estimatedReadMinutes ?? "?"} min
-            </T>
+            {r.relevance ? (
+              <View style={styles.relevance}>
+                <View style={[styles.signalDot, r.relevance.level !== "core" && { backgroundColor: color.ink3 }]} />
+                <View style={{ flex: 1 }}>
+                  <T style={styles.smallCaps}>{RELEVANCE_LABEL[r.relevance.level]}</T>
+                  <T variant="support" style={{ marginTop: 2 }}>
+                    {r.relevance.reason}
+                  </T>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.times} accessibilityRole="summary">
+              <View style={{ flex: 1 }}>
+                <T style={styles.timeValue}>~{r.estimatedReadMinutes ?? "?"} min</T>
+                <T style={styles.smallCaps}>Full {consumeVerb(r)}</T>
+              </View>
+              <View style={[styles.timeCell, { flex: 1 }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <T style={styles.timeValue}>~{r.estimatedUsefulMinutes ?? "?"} min</T>
+                  <View style={styles.signalDot} />
+                </View>
+                <T style={styles.smallCaps}>Useful for you</T>
+              </View>
+            </View>
+
+            {r.summary ? (
+              <BriefSection title="Overview">
+                <T variant="body" style={{ color: color.ink2 }}>
+                  {r.summary}
+                </T>
+              </BriefSection>
+            ) : null}
+
+            <View style={{ marginTop: space.xxl, gap: space.s }}>
+              {teachBlock}
+              {lesson ? <Button label="Read your delta" icon="arrow" onPress={() => setTab("delta")} /> : null}
+              <Button kind="secondary" label="Open original source" icon="external" accessibilityRole="link" onPress={openOriginal} />
+            </View>
           </View>
+        ) : null}
+
+        {tab === "new" ? (
           <View>
-            <T variant="label" tone="coral">
-              Useful for you
-            </T>
-            <T variant="display" style={[styles.minutes, { color: color.coral }]}>
-              ~{r.estimatedUsefulMinutes ?? "?"} min
+            <BriefSection title="New to you">
+              {nothingNew ? <T variant="body">Nothing here goes beyond what you already understand.</T> : <IdeaList ideas={r.newToYou} name={name} accent />}
+            </BriefSection>
+            {r.whyNow ? (
+              <BriefSection title="Why this matters">
+                <T variant="statement" style={{ fontSize: 18, lineHeight: 26 }}>
+                  {r.whyNow}
+                </T>
+              </BriefSection>
+            ) : null}
+            {!lesson && !nothingNew ? <View style={{ marginTop: space.xxl }}>{teachBlock}</View> : null}
+          </View>
+        ) : null}
+
+        {tab === "delta" ? (
+          <View>
+            {r.alreadyUnderstood.length ? (
+              <BriefSection title="You already understand">
+                <IdeaList ideas={r.alreadyUnderstood} name={name} />
+              </BriefSection>
+            ) : null}
+            {lesson ? (
+              <BriefSection title="The delta, for you">
+                <Lesson lesson={lesson} />
+              </BriefSection>
+            ) : (
+              <View style={{ marginTop: space.xxl }}>{teachBlock}</View>
+            )}
+            {checkButton ? <View style={{ marginTop: space.xl }}>{checkButton}</View> : null}
+            {r.relevantConnections.length ? (
+              <BriefSection title="Connects to your Mind">
+                <ListCard>
+                  {r.relevantConnections.map((c, i) => (
+                    <BriefRow
+                      key={c.conceptId}
+                      title={name(c.conceptId) ?? c.conceptId}
+                      subtitle={c.why}
+                      last={i === r.relevantConnections.length - 1}
+                      onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
+                    />
+                  ))}
+                </ListCard>
+              </BriefSection>
+            ) : null}
+          </View>
+        ) : null}
+
+        {tab === "sources" ? (
+          <View>
+            <BriefSection title="Original source">
+              <ListCard>
+                <BriefRow
+                  icon="external"
+                  kicker={SOURCE_TYPE_LABEL[r.sourceType]}
+                  title={r.title}
+                  meta={[publisher, r.author, date].filter(Boolean).join(" · ")}
+                  last
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open original source: ${r.title}, opens in browser`}
+                  onPress={openOriginal}
+                />
+              </ListCard>
+            </BriefSection>
+            <T variant="meta" style={{ marginTop: space.xl, color: color.ink3 }}>
+              {r.readVia ? `${READ_VIA_COPY[r.readVia]} ` : ""}
+              {r.analyzedBy === "claude" ? "Compared with your knowledge state by Claude." : "Compared with your knowledge state from the source text."}
             </T>
           </View>
-        </View>
-        {r.summary ? (
-          <T variant="support" style={{ marginTop: space.xl }}>
-            {r.summary}
-          </T>
         ) : null}
-      </Gutter>
 
-      <Gutter style={{ marginTop: layout.sectionGap }}>
-        {r.alreadyUnderstood.length ? (
-          <IdeaList label="You already understand" ideas={r.alreadyUnderstood} name={name} />
-        ) : null}
-        {r.newToYou.length ? (
-          <IdeaList label="New to you" ideas={r.newToYou} name={name} accent style={{ marginTop: space.xl }} />
-        ) : (
-          <T variant="body" style={{ marginTop: space.xl }}>
-            Nothing here goes beyond what you already understand.
-          </T>
-        )}
-      </Gutter>
-
-      {r.whyNow ? (
-        <Gutter style={{ marginTop: layout.sectionGap }}>
-          <T variant="label" style={{ marginBottom: space.m }}>
-            Why this matters
-          </T>
-          <T variant="statement">
-            {r.whyNow}
-          </T>
-        </Gutter>
-      ) : null}
-
-      {r.relevantConnections.length ? (
-        <View style={{ marginTop: layout.sectionGap }}>
-          <Gutter>
-            <SectionLabel>Connects to your Mind</SectionLabel>
-          </Gutter>
-          <Divider />
-          {r.relevantConnections.map((c) => (
-            <Row key={c.conceptId} onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}>
-              <T variant="body" style={{ fontFamily: font.sansMedium }}>
-                {name(c.conceptId) ?? c.conceptId}
-              </T>
-              <T variant="support">{c.why}</T>
-            </Row>
-          ))}
-        </View>
-      ) : null}
-
-      <Gutter style={{ marginTop: layout.sectionGap }}>
-        {!lesson && r.newToYou.length === 0 ? (
-          // No delta, nothing to teach: say so instead of offering an empty lesson.
-          <T variant="support" style={{ textAlign: "center" }}>
-            {r.relevance?.level === "outside" ? "This sits outside what you're learning, and there's nothing new for you in it." : "You already have what this source offers."}
-          </T>
-        ) : !lesson ? (
-          <>
-            <Button kind="decisive" label={teaching ? "Finding the actual delta…" : "Teach me the delta"} icon="arrow" loading={teaching} onPress={teach} />
-            <T variant="support" style={{ marginTop: space.m, textAlign: "center" }}>
-              {teachError ? "Couldn't prepare the lesson just now. Try again." : "Skips what you already know. About as long as the useful part."}
-            </T>
-          </>
-        ) : (
-          <Lesson lesson={lesson} />
-        )}
-      </Gutter>
-
-      {lesson ? (
-        <Gutter style={{ marginTop: space.xl }}>
-          {checkConcept ? (
-            <Button
-              kind="decisive"
-              label="Check my understanding"
-              icon="arrow"
-              onPress={() => router.push({ pathname: "/diagnostic", params: { conceptId: checkConcept } })}
-            />
-          ) : null}
-        </Gutter>
-      ) : null}
-
-      <Gutter style={{ marginTop: space.xl }}>
-        <T variant="meta" style={{ textAlign: "center" }}>
-          {r.readVia ? `${READ_VIA_COPY[r.readVia]} ` : ""}
-          {r.analyzedBy === "claude" ? "Compared with your knowledge state by Claude." : "Compared with your knowledge state from the source text."} Reading doesn&apos;t change what Thinketh thinks you know; checking your understanding does.
+        <T variant="meta" style={{ marginTop: space.x3, textAlign: "center", color: color.ink3 }}>
+          Reading doesn&apos;t change what Thinketh thinks you know; checking your understanding does.
         </T>
       </Gutter>
     </Screen>
   );
 }
 
-function IdeaList({ label, ideas, name, accent, style }: { label: string; ideas: ResourceIdea[]; name: (id?: string) => string | undefined; accent?: boolean; style?: object }) {
+function IdeaList({ ideas, name, accent }: { ideas: ResourceIdea[]; name: (id?: string) => string | undefined; accent?: boolean }) {
   return (
-    <View style={[styles.rule, { borderLeftColor: accent ? color.coral : color.edge }, style]}>
-      <T variant="label" tone={accent ? "coral" : undefined} style={{ marginBottom: space.m }}>
-        {label}
-      </T>
+    <View>
       {ideas.map((i) => (
-        <View key={i.idea} style={{ marginBottom: space.m }}>
-          {name(i.conceptId) ? <T variant="meta">{name(i.conceptId)}</T> : null}
-          <T variant="body" style={!accent ? { color: color.ink2 } : undefined}>
-            {i.idea}
-          </T>
+        <View key={i.idea} style={{ marginBottom: space.xs }}>
+          {name(i.conceptId) ? (
+            <T style={[styles.smallCaps, { marginLeft: 17, marginBottom: 2 }]}>{name(i.conceptId)!}</T>
+          ) : null}
+          <DotLine tone={accent ? "signal" : "muted"}>{i.idea}</DotLine>
         </View>
       ))}
     </View>
@@ -279,12 +321,11 @@ function IdeaList({ label, ideas, name, accent, style }: { label: string; ideas:
 function Lesson({ lesson }: { lesson: TeachDeltaResponse }) {
   return (
     <View accessibilityLiveRegion="polite">
-      <T variant="label" tone="coral" style={{ marginBottom: space.l }}>
-        The delta, for you
-      </T>
       {lesson.sections.map((s, n) => (
         <View key={s.heading} style={{ marginTop: n ? space.xl : 0 }}>
-          <T variant="section">{s.heading}</T>
+          <T variant="section" style={{ fontSize: 16, lineHeight: 22 }}>
+            {s.heading}
+          </T>
           {s.body.split(/\n{2,}/).map((p) => (
             <T key={p} variant="body" style={{ marginTop: space.s }}>
               {p}
@@ -302,10 +343,14 @@ function Lesson({ lesson }: { lesson: TeachDeltaResponse }) {
 }
 
 const styles = StyleSheet.create({
-  stage: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.xl },
-  original: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "flex-start" },
-  times: { flexDirection: "row", gap: space.xxl, marginTop: space.m },
-  minutes: { fontSize: 30, lineHeight: 36, marginTop: space.xs, fontVariant: ["tabular-nums"] },
-  rule: { borderLeftWidth: 2, paddingLeft: space.l },
-  relevance: { borderLeftWidth: 2, borderLeftColor: color.coral, paddingLeft: space.m, marginTop: space.l },
+  typeLabel: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.3, textTransform: "uppercase", color: color.ink3 },
+  title: { fontFamily: font.sansSemibold, fontSize: 25, lineHeight: 31, letterSpacing: -0.6, color: color.ink, marginTop: space.s },
+  smallCaps: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1, textTransform: "uppercase", color: color.ink3 },
+  stage: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.l },
+  processCard: { marginTop: space.xxl, padding: space.l, borderRadius: 18, backgroundColor: color.surfaceMuted },
+  relevance: { flexDirection: "row", gap: space.m, marginTop: space.xl, padding: space.m, borderRadius: 14, backgroundColor: color.surfaceMuted },
+  signalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral, marginTop: 4 },
+  times: { flexDirection: "row", marginTop: space.xl },
+  timeCell: { paddingLeft: space.l, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
+  timeValue: { fontFamily: font.sansSemibold, fontSize: 24, lineHeight: 29, letterSpacing: -0.6, color: color.ink, fontVariant: ["tabular-nums"], marginBottom: 2 },
 });

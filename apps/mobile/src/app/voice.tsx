@@ -161,6 +161,6 @@ function CheckUnderstanding({ heroId }: { heroId: string }) {
 }
 
 const styles = StyleSheet.create({
-  line: { marginTop: space.l, color: color.ink2, fontSize: 18, lineHeight: 28 },
+  line: { marginTop: space.l, color: color.ink2, fontSize: 17, lineHeight: 26 },
   actions: { marginTop: space.xxl, gap: space.m },
 });

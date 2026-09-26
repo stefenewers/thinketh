@@ -9,7 +9,7 @@ import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { improvedTodayIds } from "@/lib/knowledge";
 import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
-import { color, font, layout, radius, shadow, space } from "@/theme/tokens";
+import { color, font, layout, shadow, space } from "@/theme/tokens";
 
 export default function Library() {
   const { data } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
@@ -162,16 +162,16 @@ export default function Library() {
 const styles = StyleSheet.create({
   preview: {
     backgroundColor: color.surfaceRaised,
-    borderRadius: radius.surface,
+    borderRadius: 18,
     padding: space.l,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.edge,
-    ...shadow.raised,
+    borderColor: color.hairline,
+    ...shadow.soft,
   },
   previewLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.m, minHeight: 32 },
   sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   event: { flexDirection: "row", gap: space.l },
   rail: { width: 12, alignItems: "center" },
   node: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: color.ink2, backgroundColor: color.ground, marginTop: 2 },
-  line: { flex: 1, width: 1, backgroundColor: color.edge, marginTop: 4 },
+  line: { flex: 1, width: 1, backgroundColor: color.hairline, marginTop: 4 },
 });

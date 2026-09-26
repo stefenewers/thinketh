@@ -1,0 +1,310 @@
+import { useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { router } from "expo-router";
+import Svg, { Circle, Polyline } from "react-native-svg";
+import type { Concept, KnowledgeLevel, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
+import { api } from "@/api";
+import { Icon } from "@/components/Icon";
+import { MasteryBar } from "@/components/MindGraph";
+import { ConceptChip, IconButton, Kicker, SegmentedTabs, SignalPill } from "@/components/system";
+import { T } from "@/components/Text";
+import { agentMemoryStoryline } from "@/content/demo";
+import { useApi } from "@/lib/hooks";
+import { evidenceLabel, fmt2, levelLabel, misconceptionLabel, observationLabel, relativeTime, shortDate } from "@/lib/knowledge";
+import { color, font, radius, space } from "@/theme/tokens";
+
+// Storyboard 03 "Mind — Concept": the selected concept as an object inspector.
+// Same data and actions as the old ConceptPanel/SelectedSheet, reorganised into tabs.
+
+type InspectorTab = "overview" | "evidence" | "history";
+
+export function ConceptInspector({
+  concept,
+  state,
+  level,
+  justImproved,
+  transition,
+  related,
+  onSelectConcept,
+  onClose,
+}: {
+  concept: Concept;
+  state: KnowledgeState;
+  level: KnowledgeLevel;
+  justImproved: boolean;
+  /** Today's direct transition for this concept, if any. */
+  transition: KnowledgeStateTransition | undefined;
+  related: Concept[];
+  onSelectConcept: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<InspectorTab>("overview");
+  const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
+  const history = data?.transitions;
+  const askQ = `Explain ${concept.name} based on what I already know.`;
+
+  return (
+    <View>
+      <View style={styles.headRow}>
+        {justImproved ? <SignalPill label="Just improved" /> : <Kicker>{concept.domain}</Kicker>}
+        <IconButton icon="close" accessibilityLabel="Close concept" onPress={onClose} />
+      </View>
+      <T variant="display" accessibilityRole="header" style={{ marginTop: space.xs }}>
+        {concept.name}
+      </T>
+      <T variant="support" style={{ marginTop: space.s, fontSize: 14, lineHeight: 20 }} numberOfLines={3}>
+        {concept.description}
+      </T>
+      <View style={styles.levelLine}>
+        {transition ? <View style={styles.dot} /> : null}
+        <T variant="meta" tone={transition ? "coral" : undefined}>
+          {levelLabel[level]} · {transition ? "evidence strengthened today" : evidenceLabel(state.uncertainty).toLowerCase()}
+        </T>
+      </View>
+
+      <SegmentedTabs
+        style={{ marginTop: space.l }}
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { key: "overview", label: "Overview" },
+          { key: "evidence", label: "Evidence" },
+          { key: "history", label: "History" },
+        ]}
+      />
+
+      {tab === "overview" ? (
+        <View style={{ marginTop: space.l }}>
+          <T style={styles.h}>What&apos;s changed for you</T>
+          {transition ? (
+            <View style={styles.changeRow}>
+              <View style={[styles.dot, { marginTop: 7 }]} />
+              <View style={{ flex: 1 }}>
+                <T variant="body" style={{ fontFamily: font.sansMedium }}>
+                  {changeSentence(transition)}
+                </T>
+                <T variant="meta" style={{ color: color.ink3, marginTop: 2, fontVariant: ["tabular-nums"] }}>
+                  {relativeTime(transition.createdAt)} · {direction(transition)}
+                </T>
+              </View>
+            </View>
+          ) : (
+            <T variant="support" style={{ marginTop: space.xs }}>
+              Nothing new today. {evidenceLabel(state.uncertainty)}, last seen {relativeTime(state.lastObservedAt).toLowerCase()}.
+            </T>
+          )}
+
+          <View style={{ marginTop: space.l }}>
+            <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />
+          </View>
+
+          {related.length ? (
+            <View style={{ marginTop: space.xl }}>
+              <T style={styles.h}>Related concepts</T>
+              <View style={styles.chips}>
+                {related.map((r) => (
+                  <ConceptChip key={r.id} label={r.name} onPress={() => onSelectConcept(r.id)} />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={{ marginTop: space.l }}>
+            <Pressable
+              onPress={() => router.push({ pathname: "/ask", params: { q: askQ } })}
+              accessibilityRole="button"
+              accessibilityLabel="Ask Thinketh"
+              style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
+            >
+              <T style={styles.primaryLabel}>Ask Thinketh</T>
+              <Icon name="arrow" size={15} color={color.onInk} />
+            </Pressable>
+            <LinkRow label="Evidence · history · how it changed" onPress={() => setTab("history")} />
+            <StorylineLink conceptId={concept.id} />
+          </View>
+        </View>
+      ) : null}
+
+      {tab === "evidence" ? (
+        <EvidenceTab state={state} level={level} justImproved={justImproved} />
+      ) : null}
+
+      {tab === "history" ? (
+        <View style={{ marginTop: space.l }}>
+          <T style={[styles.h, { marginBottom: space.s }]}>How it changed</T>
+          {loading && !history ? (
+            <T variant="support">Loading history…</T>
+          ) : history && history.length ? (
+            <History transitions={history} />
+          ) : (
+            <T variant="support">No recorded changes yet.</T>
+          )}
+          <LinkRow label="Ask Thinketh about this" onPress={() => router.push({ pathname: "/ask", params: { q: askQ } })} />
+          <StorylineLink conceptId={concept.id} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function EvidenceTab({ state, level, justImproved }: { state: KnowledgeState; level: KnowledgeLevel; justImproved: boolean }) {
+  const [numbersOpen, setNumbersOpen] = useState(false);
+  return (
+    <View style={{ marginTop: space.l }}>
+      <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />
+      <View style={styles.stats}>
+        <Stat label="Level" value={levelLabel[level]} />
+        <Stat label="Evidence" value={`${state.evidenceCount} ${state.evidenceCount === 1 ? "signal" : "signals"}`} divided />
+        <Stat label="Last seen" value={relativeTime(state.lastObservedAt)} divided />
+      </View>
+      <Pressable
+        onPress={() => setNumbersOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: numbersOpen }}
+        hitSlop={8}
+        style={{ marginTop: space.m, alignSelf: "flex-start", minHeight: 32, justifyContent: "center" }}
+      >
+        <T variant="meta" style={{ fontVariant: ["tabular-nums"] }}>
+          {numbersOpen ? `Mastery ${fmt2(state.mastery)} · uncertainty ${fmt2(state.uncertainty)} · confidence ${fmt2(state.confidence)}` : "See the numbers"}
+        </T>
+      </Pressable>
+      {state.misconceptionFlags.length ? (
+        <View style={styles.flag}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: space.xs }}>
+            <View style={styles.dot} />
+            <T variant="label" style={{ color: color.ink2 }}>
+              Open confusion
+            </T>
+          </View>
+          {state.misconceptionFlags.map((f) => (
+            <T key={f} variant="support">
+              {misconceptionLabel(f)}
+            </T>
+          ))}
+        </View>
+      ) : null}
+      <T variant="support" style={{ marginTop: space.l, fontSize: 12.5, lineHeight: 18, color: color.ink3 }}>
+        Built from what you read, what you tell Thinketh, and how you answer checks. Checks count far more than reading.
+      </T>
+    </View>
+  );
+}
+
+function StorylineLink({ conceptId }: { conceptId: string }) {
+  if (conceptId !== agentMemoryStoryline.conceptId) return null;
+  return (
+    <LinkRow
+      label="See how this idea changed in the world"
+      onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: agentMemoryStoryline.id } })}
+    />
+  );
+}
+
+function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.link, pressed && { opacity: 0.6 }]}>
+      <T variant="meta" style={{ color: color.ink, flex: 1 }}>
+        {label}
+      </T>
+      <Icon name="chevron" size={14} color={color.ink3} />
+    </Pressable>
+  );
+}
+
+function History({ transitions }: { transitions: KnowledgeStateTransition[] }) {
+  const points = [transitions[0].before.mastery, ...transitions.map((t) => t.after.mastery)];
+  const [w, setW] = useState(0);
+  const h = 52;
+  const pad = 5;
+  const xy = points.map((m, i) => [pad + (i / Math.max(points.length - 1, 1)) * (w - pad * 2), pad + (1 - m) * (h - pad * 2)]);
+  const latest = [...transitions].reverse();
+
+  return (
+    <View>
+      <View
+        onLayout={(e) => setW(e.nativeEvent.layout.width)}
+        style={{ height: h }}
+        accessible
+        accessibilityLabel={`Mastery over time: ${points.map(fmt2).join(", ")}`}
+      >
+        {w > 0 ? (
+          <Svg width={w} height={h}>
+            <Polyline points={xy.map((p) => p.join(",")).join(" ")} fill="none" stroke={color.ink2} strokeWidth={1.25} />
+            {xy.map(([x, y], i) => (
+              <Circle key={i} cx={x} cy={y} r={i === xy.length - 1 ? 3.5 : 2} fill={i === xy.length - 1 ? color.coral : color.ink2} />
+            ))}
+          </Svg>
+        ) : null}
+      </View>
+      <View style={{ marginTop: space.s }}>
+        {latest.slice(0, 4).map((t) => (
+          <View key={t.id} style={styles.historyRow}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: space.m }}>
+              <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
+                {observationLabel[t.observation.kind]}
+              </T>
+              <T variant="meta" style={{ color: color.ink3, fontVariant: ["tabular-nums"] }}>
+                {shortDate(t.createdAt)} · {direction(t)}
+              </T>
+            </View>
+            <T variant="support" style={{ marginTop: 2 }}>
+              {t.reason}
+            </T>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function Stat({ label, value, divided }: { label: string; value: string; divided?: boolean }) {
+  return (
+    <View style={[{ flex: 1 }, divided && styles.statDivided]}>
+      <T variant="body" style={{ fontFamily: font.sansSemibold, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+        {value}
+      </T>
+      <T style={styles.statLabel}>{label}</T>
+    </View>
+  );
+}
+
+/** The engine's own reason, told as what changed (no invented claims). */
+export function changeSentence(t: KnowledgeStateTransition): string {
+  const first = t.reason.split(/(?<=\.)\s/)[0] ?? t.reason;
+  return first.replace(/^Updated because you /, "You ").replace(/^Updated because /, "");
+}
+
+/** A change in words; the engine's reason below it carries the numbers. */
+export function direction(t: KnowledgeStateTransition): string {
+  const d = t.after.mastery - t.before.mastery;
+  if (d > 0.005) return "Stronger";
+  if (d < -0.005) return "Weaker";
+  return t.after.uncertainty < t.before.uncertainty - 0.005 ? "More certain" : "Unchanged";
+}
+
+const styles = StyleSheet.create({
+  headRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginRight: -space.s, minHeight: 44 },
+  levelLine: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.s },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral },
+  h: { fontFamily: font.sansSemibold, fontSize: 16, lineHeight: 21, letterSpacing: -0.2, color: color.ink },
+  changeRow: { flexDirection: "row", gap: space.s, marginTop: space.s },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: space.s, marginTop: space.s },
+  primary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.s,
+    minHeight: 48,
+    paddingHorizontal: space.l,
+    borderRadius: radius.pill,
+    backgroundColor: color.ink,
+    marginBottom: space.xs,
+  },
+  primaryLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.onInk },
+  link: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
+  stats: { flexDirection: "row", marginTop: space.l },
+  statDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline, paddingLeft: space.m },
+  statLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 0.9, textTransform: "uppercase", color: color.ink2, marginTop: 2 },
+  flag: { marginTop: space.m, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: 12 },
+  historyRow: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.hairline },
+});

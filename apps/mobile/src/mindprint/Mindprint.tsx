@@ -62,7 +62,7 @@ function Region({ region, pass }: { region: MindRegion; pass: "graph" | "labels"
             <Path
               key={`${e.from}-${e.to}`}
               d={`M${e.a.x},${e.a.y} Q${e.c.x},${e.c.y} ${e.b.x},${e.b.y}`}
-              stroke={lit ? color.ink3 : "#D6D1CA"}
+              stroke={lit ? color.ink3 : color.edge}
               strokeWidth={lit ? 1.1 : 0.6 + depth * 0.4}
               fill="none"
               opacity={faded(e.from) || faded(e.to) ? 0.25 : 0.55 + depth * 0.45}

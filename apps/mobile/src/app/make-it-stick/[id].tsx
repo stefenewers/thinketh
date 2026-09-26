@@ -25,7 +25,7 @@ export default function MakeItStickScreen() {
         <Screen topInset={false}>
           <Gutter>
             <SectionLabel>Think of it like this</SectionLabel>
-            <T variant="body" style={{ fontSize: 18, lineHeight: 28 }}>
+            <T variant="body" style={{ fontSize: 16, lineHeight: 25 }}>
               {aid.analogy}
             </T>
 
@@ -33,7 +33,7 @@ export default function MakeItStickScreen() {
               <T variant="label" style={{ marginBottom: space.m }}>
                 Remember
               </T>
-              <T variant="statement" style={{ fontSize: 26, lineHeight: 35 }}>
+              <T variant="statement" style={{ fontSize: 20, lineHeight: 28 }}>
                 {aid.memoryHook}
               </T>
             </View>
@@ -83,7 +83,7 @@ export default function MakeItStickScreen() {
 }
 
 const styles = StyleSheet.create({
-  hook: { marginVertical: space.x3, paddingVertical: space.xl, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.edge },
+  hook: { marginVertical: space.x3, paddingVertical: space.xl, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
   step: { flexDirection: "row", gap: space.l, marginBottom: space.l, alignItems: "flex-start" },
   stepNum: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 24, color: color.ink3, width: 18, fontVariant: ["tabular-nums"] },
   recall: { marginTop: space.xxl, padding: space.xl, backgroundColor: color.fog, borderRadius: radius.surface },

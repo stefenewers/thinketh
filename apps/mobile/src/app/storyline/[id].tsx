@@ -143,7 +143,7 @@ function Storyline({
       </Gutter>
 
       <Gutter style={{ marginTop: space.xl }}>
-        <T variant="statement" style={{ fontSize: 22, lineHeight: 31 }}>
+        <T variant="statement" style={{ fontSize: 20, lineHeight: 28 }}>
           {corrected
             ? "The world moved from bigger windows to a memory layer, and so did your model of it."
             : "The world has moved from bigger windows to a memory layer. Your model hasn't caught up yet."}
@@ -223,6 +223,6 @@ const styles = StyleSheet.create({
   node: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: color.ink2, backgroundColor: color.ground, marginTop: 4 },
   nodeYou: { borderRadius: 2 },
   nodeCurrent: { backgroundColor: color.coral, borderColor: color.coral },
-  line: { flex: 1, width: 1, backgroundColor: color.edge, marginTop: 4 },
+  line: { flex: 1, width: 1, backgroundColor: color.hairline, marginTop: 4 },
   devLink: { paddingHorizontal: 0, marginTop: space.s },
 });

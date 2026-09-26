@@ -1,36 +1,36 @@
-// Thinketh design tokens. Derived from the Figma Make prototype (src/index.css)
-// and the design spec. Coral is reserved for new / changing knowledge.
+// Thinketh design tokens: the white, precise, Mindprint-led product system.
+// Coral is a signal, reserved for new / changing / active knowledge.
 
 export const color = {
-  ground: "#F9F7F4",
+  // White-first, neutral system (the storyboard): white ground, true grays, coral as a signal.
+  ground: "#FFFFFF",
   panel: "#FFFFFF",
-  ink: "#1A1918",
-  ink2: "#5F5A55",
-  // Darkened from the prototype's #A09A93 to keep metadata at WCAG AA-large.
-  ink3: "#857F78",
-  edge: "#E4E0D9",
-  fog: "#EDE9E3",
+  ink: "#161616",
+  ink2: "#5C5C59",
+  // AA-large on white; neutral rather than warm.
+  ink3: "#83837E",
+  edge: "#E7E7E4",
+  fog: "#F2F2F0",
   coral: "#C0553A",
-  coralTint: "#F5EAE7",
+  coralTint: "#F7ECE8",
   onInk: "#FFFFFF",
   // Semantic surfaces. Raised = cards and sheets; muted = explanation panels
   // inside a surface; lineSoft = separators inside raised surfaces.
   surfaceRaised: "#FFFFFF",
-  surfaceMuted: "#F3F0EB",
-  lineSoft: "#EDE9E3",
-  overlay: "rgba(26,25,24,0.22)",
-  // White-first home (Today).
+  surfaceMuted: "#F5F5F3",
+  lineSoft: "#EFEFED",
+  overlay: "rgba(22,22,22,0.22)",
   canvas: "#FFFFFF",
-  // Neutral hairline for white-on-white surfaces (no beige outline).
-  hairline: "rgba(26,25,24,0.07)",
+  // Neutral hairline for white-on-white surfaces.
+  hairline: "rgba(22,22,22,0.08)",
 } as const;
 
 // Tile tints (Today "Continue" tiles). Near-neutral; coral stays out.
 export const glow = {
-  tileNeutral: "#F4F3F1",
-  tileCool: "#EDF1F4",
+  tileNeutral: "#F4F4F2",
+  tileCool: "#EEF2F5",
   tileCoolInk: "#3E5B70",
-  tileWarm: "#F5F2EE",
+  tileWarm: "#F6F3F0",
   tileWarmInk: "#6B5A4E",
 } as const;
 

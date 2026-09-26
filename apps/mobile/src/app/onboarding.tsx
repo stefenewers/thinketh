@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
+import { SetupHeader, SetupRow, StepProgress } from "@/components/setup/Setup";
+import { IconButton, ListCard, SectionHeader } from "@/components/system";
 import { T } from "@/components/Text";
 import { Button, Gutter, Screen } from "@/components/ui";
 import { DEMO_PROFILE, GOALS, INTERESTS, type LearnerProfile, saveProfile, TEACHING, useProfile } from "@/lib/profile";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, space } from "@/theme/tokens";
 
 // First run: three short questions and one promise. It sets the frame
 // (what you follow, why, how you learn), never a mastery level.
@@ -36,21 +37,34 @@ export default function Onboarding() {
 
   const canContinue = [interests, goals, teaching][step]?.length !== 0;
 
+  const cta = (
+    <View style={styles.cta}>
+      {step < STEPS - 1 ? (
+        <Button label="Continue" icon="arrow" disabled={!canContinue} onPress={() => setStep((s) => s + 1)} />
+      ) : (
+        <Button label={building ? "Building your Thinketh…" : "Build my Thinketh"} icon={building ? undefined : "arrow"} loading={building} onPress={finish} />
+      )}
+    </View>
+  );
+
   return (
-    <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <Screen contentStyle={{ paddingBottom: space.x5 }}>
-        <Gutter>
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <Screen background={color.canvas} contentStyle={{ flexGrow: 1, paddingBottom: space.x4 }}>
+        <Gutter style={{ flexGrow: 1 }}>
           <View style={styles.top}>
             {step > 0 && !building ? (
-              <Pressable onPress={() => setStep((s) => s - 1)} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
-                <Icon name="back" size={20} color={color.ink} />
-              </Pressable>
+              <IconButton icon="back" accessibilityLabel="Back" onPress={() => setStep((s) => s - 1)} />
             ) : (
-              <Mark size={22} />
+              <View style={styles.mark}>
+                <Mark size={20} />
+              </View>
             )}
-            <T variant="meta">
-              {step + 1} of {STEPS}
-            </T>
+            <View style={styles.progressWrap}>
+              <StepProgress step={step} total={STEPS} />
+              <T variant="meta" style={{ color: color.ink3, fontVariant: ["tabular-nums"] }}>
+                {step + 1} of {STEPS}
+              </T>
+            </View>
           </View>
 
           {step === 0 ? (
@@ -79,33 +93,24 @@ export default function Onboarding() {
             />
           ) : (
             <View>
-              <T variant="display" style={styles.headline} accessibilityRole="header">
-                Thinketh will learn what you know as you use it.
-              </T>
-              <View style={{ marginTop: space.xxl, gap: space.xl }}>
-                <Principle title="It doesn't assume mastery.">
-                  Every concept starts uncertain. Nothing is marked as understood until you show it.
-                </Principle>
-                <Principle title="It updates on evidence.">
-                  Answers, questions and the developments you read move your knowledge state, and each change comes with its reason.
-                </Principle>
-                <Principle title="You can correct it.">
-                  Tell it you already knew something, or check your understanding, and it adjusts.
-                </Principle>
-              </View>
-              <T variant="support" style={{ marginTop: space.xxl }}>
-                Following {interests.join(", ")} · for {goals.join(", ").toLowerCase()} · taught with {teaching.join(", ").toLowerCase()}.
-              </T>
+              <SetupHeader title="Thinketh will learn what you know as you use it." note="Here is the frame it starts from. You can change it any time from your profile." />
+              <ListCard style={styles.list}>
+                <SetupRow icon="explore" title="Your interests" subtitle={interests.join(", ")} onPress={building ? undefined : () => setStep(0)} accessibilityLabel={`Your interests: ${interests.join(", ")}. Edit`} />
+                <SetupRow icon="sparkle" title="Your goals" subtitle={goals.join(", ")} onPress={building ? undefined : () => setStep(1)} accessibilityLabel={`Your goals: ${goals.join(", ")}. Edit`} />
+                <SetupRow icon="mind" title="How you learn" subtitle={teaching.join(", ")} onPress={building ? undefined : () => setStep(2)} accessibilityLabel={`How you learn: ${teaching.join(", ")}. Edit`} last />
+              </ListCard>
+
+              <SectionHeader title="How it treats what you know" />
+              <ListCard>
+                <SetupRow icon="info" title="It doesn't assume mastery." subtitle="Every concept starts uncertain. Nothing is marked as understood until you show it." />
+                <SetupRow icon="check" title="It updates on evidence." subtitle="Answers, questions and the developments you read move your knowledge state, and each change comes with its reason." />
+                <SetupRow icon="person" title="You can correct it." subtitle="Tell it you already knew something, or check your understanding, and it adjusts." last />
+              </ListCard>
             </View>
           )}
 
-          <View style={{ marginTop: space.x3 }}>
-            {step < STEPS - 1 ? (
-              <Button label="Continue" icon="arrow" disabled={!canContinue} onPress={() => setStep((s) => s + 1)} />
-            ) : (
-              <Button kind="decisive" label={building ? "Building your Thinketh…" : "Build my Thinketh"} loading={building} onPress={finish} />
-            )}
-          </View>
+          <View style={{ flexGrow: 1, minHeight: space.x3 }} />
+          {cta}
         </Gutter>
       </Screen>
     </View>
@@ -127,68 +132,20 @@ function Question({
 }) {
   return (
     <View>
-      <T variant="display" style={styles.headline} accessibilityRole="header">
-        {title}
-      </T>
-      <T variant="support" style={{ marginTop: space.m }}>
-        {note}
-      </T>
-      <View style={{ marginTop: space.xxl, gap: space.s }}>
-        {options.map((o) => {
-          const on = selected.includes(o.key);
-          return (
-            <Pressable
-              key={o.key}
-              onPress={() => onToggle(o.key)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: on }}
-              style={({ pressed }) => [styles.option, on && styles.optionOn, pressed && { opacity: 0.8 }]}
-            >
-              <View style={{ flex: 1 }}>
-                <T variant="body" style={{ fontFamily: font.sansMedium }}>
-                  {o.key}
-                </T>
-                {o.note ? <T variant="support">{o.note}</T> : null}
-              </View>
-              <View style={[styles.tick, on && styles.tickOn]}>{on ? <Icon name="check" size={14} color={color.onInk} /> : null}</View>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function Principle({ title, children }: { title: string; children: string }) {
-  return (
-    <View style={styles.principle}>
-      <T variant="body" style={{ fontFamily: font.sansMedium }}>
-        {title}
-      </T>
-      <T variant="support" style={{ marginTop: 2 }}>
-        {children}
-      </T>
+      <SetupHeader title={title} note={note} />
+      <ListCard style={styles.list}>
+        {options.map((o, i) => (
+          <SetupRow key={o.key} title={o.key} subtitle={o.note} checked={selected.includes(o.key)} onPress={() => onToggle(o.key)} last={i === options.length - 1} />
+        ))}
+      </ListCard>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, marginBottom: space.x3 },
-  headline: { fontSize: 34, lineHeight: 41 },
-  option: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.l,
-    paddingVertical: space.l,
-    paddingHorizontal: space.l,
-    borderRadius: radius.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.edge,
-    backgroundColor: color.panel,
-    minHeight: 56,
-  },
-  optionOn: { borderColor: color.ink, borderWidth: 1 },
-  tick: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: color.edge, alignItems: "center", justifyContent: "center" },
-  tickOn: { backgroundColor: color.ink, borderColor: color.ink },
-  principle: { borderLeftWidth: 2, borderLeftColor: color.coral, paddingLeft: space.l },
+  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, marginLeft: -space.m, marginBottom: space.xxl },
+  mark: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  progressWrap: { flexDirection: "row", alignItems: "center", gap: space.m },
+  list: { marginTop: space.xxl },
+  cta: { marginTop: space.l },
 });

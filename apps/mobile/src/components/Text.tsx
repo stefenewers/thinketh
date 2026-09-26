@@ -51,19 +51,20 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     color: color.ink,
   },
-  // Serif, rare by design: payoff moments only ("Your Mind", "Knowledge moved.").
+  // Payoff headlines ("Your Mind", "Knowledge moved."): sans, a step larger and tighter.
   editorial: {
-    fontFamily: font.serif,
-    fontSize: 31,
+    fontFamily: font.sansSemibold,
+    fontSize: 32,
     lineHeight: 37,
-    letterSpacing: -0.5,
+    letterSpacing: -1,
     color: color.ink,
   },
-  // The mental-model sentence: the one editorial voice inside explanations.
+  // The mental-model sentence: a sans pull-statement, not a serif quote.
   statement: {
-    fontFamily: font.serifItalic,
-    fontSize: 20,
-    lineHeight: 28,
+    fontFamily: font.sansMedium,
+    fontSize: 19,
+    lineHeight: 27,
+    letterSpacing: -0.2,
     color: color.ink,
   },
   body: {

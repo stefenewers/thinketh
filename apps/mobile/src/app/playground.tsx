@@ -2,24 +2,22 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Line } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import type { CollaborativeDeltaItem, PlaygroundRoom } from "@thinketh/contracts";
-import { layoutMind } from "@thinketh/mindprint";
-import { api, DEMO_USER_ID } from "@/api";
+import { DEMO_USER_ID } from "@/api";
 import { playground, PLAYGROUND_AVAILABLE, PlaygroundError } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { StageSteps } from "@/components/StageSteps";
+import { CardTitle, Dot, DotTag, MuseCard, StepRow, TwoMinds, type DotTone } from "@/components/playground/pieces";
+import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
-import { useApi, useReducedMotion } from "@/lib/hooks";
+import { useReducedMotion } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/roomChannel";
 import { fmt2 } from "@/lib/knowledge";
 import { DuoMind } from "@/mindprint/DuoMind";
 import { MindCanvas } from "@/mindprint/MindCanvas";
-import { Mindprint } from "@/mindprint/Mindprint";
-import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
-import { color, font, gutter, layout, radius, shadow, space } from "@/theme/tokens";
+import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
 
 /** The device owner's name in the room (the demo persona's human). */
 const HOST_NAME = "Stefen";
@@ -118,11 +116,11 @@ export default function PlaygroundScreen() {
   }[scene];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.canvas }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
         <View style={styles.headerLeft}>
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
-            <Icon name="back" size={18} color={color.ink2} />
+            <Icon name="back" size={19} color={color.ink} />
           </Pressable>
           {following && scene !== "comparing" ? (
             <Pressable
@@ -132,7 +130,7 @@ export default function PlaygroundScreen() {
               accessibilityHint={followMuse ? "Stop following and explore on your own" : "Follow Muse again"}
               style={{ minHeight: 44, justifyContent: "center" }}
             >
-              <T variant="body" style={{ color: color.ink2, fontSize: 15 }}>
+              <T style={styles.headerTitle}>
                 {followMuse ? "Following Muse" : "Exploring"}
                 <T variant="meta" style={{ color: color.ink3 }}>
                   {followMuse ? "  · Stop" : "  · Follow Muse"}
@@ -140,19 +138,19 @@ export default function PlaygroundScreen() {
               </T>
             </Pressable>
           ) : (
-            <T variant="body" style={{ color: color.ink2, fontSize: 15 }}>
+            <T style={styles.headerTitle} accessibilityRole="header">
               Playground
             </T>
           )}
         </View>
         {room && (scene === "peer_teaching" || scene === "transfer") ? (
           <Pressable onPress={() => run(null, () => playground.leave(room.id, me)).then(() => router.back())} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
-            <T variant="body" style={{ color: color.ink3, fontSize: 15 }}>
+            <T variant="meta" style={{ color: color.ink2, fontSize: 14 }}>
               Leave
             </T>
           </Pressable>
         ) : (
-          <T variant="body" style={{ color: color.ink3, fontSize: 15 }}>
+          <T variant="meta" style={{ color: color.ink3, fontSize: 13 }}>
             {scene === "comparing" ? "Following Muse" : headerRight}
           </T>
         )}
@@ -263,7 +261,7 @@ function Pill({ label, onPress, busy, kind = "primary" }: { label: string; onPre
 // ---------------------------------------------------------------------------
 // Scenes
 
-/** Figma 1:65: your Mind, alone; nothing is shared until you invite someone. */
+/** Storyboard 08: the entry. Nothing is shared until you invite someone. */
 function Waiting({
   room,
   busy,
@@ -279,39 +277,27 @@ function Waiting({
 }) {
   const [joining, setJoining] = useState(false);
   const [code, setCode] = useState("");
-  const { width } = useWindowDimensions();
-  const { data } = useApi(() => api.getKnowledge(), []);
-  const w = width - 64;
-  const h = 250;
-  const layout = useMemo(() => {
-    if (!data) return null;
-    const nodes = nodesFromKnowledge(data.items, new Set());
-    return { layout: layoutMind(nodes, layoutEdges(data.edges), { x: 0, y: 0, w, h }, { lod: "normal" }), nodes: new Map(nodes.map((n) => [n.id, n])) };
-  }, [data, w]);
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.m }}>
-        Learn together.
-      </T>
-      <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
-        Bring another Mind in. Thinketh will find the useful differences.
-      </T>
-      <T style={styles.soloName}>{HOST_NAME}</T>
-      <View style={{ alignItems: "center", height: h }}>{layout ? <Mindprint width={w} height={h} regions={[{ layout: layout.layout, nodes: layout.nodes, stubs: true }]} /> : <ActivityIndicator color={color.ink3} />}</View>
+      <View style={{ alignItems: "center", marginTop: space.l }}>
+        <TwoMinds />
+        <T variant="display" style={{ marginTop: space.xl, textAlign: "center" }}>
+          Learn together.
+        </T>
+        <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22, textAlign: "center", maxWidth: 300 }}>
+          Bring another Mind in. Thinketh will find the useful differences.
+        </T>
+      </View>
 
       {!room ? (
-        <View style={{ alignItems: "center", marginTop: space.xl }}>
-          <Pressable onPress={onInvite} accessibilityRole="button" accessibilityLabel="Invite a collaborator" style={({ pressed }) => [{ alignItems: "center" }, pressed && { opacity: 0.7 }]}>
-            <View style={styles.plus}>{busy === "invite" ? <ActivityIndicator color={color.ink} /> : <T style={{ fontSize: 26, lineHeight: 30, color: color.ink }}>+</T>}</View>
-            <T variant="body" style={{ marginTop: space.m }}>
-              Invite a collaborator
-            </T>
-          </Pressable>
-          <T variant="meta" style={{ marginTop: space.xl, color: color.ink3 }}>
+        <View style={{ marginTop: space.xl }}>
+          <Button label="Invite a collaborator" accessibilityLabel="Invite a collaborator" icon="arrow" loading={busy === "invite"} onPress={onInvite} style={styles.cta} />
+          <T variant="meta" style={{ marginTop: space.m, color: color.ink3, textAlign: "center" }}>
             Nothing is shared until you invite someone.
           </T>
           {joining ? (
-            <View style={styles.joinBox}>
+            <RaisedCard style={{ marginTop: space.l, alignItems: "center" }}>
+              <T variant="label">Room code</T>
               <TextInput
                 value={code}
                 onChangeText={(v) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
@@ -324,9 +310,9 @@ function Waiting({
               />
               {/* A second demo phone joins as Nadani so her seeded Mind is the one in the room. */}
               <Pill label="Join as Nadani" busy={busy === "join"} onPress={() => code.length === 6 && onJoin(code, "nadani")} />
-            </View>
+            </RaisedCard>
           ) : (
-            <Pressable onPress={() => setJoining(true)} accessibilityRole="button" style={{ marginTop: space.l, minHeight: 44, justifyContent: "center" }}>
+            <Pressable onPress={() => setJoining(true)} accessibilityRole="button" style={{ marginTop: space.xs, minHeight: 44, justifyContent: "center", alignItems: "center" }}>
               <T variant="meta" style={{ color: color.ink }}>
                 Have a code? Join a Playground
               </T>
@@ -334,19 +320,30 @@ function Waiting({
           )}
         </View>
       ) : (
-        <View style={styles.inviteCard}>
-          <T variant="label">Room code</T>
+        <RaisedCard style={{ marginTop: space.xl }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Dot tone="coral" size={5} />
+            <T variant="label">Room code</T>
+          </View>
           <T style={{ fontFamily: font.sansSemibold, fontSize: 30, letterSpacing: 6, marginTop: space.xs, color: color.ink, fontVariant: ["tabular-nums"] }} selectable>
             {room.code}
           </T>
           <T variant="support" style={{ marginTop: space.s }}>
             On the other phone, open the Playground and join with this code. Only your knowledge state is shared: never your questions, memories or sources.
           </T>
-          <Divider style={{ marginVertical: space.l }} />
+          <Divider style={{ marginVertical: space.l, backgroundColor: color.hairline }} />
           <T variant="support">No second phone? Nadani&apos;s Mind is seeded for the demo, and this phone can speak for her.</T>
-          <Pill label="Bring in Nadani" kind="secondary" busy={busy === "invite"} onPress={onDemoGuest} />
-        </View>
+          <Pill label="Bring in Nadani" busy={busy === "invite"} onPress={onDemoGuest} />
+        </RaisedCard>
       )}
+
+      <SectionHeader title="How it works" />
+      <ListCard>
+        <StepRow icon="person" title="Invite someone" body="A collaborator on their phone, or Nadani on this one." />
+        <StepRow icon="people" title="Muse compares your Minds" body="Shared strengths, teaching opportunities, shared gaps." />
+        <StepRow icon="ask" title="Teach each other" body="One explains; the other applies it somewhere new." />
+        <StepRow icon="sparkle" title="See what moves your thinking" body="A Mind changes only after demonstration." last />
+      </ListCard>
     </View>
   );
 }
@@ -356,13 +353,11 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
   const guest = room.participants.find((p) => p.userId !== room.hostId);
   return (
     <View>
-      <T variant="meta" tone="coral" style={{ marginHorizontal: gutter, marginTop: space.m }}>
-        {guest?.userId === me ? `You joined ${nameOf(room, room.hostId)}` : `${guest?.displayName ?? "Someone"} joined`}
-      </T>
+      <DotTag tone="coral" label={guest?.userId === me ? `You joined ${nameOf(room, room.hostId)}` : `${guest?.displayName ?? "Someone"} joined`} style={{ marginHorizontal: gutter, marginTop: space.m }} />
       <Duo room={room} />
       <View style={{ paddingHorizontal: gutter, marginTop: space.xl }}>
         <T variant="title">Two minds. One learning space.</T>
-        <T variant="support" style={{ marginTop: space.s }}>
+        <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
           Thinketh is finding what can move between you.
         </T>
         <Pill label="Compare our Minds" busy={busy} onPress={onCompare} />
@@ -371,7 +366,7 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
   );
 }
 
-/** Figma 1:142: Muse compares while the delta is computed. */
+/** Storyboard 09 (Figma 1:142): Muse compares while the delta is computed. */
 function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
   const [step, setStep] = useState(0);
   const reduced = useReducedMotion();
@@ -385,21 +380,24 @@ function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
   return (
     <View>
       {room.snapshots.length === 2 ? <Duo room={room} muse /> : <ArrivalDuo room={room} />}
-      <View style={{ paddingHorizontal: gutter, alignItems: "center" }}>
-        <T variant="section" style={{ marginTop: space.xl }}>
+      <View style={{ paddingHorizontal: gutter }}>
+        <T variant="title" style={{ marginTop: space.xl, textAlign: "center" }}>
+          Comparing your thinking
+        </T>
+        <T variant="support" style={{ marginTop: space.xs, textAlign: "center" }}>
           Muse is comparing both Minds
         </T>
-        <View style={{ marginTop: space.xl, gap: space.l, alignSelf: "center" }}>
+        <RaisedCard style={{ marginTop: space.xl, gap: space.m }}>
           {rows.map((r, i) => (
             <View key={r} style={{ flexDirection: "row", alignItems: "center", gap: space.m, opacity: shown > i ? 1 : 0.45 }}>
               <View style={[styles.check, shown > i && { backgroundColor: color.ink, borderColor: color.ink }]}>{shown > i ? <Icon name="check" size={12} color={color.onInk} /> : null}</View>
-              <T variant="body" style={{ color: color.ink2 }}>
+              <T variant="body" style={{ color: color.ink }}>
                 {r}
               </T>
             </View>
           ))}
-        </View>
-        <T variant="meta" style={{ marginTop: space.xl, color: color.ink2 }}>
+        </RaisedCard>
+        <T variant="meta" style={{ marginTop: space.l, color: color.ink3, textAlign: "center" }}>
           Muse directs the room. Thinketh evaluates evidence.
         </T>
       </View>
@@ -407,58 +405,75 @@ function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
   );
 }
 
-/** Figma 1:197: the collaborative delta, computed and explainable. */
+/** Storyboard 09 / Figma 1:197: the collaborative delta, computed and explainable. */
 function Overview({ room, busy, onStart }: { room: PlaygroundRoom; me: string; busy: boolean; onStart: () => void }) {
   const d = room.delta!;
   const aName = nameOf(room, d.aId);
   const bName = nameOf(room, d.bId);
-  const items: { tag: string; coral: boolean; item: CollaborativeDeltaItem }[] = [
-    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(bName)} → ${upper(aName)}`, coral: true, item })),
-    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(aName)} → ${upper(bName)}`, coral: true, item })),
-    ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "MUSE → BOTH", coral: false, item })),
+  const items: { tag: string; tone: DotTone; item: CollaborativeDeltaItem }[] = [
+    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(bName)} → ${upper(aName)}`, tone: "coral" as const, item })),
+    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(aName)} → ${upper(bName)}`, tone: "ink" as const, item })),
+    ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "MUSE → BOTH", tone: "muted" as const, item })),
   ];
   const words = ["No", "One", "Two", "Three"][items.length] ?? String(items.length);
   return (
-    <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.m }}>
-        {items.length ? "You can teach each other." : "You're closely matched."}
-      </T>
-      <T variant="support" style={{ marginTop: space.s, color: color.ink3 }}>
-        {words} useful difference{items.length === 1 ? "" : "s"} in your current evidence.
-      </T>
-      <View style={{ marginTop: space.xl }}>
-        {items.map((x, i) => (
-          <DeltaRow key={x.item.conceptId + x.item.kind} tag={x.tag} coral={x.coral} item={x.item} names={{ [d.aId]: aName, [d.bId]: bName }} last={i === items.length - 1} />
-        ))}
-      </View>
-      {d.conflicts.length ? (
-        <T variant="meta" style={{ marginTop: space.l }}>
-          Not assigned yet: {d.conflicts.map((c) => c.conceptName).join(", ")}. The evidence can&apos;t tell who should teach.
+    <View>
+      {room.snapshots.length === 2 ? <Duo room={room} /> : null}
+      <View style={{ paddingHorizontal: gutter }}>
+        <T variant="display" style={{ marginTop: space.l }}>
+          {items.length ? "You can teach each other." : "You're closely matched."}
         </T>
-      ) : null}
-      <Pill label="Start 7-minute session" busy={busy} onPress={onStart} />
-      <T variant="meta" style={{ marginTop: space.l, color: color.ink2 }}>
-        Muse sets the order. Thinketh evaluates evidence.
-      </T>
+        <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
+          {words} useful difference{items.length === 1 ? "" : "s"} in your current evidence.
+        </T>
+        {items.length ? (
+          <RaisedCard style={{ marginTop: space.xl, paddingBottom: space.xs }}>
+            <CardTitle>Emerging differences</CardTitle>
+            {items.map((x, i) => (
+              <DeltaRow key={x.item.conceptId + x.item.kind} tag={x.tag} tone={x.tone} item={x.item} names={{ [d.aId]: aName, [d.bId]: bName }} last={i === items.length - 1} />
+            ))}
+          </RaisedCard>
+        ) : null}
+        {d.conflicts.length ? (
+          <T variant="meta" style={{ marginTop: space.l }}>
+            Not assigned yet: {d.conflicts.map((c) => c.conceptName).join(", ")}. The evidence can&apos;t tell who should teach.
+          </T>
+        ) : null}
+        <Pill label="Start 7-minute session" busy={busy} onPress={onStart} />
+        <T variant="meta" style={{ marginTop: space.l, color: color.ink3 }}>
+          Muse sets the order. Thinketh evaluates evidence.
+        </T>
+      </View>
     </View>
   );
 }
 
-function DeltaRow({ tag, coral, item, names, last }: { tag: string; coral: boolean; item: CollaborativeDeltaItem; names: Record<string, string>; last: boolean }) {
+function DeltaRow({ tag, tone, item, names, last }: { tag: string; tone: DotTone; item: CollaborativeDeltaItem; names: Record<string, string>; last: boolean }) {
   const [open, setOpen] = useState(false);
   const ids = Object.keys(names);
   const side = (k: "a" | "b") => item[k];
   return (
-    <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityHint="Shows the evidence behind this" style={{ paddingVertical: space.xl, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: color.edge }}>
-      <T variant="label" tone={coral ? "coral" : undefined}>
-        {tag}
-      </T>
-      <T variant="section" style={{ marginTop: space.s, fontSize: 21, lineHeight: 27 }}>
-        {sentence(item.conceptName)}
-      </T>
-      <T variant="support" style={{ marginTop: space.xs }}>
-        {item.reason}
-      </T>
+    <Pressable
+      onPress={() => setOpen((o) => !o)}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityHint="Shows the evidence behind this"
+      style={({ pressed }) => [{ paddingVertical: space.l, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: color.hairline }, pressed && { opacity: 0.7 }]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.m }}>
+        <View style={{ flex: 1 }}>
+          <DotTag tone={tone} label={tag} />
+          <T variant="section" style={{ marginTop: space.s }}>
+            {sentence(item.conceptName)}
+          </T>
+          <T variant="support" style={{ marginTop: space.xs }}>
+            {item.reason}
+          </T>
+        </View>
+        <View style={{ paddingTop: 2, transform: [{ rotate: open ? "90deg" : "0deg" }] }}>
+          <Icon name="chevron" size={14} color={color.ink3} />
+        </View>
+      </View>
       {open ? (
         <View style={styles.why}>
           {(["a", "b"] as const).map((k, i) => (
@@ -475,7 +490,7 @@ function DeltaRow({ tag, coral, item, names, last }: { tag: string; coral: boole
   );
 }
 
-/** Figma 1:216: the teacher explains in their own words; the coral trace is live. */
+/** Storyboard 10 / Figma 1:216: guided teaching cards; the coral trace is live. */
 function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me: string; busy: boolean; onExplain: (text: string) => void }) {
   const t = room.teaching!;
   const [text, setText] = useState("");
@@ -486,21 +501,20 @@ function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me:
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
-        <T variant="label" tone="coral" style={{ marginTop: space.l }}>
-          {upper(teacher)} → {upper(nameOf(room, t.learnerId))}
-        </T>
+        <DotTag tone="coral" label={`${upper(teacher)} → ${upper(nameOf(room, t.learnerId))}`} style={{ marginTop: space.l }} />
         <T variant="display" style={styles.conceptTitle}>
           {sentence(t.conceptName)}
         </T>
       </View>
       <Duo room={room} focus={t.conceptId} trace={{ conceptId: t.conceptId, from, mode: "teaching" }} />
-      <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23 }}>
-          {room.museLine ?? `${teacher}, teach this in your own words.`}
-        </T>
-        <T variant="body" style={{ marginTop: space.s, color: color.ink2, fontSize: 16, lineHeight: 24 }}>
-          {t.prompt}
-        </T>
+      <View style={{ paddingHorizontal: gutter, marginTop: space.l, gap: space.m }}>
+        <MuseCard>{room.museLine ?? `${teacher}, teach this in your own words.`}</MuseCard>
+        <RaisedCard>
+          <T variant="label">Prompt</T>
+          <T variant="body" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
+            {t.prompt}
+          </T>
+        </RaisedCard>
         {canSpeak ? (
           <View style={styles.speak}>
             <TextInput
@@ -518,20 +532,20 @@ function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me:
               disabled={busy || !text.trim()}
               accessibilityRole="button"
               accessibilityLabel="Done explaining"
-              style={[styles.speakBtn, (!text.trim() || busy) && { opacity: 0.5 }]}
+              style={[styles.speakBtn, (!text.trim() || busy) && { opacity: 0.35 }]}
             >
-              {busy ? <ActivityIndicator color={color.coral} /> : <T style={{ color: color.coral, fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 20 }}>•••</T>}
+              {busy ? <ActivityIndicator color={color.onInk} /> : <Icon name="arrow" size={17} color={color.onInk} />}
             </Pressable>
           </View>
         ) : (
           <View style={styles.speak}>
-            <T variant="body" style={{ color: color.ink3, flex: 1 }}>
+            <T variant="body" style={{ color: color.ink3, flex: 1, paddingVertical: space.m }}>
               {teacher} is speaking…
             </T>
           </View>
         )}
         {canSpeak && t.teacherId !== me ? (
-          <T variant="meta" style={{ marginTop: space.m, color: color.ink3 }}>
+          <T variant="meta" style={{ color: color.ink3 }}>
             One-device mode: type what {teacher} says. Her explanation isn&apos;t evidence for anyone; the transfer question is.
           </T>
         ) : null}
@@ -551,19 +565,17 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
-        <T variant="label" tone="coral" style={{ marginTop: space.l }}>
-          {tr.learnerId === me ? "Your turn" : `${upper(learner)}'s turn`}
-        </T>
+        <DotTag tone="coral" label={tr.learnerId === me ? "Your turn" : `${upper(learner)}'s turn`} style={{ marginTop: space.l }} />
         <T variant="title" style={{ marginTop: space.m }}>
           {tr.prompt}
         </T>
         {t?.explanation ? (
-          <View style={styles.quote}>
+          <RaisedCard style={{ marginTop: space.l, paddingVertical: space.m }}>
             <T variant="label">{nameOf(room, t.teacherId)} explained</T>
-            <T variant="support" style={{ marginTop: space.xs, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2 }}>
+            <T variant="support" style={{ marginTop: space.xs, fontSize: 15, lineHeight: 22, color: color.ink2 }}>
               “{t.explanation}”
             </T>
-          </View>
+          </RaisedCard>
         ) : null}
       </View>
       <Duo room={room} focus={tr.conceptId} trace={t ? { conceptId: tr.conceptId, from: left?.userId === t.teacherId ? "left" : "right", mode: "teaching" } : null} />
@@ -595,7 +607,7 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
   );
 }
 
-/** Figma 1:269: knowledge moved, and exactly why Thinketh believes it. */
+/** Storyboard 11 / Figma 1:269: knowledge moved, and exactly why Thinketh believes it. */
 function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void }) {
   const tr = room.transfer!;
   const t = room.teaching;
@@ -614,7 +626,7 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
         <T variant="editorial" style={{ marginTop: space.m }}>
           {verified ? "Knowledge moved." : "Not yet."}
         </T>
-        <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
+        <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
           {verified ? `${learner} applied what ${teacher} taught in a new context.` : `${learner}'s answer didn't show it yet. Thinketh recorded what it did show.`}
         </T>
       </View>
@@ -625,35 +637,44 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
         changed={verified ? { [tr.learnerId]: [tr.conceptId] } : undefined}
       />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        <T variant="label" tone={verified ? "coral" : undefined}>
-          {upper(t?.conceptName ?? "")}
-        </T>
-        <T variant="section" style={{ marginTop: space.s, fontSize: 23, lineHeight: 29 }}>
-          {verified ? "New connection verified" : "Recorded, not verified"}
-        </T>
-        <T variant="support" style={{ marginTop: space.m, fontSize: 16, lineHeight: 24 }}>
-          {verified ? `${teacher} explained it. ${learner} applied it in a new context. Thinketh updated only after demonstration.` : (tr.feedback ?? "")}
-        </T>
-        {tn ? (
-          <Pressable onPress={() => setWhy((w) => !w)} accessibilityRole="button" accessibilityState={{ expanded: why }} style={{ marginTop: space.m, minHeight: 44, justifyContent: "center" }}>
-            <T variant="meta">{why ? "Why Thinketh changed its model" : `Mastery ${fmt2(tn.before.mastery)} → ${fmt2(tn.after.mastery)} · why?`}</T>
-          </Pressable>
-        ) : null}
-        {why && tn ? (
-          <View style={styles.why}>
-            <T variant="support">{tn.reason}</T>
-            {verified && tr.feedback ? (
-              <T variant="meta" style={{ marginTop: space.s }}>
-                Grader: {tr.feedback}
-              </T>
-            ) : null}
+        <ListCard>
+          <View style={[styles.changeRow, tn ? styles.changeDivided : null]}>
+            <DotTag tone={verified ? "coral" : "muted"} label={upper(t?.conceptName ?? "")} />
+            <T variant="section" style={{ marginTop: space.s }}>
+              {verified ? "New connection verified" : "Recorded, not verified"}
+            </T>
+            <T variant="support" style={{ marginTop: space.xs }}>
+              {verified ? `${teacher} explained it. ${learner} applied it in a new context. Thinketh updated only after demonstration.` : (tr.feedback ?? "")}
+            </T>
           </View>
-        ) : null}
+          {tn ? (
+            <Pressable onPress={() => setWhy((w) => !w)} accessibilityRole="button" accessibilityState={{ expanded: why }} style={({ pressed }) => [styles.changeRow, { minHeight: 44 }, pressed && { backgroundColor: color.surfaceMuted }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.s }}>
+                <T variant="meta" style={{ color: color.ink, fontVariant: ["tabular-nums"], flex: 1 }}>
+                  {why ? "Why Thinketh changed its model" : `Mastery ${fmt2(tn.before.mastery)} → ${fmt2(tn.after.mastery)} · why?`}
+                </T>
+                <View style={{ transform: [{ rotate: why ? "90deg" : "0deg" }] }}>
+                  <Icon name="chevron" size={14} color={color.ink3} />
+                </View>
+              </View>
+              {why ? (
+                <View style={styles.why}>
+                  <T variant="support">{tn.reason}</T>
+                  {verified && tr.feedback ? (
+                    <T variant="meta" style={{ marginTop: space.s }}>
+                      Grader: {tr.feedback}
+                    </T>
+                  ) : null}
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
+        </ListCard>
         {tr.learnerId === me ? (
           <Pill label={`See ${learner === HOST_NAME ? `${learner}'s` : "your"} Mind`} onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId } })} />
         ) : null}
-        <Button label="Next: the shared gap" kind="quiet" loading={busy} onPress={onNext} style={{ alignSelf: "flex-start", marginTop: space.s }} />
-        <T variant="meta" style={{ marginTop: space.s, color: color.ink2 }}>
+        <Button label="Next: the shared gap" kind="quiet" icon="arrow" loading={busy} onPress={onNext} style={{ alignSelf: "flex-start", marginTop: space.s }} />
+        <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
           Source: peer learning session · just now
         </T>
       </View>
@@ -669,39 +690,39 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
-        <T variant="label" style={{ marginTop: space.l }}>
-          Shared gap
-        </T>
+        <DotTag tone="muted" label="Shared gap" style={{ marginTop: space.l }} />
         <T variant="display" style={styles.conceptTitle}>
           {sentence(g.conceptName)}
         </T>
       </View>
       <Duo room={room} focus={g.conceptId} muse />
-      <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        <T variant="body" style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23 }}>
-          Neither Mind has strong evidence here.
-        </T>
-        <T variant="support" style={{ marginTop: space.m, fontSize: 16 }}>
-          Muse will teach the shared gap.
-        </T>
+      <View style={{ paddingHorizontal: gutter, marginTop: space.l, gap: space.m }}>
+        <MuseCard>
+          <T style={{ fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 21, color: color.ink, marginTop: space.s }}>Neither Mind has strong evidence here.</T>
+          <T variant="support" style={{ marginTop: space.xs }}>
+            Muse will teach the shared gap.
+          </T>
+        </MuseCard>
         {typeof source === "string" ? (
-          <View style={styles.resourceSmall}>
+          <RaisedCard style={{ paddingVertical: space.m }}>
             <T variant="label">Resource</T>
-            <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.s, fontSize: 16 }}>
+            <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.s, fontSize: 15 }}>
               {source}
             </T>
-          </View>
+          </RaisedCard>
         ) : null}
         {open ? (
-          <View style={{ marginTop: space.xl }}>
-            {(g.lesson ?? []).map((s) => (
-              <View key={s.heading} style={{ marginBottom: space.l }}>
-                <T variant="label">{s.heading}</T>
-                <T variant="body" style={{ marginTop: space.xs }}>
-                  {s.body}
-                </T>
-              </View>
-            ))}
+          <View>
+            <RaisedCard style={{ gap: space.l }}>
+              {(g.lesson ?? []).map((s) => (
+                <View key={s.heading}>
+                  <T variant="label">{s.heading}</T>
+                  <T variant="body" style={{ marginTop: space.xs }}>
+                    {s.body}
+                  </T>
+                </View>
+              ))}
+            </RaisedCard>
             <Pill label="Bring in a shared source" busy={busy} onPress={onNext} />
           </View>
         ) : (
@@ -712,12 +733,9 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
   );
 }
 
-
 /** Figma 1:376: same source, a different delta for each Mind. */
 function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: string; busy: boolean; onEnd: () => void }) {
   const res = room.resource!;
-  const { width } = useWindowDimensions();
-  const colW = (width - gutter * 2) / 2;
   const hostFirst = [...res.sides].sort((a) => (a.userId === room.hostId ? -1 : 1));
   const mine = res.sides.find((s) => s.userId === me);
   const ready = res.sides.every((s) => s.status !== "processing");
@@ -725,21 +743,18 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
   const differs = new Set(res.sides.map((s) => `${s.newIdeas}|${Math.round(s.usefulMinutes ?? 0)}|${s.focus ?? ""}`)).size > 1;
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <View style={styles.sourceCard}>
-        <T variant="title" style={{ fontSize: 23, lineHeight: 29 }}>
+      <RaisedCard style={{ marginTop: space.m }}>
+        <T variant="label">Shared source</T>
+        <T variant="title" style={{ marginTop: space.s }}>
           {res.title}
         </T>
         <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
           {[res.sourceLabel, res.readMinutes ? `~${Math.round(res.readMinutes)} min full` : undefined].filter(Boolean).join(" · ")}
         </T>
-      </View>
-      <Svg width={width - gutter * 2} height={40}>
-        <Line x1={(width - gutter * 2) / 2} y1={0} x2={colW / 2} y2={40} stroke={color.edge} strokeWidth={1} />
-        <Line x1={(width - gutter * 2) / 2} y1={0} x2={colW * 1.5} y2={40} stroke={color.edge} strokeWidth={1} />
-      </Svg>
-      <View style={{ flexDirection: "row", marginTop: space.s }}>
-        {hostFirst.map((s) => (
-          <View key={s.userId} style={{ width: colW, paddingRight: space.m }}>
+      </RaisedCard>
+      <RaisedCard style={{ marginTop: space.m, flexDirection: "row", paddingHorizontal: 0 }}>
+        {hostFirst.map((s, i) => (
+          <View key={s.userId} style={[{ flex: 1, paddingHorizontal: space.l }, i > 0 && styles.colDivided]}>
             <T variant="label">{upper(nameOf(room, s.userId))}</T>
             {s.status === "processing" ? (
               <View style={{ marginTop: space.m }}>
@@ -751,11 +766,14 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
               </T>
             ) : (
               <>
-                <T variant="metric" style={{ fontSize: 28, lineHeight: 34, color: color.coral, marginTop: space.s }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
+                <T variant="metric" style={{ fontSize: 28, lineHeight: 34, marginTop: space.s }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
                 <T variant="support">useful for {s.userId === me ? "you" : nameOf(room, s.userId)}</T>
-                <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.m }}>
-                  {s.newIdeas} new idea{s.newIdeas === 1 ? "" : "s"}
-                </T>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.m }}>
+                  {s.newIdeas > 0 ? <Dot tone="coral" size={5} /> : null}
+                  <T variant="body" style={{ fontFamily: font.sansSemibold }}>
+                    {s.newIdeas} new idea{s.newIdeas === 1 ? "" : "s"}
+                  </T>
+                </View>
                 {s.focus ? (
                   <T variant="meta" style={{ marginTop: 2 }}>
                     mostly {s.focus}
@@ -765,15 +783,12 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
             )}
           </View>
         ))}
-      </View>
-      <T variant="editorial" style={{ marginTop: space.xl, fontSize: 25, lineHeight: 31 }}>
+      </RaisedCard>
+      <T variant="editorial" style={{ marginTop: space.xl, fontSize: 26, lineHeight: 31 }}>
         {!ready || differs ? "Same source. Different delta." : "Same source. A similar delta."}
       </T>
       {res.note ? (
-        <View style={{ marginTop: space.xl }}>
-          <T variant="label">Muse</T>
-          <T style={{ fontFamily: font.sansMedium, fontSize: 16, lineHeight: 23, color: color.ink, marginTop: space.xs }}>{res.note}</T>
-        </View>
+        <MuseCard style={{ marginTop: space.l }}>{res.note}</MuseCard>
       ) : (
         <T variant="support" style={{ marginTop: space.m }}>
           Thinketh is reading it against each Mind…
@@ -789,10 +804,13 @@ function Ended({ room, me }: { room: PlaygroundRoom; me: string }) {
   const verified = room.transfer?.verified;
   return (
     <View style={{ paddingHorizontal: gutter }}>
-      <T variant="display" style={{ marginTop: space.m }}>
+      <View style={{ alignItems: "center", marginTop: space.l }}>
+        <TwoMinds width={200} height={128} />
+      </View>
+      <T variant="display" style={{ marginTop: space.xl }}>
         Session complete.
       </T>
-      <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
+      <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
         {verified ? `${nameOf(room, room.transfer!.learnerId)}'s Mind keeps what was verified. Nothing else changed.` : "Nothing was verified, so no Mind changed."}
       </T>
       <Pill label="See your Mind" onPress={() => router.push({ pathname: "/mind", params: room.transfer && room.transfer.learnerId === me ? { concept: room.transfer.conceptId } : {} })} />
@@ -839,22 +857,19 @@ function Offline() {
 
 const styles = StyleSheet.create({
   conceptTitle: { marginTop: space.s, fontSize: 28, lineHeight: 34 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
-  soloName: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 24, letterSpacing: -0.3, color: color.ink, textAlign: "center", marginTop: space.xl },
-  joinBox: { marginTop: space.l, alignSelf: "stretch", alignItems: "center" },
-  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, letterSpacing: 6, color: color.ink, borderBottomWidth: 1, borderBottomColor: color.edge, paddingVertical: space.s },
-  plus: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel, alignItems: "center", justifyContent: "center" },
-  inviteCard: { marginTop: space.l, padding: layout.cardPad, backgroundColor: color.surfaceRaised, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s, backgroundColor: color.canvas },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44 },
+  headerTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
+  cta: { alignSelf: "stretch", minHeight: 52 },
+  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, letterSpacing: 6, color: color.ink, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline, paddingVertical: space.s, marginTop: space.s },
   pill: { alignSelf: "flex-start", marginTop: space.l, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 46 },
-  privateMind: { width: "100%", height: 168, borderRadius: radius.surface, borderWidth: 1, borderColor: color.edge, borderStyle: "dashed", alignItems: "center", justifyContent: "center", padding: space.m },
   check: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: color.edge, alignItems: "center", justifyContent: "center" },
   why: { marginTop: space.s, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.control, gap: 2 },
-  speak: { flexDirection: "row", alignItems: "center", marginTop: space.l, minHeight: 60, paddingLeft: space.l, paddingRight: space.s, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
+  speak: { flexDirection: "row", alignItems: "center", minHeight: 60, paddingLeft: space.l, paddingRight: space.s, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas, ...shadow.soft },
   speakInput: { flex: 1, fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: color.ink, paddingVertical: space.m, maxHeight: 140 },
-  speakBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: color.coral, backgroundColor: color.coralTint, alignItems: "center", justifyContent: "center", marginLeft: space.s },
-  quote: { marginTop: space.l, paddingLeft: space.m, borderLeftWidth: 2, borderLeftColor: color.coralTint },
-  answer: { marginTop: space.l, minHeight: 96, padding: space.m, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink, textAlignVertical: "top" },
-  resourceSmall: { marginTop: space.l, padding: space.m, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
-  sourceCard: { marginTop: space.m, padding: layout.cardPad, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, backgroundColor: color.surfaceRaised, ...shadow.raised },
+  speakBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", marginLeft: space.s },
+  answer: { marginTop: space.l, minHeight: 104, padding: space.l, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink, textAlignVertical: "top", ...shadow.soft },
+  changeRow: { paddingHorizontal: space.l, paddingVertical: space.m },
+  changeDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
+  colDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
 });

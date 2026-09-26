@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
-import { Icon, type IconName } from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
+import { ActionTile, InsightRow, ListCard, MetricStrip, MindprintPreview, SectionHeader } from "@/components/system";
 import { Texture } from "@/components/Texture";
 import { imageFor } from "@/content/imagery";
 import { Sheet } from "@/components/Sheet";
@@ -105,13 +106,14 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
       <Gutter>
         <IntelligenceHero count={brief.meaningfulCount} knowledge={knowledge} active={active} />
         <MetricStrip
+          style={{ marginTop: space.xl }}
           metrics={[
             { value: String((brief.skippedCount ?? 0) + brief.meaningfulCount), label: "Items", sub: "scanned" },
             understood.size > 0
               ? { value: `${understood.size}/${brief.meaningfulCount}`, label: "Understood", sub: "so far", accent: true }
               : { value: String(brief.meaningfulCount), label: "New", sub: "for you", accent: true },
             { value: String(connected.size), label: "Connected", sub: "to your Mind" },
-            { value: String(brief.skippedCount ?? 0), label: "Filtered", sub: "why? ⓘ", onPress: brief.skippedCount ? () => setFilterOpen(true) : undefined },
+            { value: String(brief.skippedCount ?? 0), label: "Filtered", sub: "why? ⓘ", accessibilityLabel: `${brief.skippedCount ?? 0} items filtered. See why.`, onPress: brief.skippedCount ? () => setFilterOpen(true) : undefined },
           ]}
         />
         <View style={styles.ctaRow}>
@@ -138,7 +140,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
 
         <SectionHeader title="Continue where you left off" />
         <View style={styles.tiles}>
-          <ContinueTile
+          <ActionTile
             icon="mind"
             tint={glow.tileNeutral}
             ink={color.ink}
@@ -148,8 +150,8 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             accent={!!latest}
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
           />
-          <ContinueTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ContinueTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
+          <ActionTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
+          <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
         </View>
 
         {rest.length ? (
@@ -158,17 +160,22 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
               title="Recent new insights"
               action={rest.length > VISIBLE_ROWS ? { label: showAll ? "Show fewer" : "See all", onPress: () => setShowAll((v) => !v) } : undefined}
             />
-            <View style={styles.insights}>
+            <ListCard>
               {shown.map((d, i) => (
-                <RecentInsightRow
+                <InsightRow
                   key={d.id}
-                  development={d}
-                  last={i === shown.length - 1}
-                  category={conceptById.get(d.conceptIds[0] ?? "")?.name}
+                  thumb={imageFor(d.conceptIds)}
+                  category={conceptById.get(d.conceptIds[0] ?? "")?.name ?? significanceLabel(d)}
+                  title={d.title}
+                  summary={d.summaryBullets[0]}
+                  meta={relativeTime(d.happenedAt)}
                   understood={understood.has(d.id)}
+                  last={i === shown.length - 1}
+                  accessibilityLabel={`${d.title}. ${significanceLabel(d)}.${understood.has(d.id) ? " Understood." : ""}`}
+                  onPress={() => router.push({ pathname: "/development/[id]", params: { id: d.id } })}
                 />
               ))}
-            </View>
+            </ListCard>
           </>
         ) : null}
       </Gutter>
@@ -225,7 +232,10 @@ function IntelligenceHero({ count, knowledge, active }: { count: number; knowled
   return (
     <View style={styles.hero}>
       <View style={styles.heroGraph} pointerEvents="none">
-        <HeroMindprint knowledge={knowledge} active={active} />
+        <MindprintPreview
+          nodes={knowledge.items.map((it) => ({ id: it.concept.id, strong: it.level === "strong" || it.level === "intermediate" }))}
+          activeId={knowledge.items.find((it) => active.has(it.concept.id))?.concept.id}
+        />
       </View>
       <T style={styles.kicker}>Your intelligence today</T>
       <T style={styles.headline} accessibilityRole="header">
@@ -236,87 +246,10 @@ function IntelligenceHero({ count, knowledge, active }: { count: number; knowled
   );
 }
 
-/**
- * A mini Mindprint, composed rather than scattered: what changed sits at the centre (coral),
- * your other concepts on two faint rings. Filled = strong, hollow = developing.
- */
-function HeroMindprint({ knowledge, active }: { knowledge: KnowledgeResponse; active: Set<string> }) {
-  const items = knowledge.items;
-  const centre = items.find((it) => active.has(it.concept.id)) ?? items[0];
-  const others = items.filter((it) => it !== centre).slice(0, 10);
-  const inner = others.slice(0, 4);
-  const outer = others.slice(4);
-  const C = 64;
-  const at = (i: number, n: number, radius: number, offset: number) => {
-    const a = offset + (i / Math.max(n, 1)) * Math.PI * 2;
-    return [C + Math.cos(a) * radius, C + Math.sin(a) * radius] as const;
-  };
-  const innerPts = inner.map((_, i) => at(i, inner.length, 28, -Math.PI / 3));
-  const outerPts = outer.map((_, i) => at(i, outer.length, 52, -Math.PI / 5));
-  const node = (it: (typeof items)[number], [x, y]: readonly [number, number]) =>
-    it.level === "strong" || it.level === "intermediate" ? (
-      <Circle key={it.concept.id} cx={x} cy={y} r={3.2} fill={color.ink} />
-    ) : (
-      <Circle key={it.concept.id} cx={x} cy={y} r={3} fill={color.canvas} stroke={color.ink2} strokeWidth={1.1} />
-    );
-  if (!centre) return null;
-  return (
-    <Svg width={128} height={128} viewBox="0 0 128 128">
-      <Circle cx={C} cy={C} r={28} stroke={color.hairline} strokeWidth={1} fill="none" />
-      <Circle cx={C} cy={C} r={52} stroke={color.hairline} strokeWidth={1} fill="none" />
-      {innerPts.map(([x, y], i) => (
-        <Path key={`c${i}`} d={`M${C} ${C} L${x} ${y}`} stroke={color.ink} strokeOpacity={0.16} strokeWidth={0.9} />
-      ))}
-      {outerPts.map(([x, y], j) => {
-        const [px, py] = innerPts[Math.floor((j * innerPts.length) / Math.max(outerPts.length, 1))] ?? [C, C];
-        return <Path key={`o${j}`} d={`M${px} ${py} L${x} ${y}`} stroke={color.ink} strokeOpacity={0.12} strokeWidth={0.8} />;
-      })}
-      {inner.map((it, i) => node(it, innerPts[i]))}
-      {outer.map((it, i) => node(it, outerPts[i]))}
-      {active.has(centre.concept.id) ? (
-        <G>
-          <Circle cx={C} cy={C} r={8} fill="none" stroke={color.coral} strokeOpacity={0.3} strokeWidth={1} />
-          <Circle cx={C} cy={C} r={4} fill={color.coral} />
-        </G>
-      ) : (
-        <Circle cx={C} cy={C} r={4} fill={color.ink} />
-      )}
-    </Svg>
-  );
-}
 
 
 
-type Metric = { value: string; label: string; sub: string; accent?: boolean; onPress?: () => void };
 
-function MetricStrip({ metrics }: { metrics: Metric[] }) {
-  return (
-    <View style={styles.metrics} accessibilityRole="summary">
-      {metrics.map((m, i) => {
-        const cell = (
-          <View style={[styles.metric, i === 0 ? styles.metricFirst : styles.metricDivided]}>
-            <T variant="metric" style={[{ fontSize: 26, lineHeight: 30 }, m.accent && { color: color.coral }]}>
-              {m.value}
-            </T>
-            <T style={styles.metricLabel} numberOfLines={1} adjustsFontSizeToFit>
-              {m.label}
-            </T>
-            <T style={styles.metricSub}>{m.sub}</T>
-          </View>
-        );
-        return m.onPress ? (
-          <Pressable key={m.label} onPress={m.onPress} accessibilityRole="button" accessibilityLabel={`${m.value} items filtered. See why.`} style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}>
-            {cell}
-          </Pressable>
-        ) : (
-          <View key={m.label} style={{ flex: 1 }}>
-            {cell}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
 
 function LeadDevelopmentCard({ development, understood, concepts }: { development: Development; understood: boolean; concepts: Concept[] }) {
   const { width } = useWindowDimensions();
@@ -398,75 +331,8 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
 
 
 
-function SectionHeader({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <T style={styles.sectionTitle}>{title}</T>
-      {action ? (
-        <Pressable onPress={action.onPress} accessibilityRole="button" hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 2, minHeight: 44 }}>
-          <T variant="meta">{action.label}</T>
-          <Icon name="chevron" size={14} color={color.ink2} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
 
-function ContinueTile({ icon, tint, ink, title, subtitle, accent, onPress }: { icon: IconName; tint: string; ink: string; title: string; subtitle: string; accent?: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}.`} style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
-      <View style={[styles.tileIcon, { backgroundColor: tint }]}>
-        <Icon name={icon} size={20} color={ink} />
-      </View>
-      <T style={styles.tileTitle} numberOfLines={1}>
-        {title}
-      </T>
-      <T style={[styles.tileSub, accent && { color: color.coral }]} numberOfLines={2}>
-        {subtitle}
-      </T>
-      <View style={styles.tileArrow}>
-        <Icon name="arrow" size={15} color={color.ink2} />
-      </View>
-    </Pressable>
-  );
-}
 
-function RecentInsightRow({ development: d, last, category, understood }: { development: Development; last: boolean; category?: string; understood: boolean }) {
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: "/development/[id]", params: { id: d.id } })}
-      accessibilityRole="button"
-      accessibilityLabel={`${d.title}. ${significanceLabel(d)}.${understood ? " Understood." : ""}`}
-      style={({ pressed }) => [styles.insight, pressed && { backgroundColor: color.surfaceMuted }]}
-    >
-      <Texture source={imageFor(d.conceptIds)} style={styles.thumb} />
-      <View style={[styles.insightBody, !last && styles.insightDivided]}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {understood ? <Icon name="check" size={12} color={color.ink} /> : <View style={styles.metaDot} />}
-            <T style={styles.insightCategory} numberOfLines={1}>
-              {understood ? "Understood" : (category ?? significanceLabel(d))}
-            </T>
-          </View>
-          <T style={styles.insightTitle} numberOfLines={2}>
-            {d.title}
-          </T>
-          {d.summaryBullets[0] ? (
-            <T style={styles.insightSummary} numberOfLines={1}>
-              {d.summaryBullets[0]}
-            </T>
-          ) : null}
-        </View>
-        <View style={{ alignItems: "flex-end", gap: space.s }}>
-          <T variant="meta" style={{ color: color.ink3, fontVariant: ["tabular-nums"] }}>
-            {relativeTime(d.happenedAt)}
-          </T>
-          <Icon name="chevron" size={14} color={color.ink3} />
-        </View>
-      </View>
-    </Pressable>
-  );
-}
 
 
 

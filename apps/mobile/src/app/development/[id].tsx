@@ -3,9 +3,11 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Development, DevelopmentDetailResponse, FeedbackKind, Source } from "@thinketh/contracts";
 import { api } from "@/api";
+import { BriefRow, BriefSection, DotLine } from "@/components/brief/Brief";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
-import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
+import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
+import { AppTopBar, ConceptChip, ListCard, SignalPill } from "@/components/system";
 import { useApi } from "@/lib/hooks";
 import { shortDate, significanceLabel } from "@/lib/knowledge";
 import { openExternal } from "@/lib/links";
@@ -16,8 +18,8 @@ export default function DevelopmentScreen() {
   const { data, error, loading, reload } = useApi(() => api.getDevelopment(id), [id]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <BackBar onBack={() => router.back()} />
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <AppTopBar title="Development" onBack={() => router.back()} />
       {loading && !data ? (
         <LoadingState message="Comparing this with what you already know…" />
       ) : error || !data ? (
@@ -29,6 +31,12 @@ export default function DevelopmentScreen() {
   );
 }
 
+/** Split a paragraph into sentences for a scannable list; the text itself is unchanged. */
+function sentences(text: string): string[] {
+  const parts = text.replace(/([.!?])\s+(?=[A-Z])/g, "$1\n").split("\n").map((p) => p.trim()).filter(Boolean);
+  return parts.length ? parts : [text];
+}
+
 function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   const { development: d, delta, sources, concepts } = data;
   const [whyOpen, setWhyOpen] = useState(false);
@@ -37,6 +45,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   const primaryConceptId = delta.affectedConcepts[0]?.conceptId ?? d.conceptIds[0];
   const primaryConcept = concepts.find((c) => c.id === primaryConceptId);
   const conceptName = (cid: string) => concepts.find((c) => c.id === cid)?.name ?? cid;
+  const significance = significanceLabel(d);
 
   const send = async (kind: FeedbackKind) => {
     setSending(kind);
@@ -50,18 +59,49 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
     }
   };
 
+  const ways = [
+    { key: "visualize", title: "Visualize this", subtitle: "See the old and new model side by side.", onPress: () => router.push({ pathname: "/visualize/[id]", params: { id: d.id } }) },
+    {
+      key: "stick",
+      title: "Make it stick",
+      subtitle: "An analogy, a hook, and a three-step model.",
+      onPress: () => router.push({ pathname: "/make-it-stick/[id]", params: { id: d.id, conceptId: primaryConceptId } }),
+    },
+    {
+      key: "deeper",
+      title: "Explain deeper",
+      subtitle: "Ask Thinketh, grounded in what you know.",
+      onPress: () =>
+        router.push({
+          pathname: "/ask",
+          params: {
+            q: `Explain what changed in ${(primaryConcept?.name ?? d.title).toLowerCase()}, based on what I already know.`,
+            dev: d.id,
+            mode: "teach",
+          },
+        }),
+    },
+    ...(d.storylineIds.length > 0
+      ? [
+          {
+            key: "storyline",
+            title: "See how this idea changed",
+            subtitle: "The storyline behind this development, and where you are in it.",
+            onPress: () => router.push({ pathname: "/storyline/[id]", params: { id: "agent-memory" } }),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Screen topInset={false} contentStyle={{ paddingTop: space.s }}>
       <Gutter>
-        <View style={styles.meta}>
-          <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
-            {sources.length} {sources.length === 1 ? "source" : "sources"}
-          </T>
-          <T variant="meta">· surfaced {shortDate(d.happenedAt)}</T>
-          <T variant="meta">· {significanceLabel(d)}</T>
-        </View>
-        <T variant="title" style={{ marginTop: space.m, fontSize: 30, lineHeight: 37 }} accessibilityRole="header">
+        <SignalPill label={significance} muted={d.significance < 0.75} />
+        <T style={styles.title} accessibilityRole="header">
           {d.title}
+        </T>
+        <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+          {sources.length} {sources.length === 1 ? "source" : "sources"} · {shortDate(d.happenedAt)}
         </T>
         {d.summaryBullets[0] ? (
           <T variant="body" style={{ marginTop: space.l, color: color.ink2 }}>
@@ -70,185 +110,141 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
         ) : null}
 
         <Pressable onPress={() => setWhyOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: whyOpen }} style={styles.why}>
-          <T variant="meta">Why Thinketh considers this {significanceLabel(d).toLowerCase().replace(" development", "")}</T>
+          <T variant="meta">Why Thinketh considers this {significance.toLowerCase().replace(" development", "")}</T>
           <View style={{ transform: [{ rotate: whyOpen ? "90deg" : "0deg" }] }}>
             <Icon name="chevron" size={14} color={color.ink2} />
           </View>
         </Pressable>
         {whyOpen ? <WhyMajor d={d} sourceCount={sources.length} storyline={d.storylineIds.length > 0} /> : null}
-      </Gutter>
 
-      <Section label="What happened">
-        {delta.whatHappened.map((line) => (
-          <Bullet key={line}>{line}</Bullet>
-        ))}
-      </Section>
-
-      <Section label="Why this matters to you">
-        <T variant="body">{delta.whyItMattersToYou}</T>
-      </Section>
-
-      {/* The knowledge delta: what you had, what changed, what it means. */}
-      <Gutter style={{ marginTop: space.x3 }}>
-        <View style={[styles.rule, { borderLeftColor: color.edge }]}>
-          <T variant="label" style={{ marginBottom: space.m }}>
-            You already knew
-          </T>
-          {delta.alreadyKnew.map((line) => (
-            <Bullet key={line} muted>
-              {line}
-            </Bullet>
-          ))}
-        </View>
-        <View style={[styles.rule, { borderLeftColor: color.coral, marginTop: space.xl }]}>
-          <T variant="label" tone="coral" style={{ marginBottom: space.m }}>
-            What changed
-          </T>
-          {delta.whatChanged.map((line) => (
-            <Bullet key={line} accent>
-              {line}
-            </Bullet>
-          ))}
-        </View>
-      </Gutter>
-
-      <Gutter style={{ marginTop: space.x4, marginBottom: space.x3 }}>
-        <T variant="label" style={{ marginBottom: space.l }}>
-          Why this changes your mental model
-        </T>
-        <T variant="statement" style={{ fontSize: 26, lineHeight: 36 }}>
-          {delta.mentalModelChange}
-        </T>
-      </Gutter>
-
-      <Gutter>
-        <Button
-          kind="decisive"
-          label="Check my understanding"
-          icon="arrow"
-          onPress={() =>
-            router.push({ pathname: "/diagnostic", params: { developmentId: d.id, conceptId: primaryConceptId } })
-          }
-        />
-        <T variant="support" style={{ marginTop: space.m, textAlign: "center" }}>
-          One question. It tests the idea, not the wording.
-        </T>
-      </Gutter>
-
-      <View style={{ marginTop: space.x3 }}>
-        <Gutter>
-          <SectionLabel>Other ways in</SectionLabel>
-        </Gutter>
-        <Divider />
-        <Row onPress={() => router.push({ pathname: "/visualize/[id]", params: { id: d.id } })}>
-          <T variant="body" style={{ fontFamily: font.sansMedium }}>
-            Visualize this
-          </T>
-          <T variant="support">See the old and new model side by side.</T>
-        </Row>
-        <Row
-          onPress={() =>
-            router.push({ pathname: "/make-it-stick/[id]", params: { id: d.id, conceptId: primaryConceptId } })
-          }
-        >
-          <T variant="body" style={{ fontFamily: font.sansMedium }}>
-            Make it stick
-          </T>
-          <T variant="support">An analogy, a hook, and a three-step model.</T>
-        </Row>
-        <Row
-          onPress={() =>
-            router.push({
-              pathname: "/ask",
-              params: {
-                q: `Explain what changed in ${(primaryConcept?.name ?? d.title).toLowerCase()}, based on what I already know.`,
-                dev: d.id,
-                mode: "teach",
-              },
-            })
-          }
-        >
-          <T variant="body" style={{ fontFamily: font.sansMedium }}>
-            Explain deeper
-          </T>
-          <T variant="support">Ask Thinketh, grounded in what you know.</T>
-        </Row>
-        {d.storylineIds.length > 0 ? (
-          <Row onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: "agent-memory" } })}>
-            <T variant="body" style={{ fontFamily: font.sansMedium }}>
-              See how this idea changed
-            </T>
-            <T variant="support">The storyline behind this development, and where you are in it.</T>
-          </Row>
-        ) : null}
-      </View>
-
-      <Gutter style={{ marginTop: space.xl }}>
-        <View style={{ flexDirection: "row", gap: space.m }}>
-          <Button
-            kind="secondary"
-            label="Got it"
-            style={{ flex: 1, paddingHorizontal: space.m }}
-            disabled={!!feedback}
-            loading={sending === "got_it"}
-            onPress={() => send("got_it")}
-          />
-          <Button
-            kind="secondary"
-            label="I already knew this"
-            style={{ flex: 1.6, paddingHorizontal: space.m }}
-            disabled={!!feedback}
-            loading={sending === "already_knew"}
-            onPress={() => send("already_knew")}
-          />
-        </View>
-        {feedback ? (
-          <View style={styles.feedbackNote} accessibilityLiveRegion="polite">
-            <Icon name="check" size={16} color={color.ink} />
-            <T variant="support" style={{ flex: 1 }}>
-              {feedback.reason}
-            </T>
+        {/* The knowledge delta: what you had, what changed. */}
+        <BriefSection title="What's the shift?" style={{ marginTop: space.xl }}>
+          <View style={styles.shift}>
+            <T style={styles.smallCaps}>You already knew</T>
+            <View style={{ marginTop: space.s }}>
+              {delta.alreadyKnew.map((line) => (
+                <DotLine key={line} tone="muted">
+                  {line}
+                </DotLine>
+              ))}
+            </View>
+            <View style={styles.shiftRule} />
+            <T style={[styles.smallCaps, { color: color.ink }]}>What changed</T>
+            <View style={{ marginTop: space.s }}>
+              {delta.whatChanged.map((line) => (
+                <DotLine key={line} tone="signal">
+                  {line}
+                </DotLine>
+              ))}
+            </View>
           </View>
+        </BriefSection>
+
+        <BriefSection title="Why this matters to you">
+          {sentences(delta.whyItMattersToYou).map((line) => (
+            <DotLine key={line} tone="signal">
+              {line}
+            </DotLine>
+          ))}
+        </BriefSection>
+
+        <BriefSection title="Why this changes your mental model">
+          <T variant="statement" style={{ fontSize: 19, lineHeight: 27 }}>
+            {delta.mentalModelChange}
+          </T>
+        </BriefSection>
+
+        <BriefSection title="What happened">
+          {delta.whatHappened.map((line) => (
+            <DotLine key={line} tone="muted">
+              {line}
+            </DotLine>
+          ))}
+        </BriefSection>
+
+        {delta.affectedConcepts.length ? (
+          <BriefSection title="Related concepts">
+            <View style={styles.chips}>
+              {delta.affectedConcepts.map((c) => (
+                <ConceptChip
+                  key={c.conceptId}
+                  label={conceptName(c.conceptId)}
+                  active={c.conceptId === primaryConceptId}
+                  onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
+                />
+              ))}
+            </View>
+            {delta.affectedConcepts[0]?.reason ? (
+              <T variant="support" style={{ marginTop: space.m }}>
+                {delta.affectedConcepts[0].reason}
+              </T>
+            ) : null}
+          </BriefSection>
         ) : null}
+
+        <View style={{ marginTop: space.x3 }}>
+          <Button
+            label="Check my understanding"
+            icon="arrow"
+            onPress={() => router.push({ pathname: "/diagnostic", params: { developmentId: d.id, conceptId: primaryConceptId } })}
+          />
+          <T variant="support" style={{ marginTop: space.s, textAlign: "center" }}>
+            One question. It tests the idea, not the wording.
+          </T>
+          <View style={{ flexDirection: "row", gap: space.s, marginTop: space.l }}>
+            <Button
+              kind="secondary"
+              label="Got it"
+              style={{ flex: 1, paddingHorizontal: space.m }}
+              disabled={!!feedback}
+              loading={sending === "got_it"}
+              onPress={() => send("got_it")}
+            />
+            <Button
+              kind="secondary"
+              label="I already knew this"
+              style={{ flex: 1.6, paddingHorizontal: space.m }}
+              disabled={!!feedback}
+              loading={sending === "already_knew"}
+              onPress={() => send("already_knew")}
+            />
+          </View>
+          {feedback ? (
+            <View style={styles.feedbackNote} accessibilityLiveRegion="polite">
+              <Icon name="check" size={16} color={color.ink} />
+              <T variant="support" style={{ flex: 1 }}>
+                {feedback.reason}
+              </T>
+            </View>
+          ) : null}
+        </View>
+
+        <BriefSection title="Other ways in" style={{ marginTop: space.x3 }}>
+          <ListCard>
+            {ways.map((w, i) => (
+              <BriefRow key={w.key} title={w.title} subtitle={w.subtitle} last={i === ways.length - 1} onPress={w.onPress} />
+            ))}
+          </ListCard>
+        </BriefSection>
+
+        <BriefSection title="Go deeper">
+          <ListCard>
+            {sources.map((s, i) => (
+              <BriefRow
+                key={s.id}
+                icon={s.url ? "external" : undefined}
+                kicker={sourceClass(s)}
+                title={s.title}
+                meta={[s.publisher, s.publishedAt && !s.publisher?.includes("(demo)") ? shortDate(s.publishedAt) : undefined].filter(Boolean).join(" · ") || undefined}
+                last={i === sources.length - 1}
+                accessibilityRole="link"
+                accessibilityLabel={`${sourceClass(s)}, ${s.publisher ?? ""}: ${s.title}${s.url ? ", opens in browser" : ""}`}
+                onPress={s.url ? () => openExternal(s.url) : undefined}
+              />
+            ))}
+          </ListCard>
+        </BriefSection>
       </Gutter>
-
-      <View style={{ marginTop: space.x4 }}>
-        <Gutter>
-          <SectionLabel>Go deeper</SectionLabel>
-        </Gutter>
-        <Divider />
-        {sources.map((s) => (
-          <Row
-            key={s.id}
-            onPress={s.url ? () => openExternal(s.url) : undefined}
-            accessibilityLabel={`${sourceClass(s)}, ${s.publisher ?? ""}: ${s.title}${s.url ? ", opens in browser" : ""}`}
-          >
-            <T variant="label">{sourceClass(s)}</T>
-            <T variant="body" style={{ marginTop: 2 }}>
-              {s.title}
-              {s.url ? " ↗" : ""}
-            </T>
-            <T variant="meta" style={{ marginTop: 2 }}>
-              {[s.publisher, s.publishedAt && !s.publisher?.includes("(demo)") ? shortDate(s.publishedAt) : undefined].filter(Boolean).join(" · ")}
-            </T>
-          </Row>
-        ))}
-      </View>
-
-      <View style={{ marginTop: space.x3 }}>
-        <Gutter>
-          <SectionLabel>Related concepts</SectionLabel>
-        </Gutter>
-        <Divider />
-        {delta.affectedConcepts.map((c) => (
-          <Row key={c.conceptId} onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}>
-            <T variant="body" style={{ fontFamily: font.sansMedium }}>
-              {conceptName(c.conceptId)}
-            </T>
-            <T variant="support">{c.reason}</T>
-          </Row>
-        ))}
-      </View>
     </Screen>
   );
 }
@@ -264,39 +260,21 @@ function WhyMajor({ d, sourceCount, storyline }: { d: Development; sourceCount: 
   return (
     <View style={{ marginTop: space.s, gap: space.xs }}>
       {lines.map((l) => (
-        <Bullet key={l} muted>
+        <DotLine key={l} tone="muted">
           {l}
-        </Bullet>
+        </DotLine>
       ))}
     </View>
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Gutter style={{ marginTop: space.x3 }}>
-      <SectionLabel>{label}</SectionLabel>
-      {children}
-    </Gutter>
-  );
-}
-
-function Bullet({ children, muted, accent }: { children: string; muted?: boolean; accent?: boolean }) {
-  return (
-    <View style={{ flexDirection: "row", gap: space.m, marginBottom: space.s }}>
-      <View style={[styles.dot, accent && { backgroundColor: color.coral }]} />
-      <T variant="body" style={[{ flex: 1 }, muted && { color: color.ink2 }]}>
-        {children}
-      </T>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  meta: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" },
-  why: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.m, alignSelf: "flex-start" },
-  rule: { borderLeftWidth: 2, paddingLeft: space.l },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.ink3, marginTop: 10 },
+  title: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 32, letterSpacing: -0.7, color: color.ink, marginTop: space.m },
+  why: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.s, alignSelf: "flex-start" },
+  smallCaps: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink3 },
+  shift: { padding: space.l, borderRadius: 18, backgroundColor: color.surfaceMuted },
+  shiftRule: { height: StyleSheet.hairlineWidth, backgroundColor: color.hairline, marginVertical: space.m },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: space.s },
   feedbackNote: { flexDirection: "row", gap: space.s, marginTop: space.l, alignItems: "flex-start" },
 });
 

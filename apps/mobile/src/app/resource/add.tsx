@@ -33,11 +33,12 @@ export default function AddResource() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.canvas }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ModalHeader title="Add a resource" onClose={() => router.back()} />
       <Gutter style={{ paddingTop: space.xl }}>
-        <T variant="display" accessibilityRole="header" style={{ fontSize: 30, lineHeight: 36 }}>
-          Save to learn.
+        <T style={styles.kicker}>Save to learn</T>
+        <T variant="display" accessibilityRole="header" style={{ fontSize: 26, lineHeight: 32, letterSpacing: -0.7, marginTop: space.s }}>
+          What should Thinketh read?
         </T>
         <T variant="support" style={{ marginTop: space.m }}>
           Paste a link to an article, paper, PDF or YouTube video. Thinketh reads it and works out what&apos;s actually new to you.
@@ -69,7 +70,7 @@ export default function AddResource() {
         <View style={{ marginTop: space.xl }}>
           <Button label="Read it" icon="arrow" disabled={!looksLikeUrl} loading={saving} onPress={save} />
         </View>
-        <T variant="meta" style={{ marginTop: space.l }}>
+        <T variant="meta" style={{ marginTop: space.l, color: color.ink3, textAlign: "center" }}>
           Videos are read from their transcripts. Pages behind a sign-in can&apos;t be read.
         </T>
       </Gutter>
@@ -78,14 +79,15 @@ export default function AddResource() {
 }
 
 const styles = StyleSheet.create({
+  kicker: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.3, textTransform: "uppercase", color: color.ink3 },
   input: {
     marginTop: space.xxl,
     minHeight: 46,
     paddingHorizontal: space.l,
     borderRadius: radius.surface,
-    borderWidth: 1,
-    borderColor: color.edge,
-    backgroundColor: color.panel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.hairline,
+    backgroundColor: color.surfaceMuted,
     color: color.ink,
     fontFamily: font.sans,
     fontSize: 16,

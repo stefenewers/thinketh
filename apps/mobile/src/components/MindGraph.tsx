@@ -40,8 +40,8 @@ const radiusOf = (c: Concept) => 1.6 + c.importance * 1.6;
 
 export function nodeFill(mastery: number) {
   if (mastery >= 0.7) return color.ink;
-  if (mastery >= 0.5) return "#6F6963";
-  if (mastery >= 0.3) return "#B3ACA4";
+  if (mastery >= 0.5) return "#6B6B67";
+  if (mastery >= 0.3) return "#B4B4AF";
   return color.panel;
 }
 
@@ -188,7 +188,7 @@ export function MindGraph({ concepts, states, edges, selectedId, updatedIds, onS
       </View>
       <View style={styles.legend}>
         <Legend swatch={color.ink} label="Strong" />
-        <Legend swatch="#B3ACA4" label="Developing" />
+        <Legend swatch="#B4B4AF" label="Developing" />
         <Legend swatch={color.coral} label="Updated today" />
         <Legend dashed label="Little evidence" />
       </View>
