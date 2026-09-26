@@ -138,4 +138,11 @@ describe("cues: newly observed actions, once", () => {
     expect(assign.actor).toEqual({ kind: "planner", name: "Planner" });
     expect(assign.label).toMatch(/^Planner chose Nadani to teach you/);
   });
+
+  it("speaks to the viewer in the second person on either device", () => {
+    const onGuest = cuesSince(rooms.peer_teaching, rooms.overview.seq, "nadani").find((c) => c.kind === "assign")!;
+    expect(onGuest.label).toMatch(/chose you to teach Stefen/);
+    const verified = cuesSince(rooms.verified, rooms.transfer.seq, ME).find((c) => c.kind === "verified")!;
+    expect(verified.label).toBe("Verified: Your Mind changed");
+  });
 });

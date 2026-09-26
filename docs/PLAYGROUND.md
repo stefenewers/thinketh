@@ -123,6 +123,23 @@ The **What just happened** rail lists the current exchange from the recorded eve
 
 The comparison is Thinketh's: `compare_started` is a Thinketh event, and there's no longer a timed "Muse is comparing" checklist.
 
+## The learning room (2.5D world)
+
+From arrival to the shared source, the Playground is one persistent room: an elevated-angle floor with each Mind on its own platform (host left, guest right, on every device), concepts as spheres on stems, Muse as a small dark presence, and Thinketh's actions (comparison sweep, checkpoint gate, grading) drawn as system objects rather than characters. The room stays mounted and centred; the action area scrolls beneath it.
+
+Two pure functions own the meaning; the renderer only draws:
+
+- `projectRoomToWorld(room, me, pending)` in `apps/mobile/src/lib/roomWorld.ts` turns the server's room (plus this device's in-flight request) into a `World`: people and sides, up to 7 concepts per Mind in stable order, heights equal to snapshot mastery, focus/related/quiet roles, the teaching path and its progress (from `roomStory.stageState`), Muse's target, Thinketh's `comparing`/`grading`, the shared gap, the source and its two computed outcomes, and a camera frame. It reads only snapshot and event data, never explanation text, Ask history, memories or unshared sources.
+- `eventToVisualCue(event, room, me)` maps one recorded event to a cue: kind, actor (Thinketh, Muse, Planner or a person) and label. Only `transfer_verified` celebrates.
+
+**Once only.** Broadcasts carry `{seq, type}`; the client refetches the room. `useRoomCues` (`components/playground/room/RoomParts.tsx`) keeps the last seen seq per room at module level. On first sight of a room (load, reconnect, return) it settles with a still caption and plays nothing. Later events in one response queue in seq order and play one after another (1.8 s each, never blocking input). With reduced motion only the latest cue shows, and every move is a jump.
+
+**Camera is not learning state.** Follow Muse frames the World's `frame`; Explore enables pan and pinch, with "Return to live". Nothing in the camera feeds back into the projection.
+
+**Touch and text.** Every concept, the path, the gap, the source and the latest action are 44 pt targets with labels. Each opens the evidence sheet (rule, numbers, before/after, grader, what the snapshot excludes). The "What just happened" rail stays as the textual event view.
+
+**Renderer.** `RoomScene.tsx` uses react-native-svg and Reanimated (per-shape animated props; no JS calls inside worklets). A Skia spike (`@shopify/react-native-skia` 2.6.2, SDK 57's version) rendered the same projection on web through CanvasKit (8 MB wasm, ~1.7 s first load) and built for the iOS simulator. But the phone's dev client doesn't include Skia and would need a rebuild, and native rendering couldn't be checked on hardware. So the demo build stays on SVG. The projection is renderer-independent if Skia is adopted later.
+
 ## Resource dual delta
 
 Muse brings one source into the room: the known-safe default, or **any** link someone pastes with "Use another source" (article, docs page, PDF or YouTube). It goes through the same hardened resource pipeline as everywhere else: URL validation, SSRF checks, redirect validation, size and PDF limits, YouTube transcripts, reader fallback, prompt-injection handling and timeouts. The page is fetched and extracted **once**, then personalized separately against each participant's Mind: read, map concepts, compare with **that** person's Mind, then compute the delta. A blocked or unreadable source fails honestly ("I couldn't read it for you"), and the session and the safe default stay available.

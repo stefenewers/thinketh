@@ -109,7 +109,7 @@ export function sides(room: PlaygroundRoom): { left?: string; right?: string } {
 }
 
 export function projectRoomToWorld(room: PlaygroundRoom, me: string, pending: Pending | "compare" = null): World {
-  const { left, right } = sides(room);
+  const { right } = sides(room);
   const sideOf = (id: string): Side => (id === right ? "right" : "left");
   const people: WorldPerson[] = room.participants.map((p) => ({
     userId: p.userId,
@@ -259,6 +259,10 @@ export function eventToVisualCue(e: RoomEvent, room: PlaygroundRoom, me: string)
   const concept = typeof e.data?.conceptId === "string" ? e.data.conceptId : undefined;
   const topic = (id?: string) => (id ? narrativeLabel(id, room.snapshots[0]?.concepts.find((c) => c.conceptId === id)?.name ?? id) : "");
   const person: CueActor = { kind: "person", name: who(e.actor) };
+  // Grammar for "you" on your own device.
+  const obj = (id: unknown) => who(id).replace(/^You$/, "you");
+  const whose = (id: unknown) => (who(id) === "You" ? "Your" : `${who(id)}'s`);
+  const applies = (id: unknown) => (who(id) === "You" ? "you apply" : `${who(id)} applies`);
   const base = { seq: e.seq, conceptId: concept, celebrate: false };
   switch (e.type) {
     case "participant_joined":
@@ -271,7 +275,7 @@ export function eventToVisualCue(e: RoomEvent, room: PlaygroundRoom, me: string)
       return { ...base, kind: "difference", actor: { kind: "thinketh", name: "Thinketh" }, label: e.summary };
     case "teacher_assigned": {
       const c = conductorOf(e);
-      return { ...base, kind: "assign", actor: c, label: `${c.name} chose ${who(e.data?.teacherId)} to teach ${who(e.data?.learnerId).replace(/^You$/, "you")} · ${topic(concept)}` };
+      return { ...base, kind: "assign", actor: c, label: `${c.name} chose ${obj(e.data?.teacherId)} to teach ${obj(e.data?.learnerId)} · ${topic(concept)}` };
     }
     case "spotlight": {
       const c = conductorOf(e);
@@ -280,11 +284,11 @@ export function eventToVisualCue(e: RoomEvent, room: PlaygroundRoom, me: string)
     case "explanation_submitted":
       return { ...base, kind: "explain", actor: person, label: `${who(e.actor)} explained: a perspective, not proof yet` };
     case "transfer_question":
-      return { ...base, kind: "checkpoint", actor: { kind: "thinketh", name: "Thinketh" }, label: `Thinketh set a checkpoint: ${who(e.data?.learnerId)} applies it somewhere new` };
+      return { ...base, kind: "checkpoint", actor: { kind: "thinketh", name: "Thinketh" }, label: `Thinketh set a checkpoint: ${applies(e.data?.learnerId)} it somewhere new` };
     case "answer_submitted":
       return { ...base, kind: "answer", actor: person, label: `${who(e.actor)} answered · Thinketh is grading` };
     case "transfer_verified":
-      return { ...base, kind: "verified", actor: { kind: "thinketh", name: "Thinketh" }, label: `Verified: ${who(room.transfer?.learnerId)}'s Mind changed`, celebrate: true };
+      return { ...base, kind: "verified", actor: { kind: "thinketh", name: "Thinketh" }, label: `Verified: ${whose(room.transfer?.learnerId)} Mind changed`, celebrate: true };
     case "transfer_not_verified":
       return { ...base, kind: "not_verified", actor: { kind: "thinketh", name: "Thinketh" }, label: "Not verified: recorded, nothing moved" };
     case "shared_gap_taught": {
