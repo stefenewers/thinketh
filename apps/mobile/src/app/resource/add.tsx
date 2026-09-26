@@ -40,7 +40,7 @@ export default function AddResource() {
           Save to learn.
         </T>
         <T variant="support" style={{ marginTop: space.m }}>
-          Paste a link to an article, paper or docs page. Thinketh reads it and works out what&apos;s actually new to you.
+          Paste a link to an article, paper, PDF or YouTube video. Thinketh reads it and works out what&apos;s actually new to you.
         </T>
         <TextInput
           value={url}
@@ -70,7 +70,7 @@ export default function AddResource() {
           <Button label="Read it" icon="arrow" disabled={!looksLikeUrl} loading={saving} onPress={save} />
         </View>
         <T variant="meta" style={{ marginTop: space.l }}>
-          Web pages work best. PDFs and pages that need a sign-in can&apos;t be read yet.
+          Videos are read from their transcripts. Pages behind a sign-in can&apos;t be read.
         </T>
       </Gutter>
     </KeyboardAvoidingView>

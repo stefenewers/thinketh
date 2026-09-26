@@ -6,7 +6,7 @@ vi.mock("node:dns/promises", () => ({
 }));
 
 import { deterministicAnalysis, enforceAnalysis, inferSourceType, publisherFromUrl, readMinutes, usefulMinutes, type ConceptView } from "../src/resources/analyze.ts";
-import { extractPage, fetchPage, isPrivateAddress, ResourceReadError, validateUrl } from "../src/resources/fetchPage.ts";
+import { captionText, extractPage, fetchPage, isPrivateAddress, ResourceReadError, validateUrl, youtubeId } from "../src/resources/fetchPage.ts";
 import { createThinketh } from "../src/index.ts";
 import { NOW, offlineConfig } from "./helpers.ts";
 
@@ -71,6 +71,75 @@ describe("URL safety", () => {
   });
 });
 
+const WORDS = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ");
+const player = (over: object = {}) =>
+  new Response(
+    JSON.stringify({
+      playabilityStatus: { status: "OK" },
+      videoDetails: { title: "Intro to Agent Memory", author: "Some Channel", lengthSeconds: "1800", shortDescription: "A talk about memory." },
+      captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: "https://www.youtube.com/api/timedtext?v=abc", languageCode: "en", kind: "asr" }] } },
+      ...over,
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+
+describe("links beyond web pages", () => {
+  it("recognizes YouTube links in every common form", () => {
+    for (const u of ["https://www.youtube.com/watch?v=zjkBMFhNj_g&t=30s", "https://youtu.be/zjkBMFhNj_g", "https://m.youtube.com/watch?v=zjkBMFhNj_g", "https://www.youtube.com/shorts/zjkBMFhNj_g", "https://www.youtube.com/embed/zjkBMFhNj_g"]) {
+      expect(youtubeId(new URL(u)), u).toBe("zjkBMFhNj_g");
+    }
+    expect(youtubeId(new URL("https://www.youtube.com/@karpathy"))).toBeUndefined();
+    expect(youtubeId(new URL("https://example.com/watch?v=zjkBMFhNj_g"))).toBeUndefined();
+  });
+
+  it("turns caption XML into transcript text", () => {
+    expect(captionText('<transcript><text start="0">hi everyone &amp; welcome</text><text start="2">to the <b>talk</b></text></transcript>')).toBe("hi everyone & welcome to the talk");
+  });
+
+  it("reads a YouTube video from its transcript, with its running time", async () => {
+    const f = vi.fn(async (u: string | URL) =>
+      String(u).includes("/player") ? player() : new Response(`<transcript>${`<text>${WORDS(60)}</text>`.repeat(3)}</transcript>`),
+    );
+    const page = await fetchPage("https://youtu.be/zjkBMFhNj_g", f as unknown as typeof fetch);
+    expect(page).toMatchObject({ kind: "video", readVia: "transcript", title: "Intro to Agent Memory", publisher: "Some Channel", durationMinutes: 30, url: "https://www.youtube.com/watch?v=zjkBMFhNj_g" });
+    expect(page.words).toBe(180);
+  });
+
+  it("falls back to the title and description when a video has no transcript, and says so", async () => {
+    const noCaptions = player({ captions: undefined, videoDetails: { title: "A talk", author: "C", lengthSeconds: "600", shortDescription: WORDS(40) } });
+    const page = await fetchPage("https://www.youtube.com/watch?v=zjkBMFhNj_g", vi.fn(async () => noCaptions) as unknown as typeof fetch);
+    expect(page).toMatchObject({ kind: "video", readVia: "description" });
+    const bare = player({ captions: undefined, videoDetails: { title: "x", shortDescription: "short" } });
+    await expect(fetchPage("https://youtu.be/zjkBMFhNj_g", vi.fn(async () => bare) as unknown as typeof fetch)).rejects.toThrow(/no transcript or description/);
+    const gone = player({ playabilityStatus: { status: "ERROR" }, videoDetails: undefined });
+    await expect(fetchPage("https://youtu.be/zjkBMFhNj_g", vi.fn(async () => gone) as unknown as typeof fetch)).rejects.toThrow(/isn't available/);
+  });
+
+  it("reads PDFs with the PDF extractor, and says so when a PDF can't be read", async () => {
+    const pdfRes = () => new Response(new Uint8Array([37, 80, 68, 70]), { headers: { "content-type": "application/pdf" } });
+    const page = await fetchPage("https://example.com/paper.pdf", vi.fn(async () => pdfRes()) as unknown as typeof fetch, {
+      pdf: async () => ({ text: WORDS(200), title: "A Paper", author: "A. Author" }),
+    });
+    expect(page).toMatchObject({ kind: "pdf", readVia: "pdf", title: "A Paper", author: "A. Author", words: 200 });
+    await expect(
+      fetchPage("https://example.com/scan.pdf", vi.fn(async () => pdfRes()) as unknown as typeof fetch, { pdf: async () => { throw new Error("bad xref"); } }),
+    ).rejects.toThrow(/couldn't read that PDF/);
+  });
+
+  it("uses the reader service only for blocked or script-rendered pages, and only when enabled", async () => {
+    const reader = `Title: Rendered title\nPublished Time: 2026-01-01\n\nMarkdown Content:\n# Heading\n${WORDS(150)} [a link](https://x.y)`;
+    const blocked = vi.fn(async (u: string | URL) => (String(u).startsWith("https://r.jina.ai/") ? new Response(reader) : html("denied", 403)));
+    const viaService = await fetchPage("https://example.com/post", blocked as unknown as typeof fetch, { readerBase: "https://r.jina.ai/" });
+    expect(viaService).toMatchObject({ readVia: "reader-service", title: "Rendered title", publishedAt: "2026-01-01" });
+    expect(viaService.text).not.toMatch(/\]\(|#/);
+    await expect(fetchPage("https://example.com/post", blocked as unknown as typeof fetch, { readerBase: null })).rejects.toThrow(/403/);
+
+    const spa = vi.fn(async (u: string | URL) => (String(u).startsWith("https://r.jina.ai/") ? new Response(reader) : html("<title>App</title><div id=root></div>")));
+    expect(await fetchPage("https://example.com/app", spa as unknown as typeof fetch, { readerBase: "https://r.jina.ai/" })).toMatchObject({ readVia: "reader-service" });
+    expect(blocked.mock.calls.every(([u]) => !String(u).includes("r.jina.ai") || String(u) === "https://r.jina.ai/https://example.com/post")).toBe(true);
+  });
+});
+
 describe("extraction", () => {
   it("reads metadata and the article text, dropping scripts and page chrome", () => {
     const page = extractPage("https://example.com/posts/1", ARTICLE_HTML);
@@ -115,7 +184,7 @@ const CONCEPTS: ConceptView[] = [
 describe("analysis rules", () => {
   it("deterministic analysis is extractive: known ideas only for known concepts, quoted from the page", () => {
     const page = extractPage("https://example.com/p", ARTICLE_HTML);
-    const a = deterministicAnalysis({ page, excerpt: page.text, concepts: CONCEPTS, preferences: [] });
+    const a = deterministicAnalysis({ page, excerpt: page.text, concepts: CONCEPTS, preferences: [], interests: ["AI agents"] });
     expect(a.matchedConceptIds).toEqual(expect.arrayContaining(["agent-memory", "retrieval", "context-windows"]));
     expect(a.alreadyUnderstood.every((i) => ["retrieval", "context-windows"].includes(i.conceptId!))).toBe(true);
     expect(a.newToYou.map((i) => i.conceptId)).toContain("agent-memory");
@@ -136,6 +205,7 @@ describe("analysis rules", () => {
         relevantConnections: [{ conceptId: "made-up", why: "x" }, { conceptId: "mcp", why: "tools" }],
         whyNow: "w",
         usefulFraction: 7,
+        relevance: { level: "core", reason: "r" },
       },
       CONCEPTS,
     );
@@ -183,6 +253,16 @@ describe("Learning Queue API", () => {
     expect(list.resources.map((r) => r.id)).toEqual([created.id]);
 
     expect(await (await app.request("/knowledge")).json()).toEqual(before);
+  });
+
+  it("treats every form of a YouTube link as the same saved video", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => player({ captions: undefined, videoDetails: { title: "T", author: "A", lengthSeconds: "60", shortDescription: WORDS(40) } })));
+    const { app } = createThinketh({ config: offlineConfig(), now: () => NOW });
+    const add = async (url: string) => (await (await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url }) })).json()) as { id: string; url: string };
+    const a = await add("https://youtu.be/zjkBMFhNj_g");
+    const b = await add("https://www.youtube.com/watch?v=zjkBMFhNj_g&t=42s");
+    expect(b.id).toBe(a.id);
+    expect(a.url).toBe("https://www.youtube.com/watch?v=zjkBMFhNj_g");
   });
 
   it("reports unreadable sources honestly, rejects bad URLs, and reset clears the queue", async () => {

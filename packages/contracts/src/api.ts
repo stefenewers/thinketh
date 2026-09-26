@@ -204,7 +204,7 @@ export type AppConfigResponse = z.infer<typeof AppConfigResponseSchema>;
 // diagnostic remains the only path that does.
 
 /** What the URL is, judged only from where it lives (no claims beyond that). */
-export const ResourceSourceTypeSchema = z.enum(["primary", "documentation", "research", "preprint", "repository", "reporting", "article"]);
+export const ResourceSourceTypeSchema = z.enum(["primary", "documentation", "research", "preprint", "repository", "reporting", "article", "video", "document"]);
 export type ResourceSourceType = z.infer<typeof ResourceSourceTypeSchema>;
 
 export const ResourceStatusSchema = z.enum(["processing", "ready", "failed", "learned"]);
@@ -240,6 +240,10 @@ export const ResourceSchema = z.object({
   whyNow: z.string().optional(),
   /** Which layer wrote the analysis: Claude, or the deterministic fallback. */
   analyzedBy: z.enum(["claude", "deterministic"]).optional(),
+  /** How the text was obtained: the page, a PDF, a video transcript, a video's description only, or a reader service. */
+  readVia: z.enum(["page", "pdf", "transcript", "description", "reader-service"]).optional(),
+  /** How this relates to what the user is learning. */
+  relevance: z.object({ level: z.enum(["core", "adjacent", "outside"]), reason: z.string() }).optional(),
 });
 export type Resource = z.infer<typeof ResourceSchema>;
 
