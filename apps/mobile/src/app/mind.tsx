@@ -66,9 +66,14 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
         <T variant="display" accessibilityRole="header">
           Your Mind
         </T>
-        <T variant="support" style={{ marginTop: space.s }}>
-          A living map of what you understand.
-        </T>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.s }}>
+          <T variant="support">A living map of what you understand.</T>
+          <Pressable onPress={() => router.push("/playground")} accessibilityRole="button" accessibilityLabel="Learn together in the Playground" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+            <T variant="meta" style={{ color: color.ink }}>
+              Learn together
+            </T>
+          </Pressable>
+        </View>
       </Gutter>
 
       <MindMap items={items} edges={data.edges} changedIds={updatedIds} selectedId={selectedId} onSelect={(id) => select(id)} />

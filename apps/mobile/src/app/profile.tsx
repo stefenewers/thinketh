@@ -54,6 +54,17 @@ export default function ProfileScreen() {
             </T>
             <T variant="support">Your knowledge state, and why each part of it changed.</T>
           </Row>
+          <Row
+            onPress={() => {
+              router.back();
+              router.push("/playground");
+            }}
+          >
+            <T variant="body" style={{ fontFamily: font.sansMedium }}>
+              Learn together
+            </T>
+            <T variant="support">Bring another Mind in. Thinketh finds what can move between you.</T>
+          </Row>
         </View>
       </Screen>
     </View>

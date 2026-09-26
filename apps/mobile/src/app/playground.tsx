@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ import { useApi, useReducedMotion } from "@/lib/hooks";
 import { useRoomChannel } from "@/lib/roomChannel";
 import { fmt2 } from "@/lib/knowledge";
 import { DuoMind } from "@/mindprint/DuoMind";
+import { MindCanvas } from "@/mindprint/MindCanvas";
 import { Mindprint } from "@/mindprint/Mindprint";
 import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
 import { color, font, gutter, radius, space } from "@/theme/tokens";
@@ -25,6 +26,9 @@ const HOST_NAME = "Stefen";
 const POLL_MS = 1500;
 /** Muse's "comparing" beat is shown at least this long, even when the server is instant. */
 const COMPARE_MS = 2600;
+
+/** "Following Muse" (Figma Spotlight): the view goes where the conductor points until you stop following. */
+const FollowContext = createContext(true);
 
 type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join";
 
@@ -68,7 +72,9 @@ export default function PlaygroundScreen() {
   }, [roomId, me, room?.scene, seq]);
 
   // Realtime makes the other device's actions land immediately; polling stays as the floor.
-  const live = useRoomChannel(room?.realtime, (e) => {
+  const [followMuse, setFollowMuse] = useState(true);
+  const myName = room?.participants.find((p) => p.userId === me)?.displayName ?? HOST_NAME;
+  const { live, present } = useRoomChannel(room?.realtime, me, room ? { name: myName, scene: room.scene, following: followMuse } : null, (e) => {
     if (!roomId || (seq !== undefined && e.seq <= seq)) return;
     playground.get(roomId, me).then(setRoom, () => {});
   });
@@ -114,20 +120,49 @@ export default function PlaygroundScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + space.s }]}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={styles.headerLeft}>
-          <Icon name="back" size={18} color={color.ink2} />
-          <T variant="body" style={{ color: color.ink2, fontSize: 15 }}>
-            {following && scene !== "comparing" ? "Following Muse" : "Playground"}
+        <View style={styles.headerLeft}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+            <Icon name="back" size={18} color={color.ink2} />
+          </Pressable>
+          {following && scene !== "comparing" ? (
+            <Pressable
+              onPress={() => setFollowMuse((f) => !f)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: followMuse }}
+              accessibilityHint={followMuse ? "Stop following and explore on your own" : "Follow Muse again"}
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <T variant="body" style={{ color: color.ink2, fontSize: 15 }}>
+                {followMuse ? "Following Muse" : "Exploring"}
+                <T variant="meta" style={{ color: color.ink3 }}>
+                  {followMuse ? "  · Stop" : "  · Follow Muse"}
+                </T>
+              </T>
+            </Pressable>
+          ) : (
+            <T variant="body" style={{ color: color.ink2, fontSize: 15 }}>
+              Playground
+            </T>
+          )}
+        </View>
+        {room && (scene === "peer_teaching" || scene === "transfer") ? (
+          <Pressable onPress={() => run(null, () => playground.leave(room.id, me)).then(() => router.back())} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+            <T variant="body" style={{ color: color.ink3, fontSize: 15 }}>
+              Leave
+            </T>
+          </Pressable>
+        ) : (
+          <T variant="body" style={{ color: color.ink3, fontSize: 15 }}>
+            {scene === "comparing" ? "Following Muse" : headerRight}
           </T>
-        </Pressable>
-        <T variant="body" style={{ color: color.ink3, fontSize: 15 }}>
-          {scene === "comparing" ? "Following Muse" : headerRight}
-        </T>
+        )}
       </View>
+      {room ? <PresenceLine room={room} me={me} present={present} /> : null}
 
       {!PLAYGROUND_AVAILABLE ? (
         <Offline />
       ) : (
+        <FollowContext.Provider value={followMuse || !following}>
         <ScrollView contentContainerStyle={{ paddingBottom: space.x5 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {scene === "waiting" ? (
             <Waiting
@@ -161,6 +196,7 @@ export default function PlaygroundScreen() {
           ) : null}
           {room ? <Provenance room={room} live={live} /> : null}
         </ScrollView>
+        </FollowContext.Provider>
       )}
     </KeyboardAvoidingView>
   );
@@ -186,10 +222,27 @@ function Duo({ room, focus, trace, muse, changed }: { room: PlaygroundRoom; focu
   const { left, right } = useSides(room);
   const d = room.delta;
   const keyConcepts = useMemo(() => (d ? [...d.bTeachesA.slice(0, 1), ...d.aTeachesB.slice(0, 1), ...d.sharedGaps.slice(0, 1)].map((i) => i.conceptId) : undefined), [d]);
+  const followingMuse = useContext(FollowContext);
   if (!left || !right) return <ArrivalDuo room={room} />;
+  const w = width - 32;
+  const duo = (
+    <DuoMind
+      left={left}
+      right={right}
+      edges={left.edges}
+      width={w}
+      height={256}
+      // Following: Muse's spotlight frames the view. Exploring: nothing dimmed, pan and pinch freely.
+      focusConceptId={followingMuse ? (focus ?? null) : null}
+      trace={trace ?? null}
+      muse={muse}
+      changed={changed}
+      keyConcepts={keyConcepts}
+    />
+  );
   return (
     <View style={{ alignItems: "center", marginTop: space.l }}>
-      <DuoMind left={left} right={right} edges={left.edges} width={width - 32} height={256} focusConceptId={focus ?? null} trace={trace ?? null} muse={muse} changed={changed} keyConcepts={keyConcepts} />
+      {followingMuse ? duo : <MindCanvas width={w} height={256} hits={[]}>{duo}</MindCanvas>}
     </View>
   );
 }
@@ -743,6 +796,21 @@ function Ended({ room, me }: { room: PlaygroundRoom; me: string }) {
         {verified ? `${nameOf(room, room.transfer!.learnerId)}'s Mind keeps what was verified. Nothing else changed.` : "Nothing was verified, so no Mind changed."}
       </T>
       <Pill label="See your Mind" onPress={() => router.push({ pathname: "/mind", params: room.transfer && room.transfer.learnerId === me ? { concept: room.transfer.conceptId } : {} })} />
+    </View>
+  );
+}
+
+/** Presence (Figma multiplayer grammar): who's here and whether they're following. Quiet, one line. */
+function PresenceLine({ room, me, present }: { room: PlaygroundRoom; me: string; present: Record<string, { name: string; scene: string; following: boolean }> }) {
+  const other = room.participants.find((p) => p.userId !== me);
+  const p = other ? present[other.userId] : undefined;
+  if (!other || other.demoPersona || !p) return null;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: gutter, marginTop: -4 }}>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral }} />
+      <T variant="meta" style={{ color: color.ink3 }}>
+        {p.following ? `${other.displayName} is here` : `${other.displayName} is exploring on their own`}
+      </T>
     </View>
   );
 }
