@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@thinketh/contracts";
+import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { ActionTile, Avatar, ListCard, SectionHeader } from "@/components/system";
@@ -15,7 +15,7 @@ import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
-import { color, font, glow, gutter, radius, shadow, space } from "@/theme/tokens";
+import { color, depth, font, glow, gutter, radius, space, warm } from "@/theme/tokens";
 
 const BRAND_MARK = require("../../../assets/brand/mark.png");
 
@@ -84,6 +84,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   // Concepts today's developments touch that are already in your Mind.
   const connected = new Set(ordered.flatMap((d) => d.conceptIds).filter((id) => inMind.has(id)));
   // Coral is a signal: only what changed today, or the lead development's way into your Mind.
+  const strongIds = new Set(knowledge.items.filter((i) => i.level === "strong" || i.level === "intermediate").map((i) => i.concept.id));
   const active = new Set([latest?.conceptId, hero?.conceptIds.find((id) => inMind.has(id))].filter((id): id is string => !!id));
 
   if (!hero) {
@@ -101,7 +102,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
 
   const shown = showAll ? rest : rest.slice(0, VISIBLE_ROWS);
   return (
-    <Screen background={color.canvas} contentStyle={{ paddingTop: 0 }} topInset={false}>
+    <Screen background={warm.ground} contentStyle={{ paddingTop: 0 }} topInset={false}>
       <TodayWash />
       <HomeTopBar />
       <Gutter>
@@ -141,6 +142,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
           development={hero}
           understood={understood.has(hero.id)}
           concepts={hero.conceptIds.map((id) => conceptById.get(id)).filter((c): c is Concept => !!c)}
+          tones={hero.conceptIds.filter((id) => conceptById.has(id)).map((id) => (id === latest?.conceptId ? "changed" : strongIds.has(id) ? "strong" : "developing"))}
           onPress={() => router.push({ pathname: "/development/[id]", params: { id: hero.id } })}
         />
 
@@ -166,12 +168,13 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
               title="Recent new insights"
               action={rest.length > VISIBLE_ROWS ? { label: showAll ? "Show fewer" : "See all", onPress: () => setShowAll((v) => !v) } : undefined}
             />
-            <ListCard>
+            <ListCard style={styles.panel}>
               {shown.map((d, i) => (
                 <InsightItem
                   key={d.id}
                   development={d}
-                  category={conceptById.get(d.conceptIds[0] ?? "")?.name ?? significanceLabel(d)}
+                  // Plain-language category; the canonical concept name stays on the detail view.
+                  category={d.conceptIds[0] && conceptById.get(d.conceptIds[0]) ? narrativeLabel(d.conceptIds[0], conceptById.get(d.conceptIds[0])!.name) : significanceLabel(d)}
                   meta={relativeTime(d.happenedAt)}
                   understood={understood.has(d.id)}
                   last={i === shown.length - 1}
@@ -240,7 +243,7 @@ function IntelligenceHero({ count, connected, lit }: { count: number; connected:
       <T style={styles.headline} accessibilityRole="header">
         {count} new {count === 1 ? "thing" : "things"} worth knowing
       </T>
-      <T style={styles.heroCopy}>We read the world for you, filtered the noise, and found what changes your model.</T>
+      <T style={styles.heroCopy}>We read the world, compared it to your Mind, and found what matters.</T>
     </View>
   );
 }
@@ -264,22 +267,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: color.canvas,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.hairline,
-    ...shadow.soft,
+    borderColor: "rgba(22,22,22,0.05)",
+    ...depth.control,
   },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted },
-  hero: { paddingTop: space.xl },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted, ...depth.control },
+  hero: { paddingTop: space.xxl },
   // The orb sits upper right and bleeds past the edge; the headline reads over its glow.
-  heroOrb: { position: "absolute", right: -gutter - 52, top: -18 },
+  heroOrb: { position: "absolute", right: -gutter - 70, top: -34 },
   kicker: { fontFamily: font.sansMedium, fontSize: 11.5, lineHeight: 14, letterSpacing: 3, textTransform: "uppercase", color: color.ink2 },
-  headline: { fontFamily: font.sansBold, fontSize: 41, lineHeight: 45, letterSpacing: -1.6, color: color.ink, marginTop: space.l, maxWidth: "76%" },
-  heroCopy: { fontFamily: font.sans, fontSize: 16, lineHeight: 23, color: color.ink2, marginTop: space.l, maxWidth: "86%" },
+  headline: { fontFamily: font.sansBold, fontSize: 41, lineHeight: 45, letterSpacing: -1.6, color: color.ink, marginTop: space.m, maxWidth: "80%" },
+  heroCopy: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 21, color: color.ink2, marginTop: space.s, maxWidth: "78%" },
+  // A curated panel: gently lifted off the warm ground.
+  panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.xxl },
-  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 58, paddingHorizontal: space.xl, borderRadius: radius.pill, backgroundColor: color.ink, ...shadow.raised },
+  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 58, paddingHorizontal: space.xl, borderRadius: radius.pill, backgroundColor: color.ink, ...depth.control, shadowOpacity: 0.18 },
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 16.5, lineHeight: 21, letterSpacing: -0.2, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
-  listen: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
+  listen: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },
   tiles: { flexDirection: "row", gap: 10 },
-  tile: { flex: 1, padding: space.m, paddingBottom: space.s, borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
   skipRow: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
 });

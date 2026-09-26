@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { narrativeLabel, topicLabel } from "@thinketh/contracts";
+import { developmentDisplay, narrativeLabel, topicLabel } from "@thinketh/contracts";
 import { SHORT } from "../../mindprint/model";
 
 describe("concept presentation layer on mobile", () => {
@@ -24,5 +24,12 @@ describe("concept presentation layer on mobile", () => {
     expect(narrativeLabel("evaluator-architectures", "Evaluator architectures")).toBe("AI checking its own work");
     expect(topicLabel("agent-tool-use", "x")).toBe("when AI should use a tool");
     expect(narrativeLabel("brand-new", "Brand new")).toBe("Brand new");
+  });
+
+  it("the lead story reads plainly; unknown developments keep their real title", () => {
+    expect(developmentDisplay({ id: "dev-persistent-agent-memory", title: "Persistent agent memory changes how long-running agents operate", summaryBullets: ["x"] }).headline).toBe(
+      "AI can now remember what matters across sessions",
+    );
+    expect(developmentDisplay({ id: "dev-new", title: "A real title", summaryBullets: ["A real bullet"] })).toEqual({ headline: "A real title", summary: "A real bullet" });
   });
 });

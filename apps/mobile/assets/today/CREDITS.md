@@ -9,7 +9,7 @@ Each was downloaded at 1200 px wide, center-cropped to 4:3 if portrait, and comp
 
 | File | Concept | Photographer | Source |
 |---|---|---|---|
-| `peak-pink.jpg` | agent-memory (today's lead) | Ahmet Yüksek | https://unsplash.com/photos/bAPm9p1TFjI |
+| `peak-sunset.jpg` | agent-memory (today's lead; top-cropped to 1200×640 to keep the peak and sky) | Gantavya Bhatt (@gbhatt_2) | https://unsplash.com/photos/LCPvPscVC-k |
 | `stair-stone.jpg` | evaluator-architectures | Alesia Kazantceva (@alesiaskaz) | https://unsplash.com/photos/0B7ijYKaKcE |
 | `dunes-gold.jpg` | agent-tool-use | Zetong Li (@zetong) | https://unsplash.com/photos/HEf0fKgJA1Q |
 | `sand-ripples.jpg` | mcp | Stefanie Jockschat | https://unsplash.com/photos/DS0AgV4xn9Q |

@@ -41,7 +41,7 @@ export function imageFor(conceptIds: readonly string[]): ImageSourcePropType {
 // Today's story photography (apps/mobile/assets/today; credits in CREDITS.md there): one warm,
 // quiet natural family, so the home screen reads as curated. Other screens keep the textures above.
 const STORY = {
-  peak: require("../../assets/today/peak-pink.jpg"),
+  peak: require("../../assets/today/peak-sunset.jpg"),
   dunes: require("../../assets/today/dunes-gold.jpg"),
   forest: require("../../assets/today/forest-mist.jpg"),
   stair: require("../../assets/today/stair-stone.jpg"),

@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { T } from "@/components/Text";
-import { color, font, shadow, space } from "@/theme/tokens";
+import { color, depth, font, space } from "@/theme/tokens";
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: "Today", icon: "today" },
@@ -68,22 +68,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: color.canvas,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: color.hairline,
+    borderTopColor: "rgba(22,22,22,0.06)",
+    // A faint upward lift so the bar sits on the page like the cards do.
+    ...depth.card,
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: -4 },
   },
   tab: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingTop: space.s, minHeight: 52 },
-  label: { fontSize: 11, lineHeight: 14, marginTop: 3 },
+  label: { fontSize: 11, lineHeight: 14, marginTop: 4, letterSpacing: 0.1 },
   // Premium, not playful: a white disc with a coral spark and a soft lift.
   askButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    marginTop: -14,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginTop: -18,
     backgroundColor: color.canvas,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.hairline,
-    ...shadow.soft,
-    shadowOpacity: 0.1,
+    borderColor: "rgba(22,22,22,0.05)",
+    ...depth.control,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
   },
 });

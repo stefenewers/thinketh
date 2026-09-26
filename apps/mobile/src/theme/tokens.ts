@@ -36,6 +36,8 @@ export const warm = {
   orbMid: "#F7A583",
   orbDeep: "#E8704B",
   orbit: "#E79A7C",
+  /** The page itself: a breath warmer than white, so white cards have something to lift from. */
+  ground: "#FBF9F7",
 } as const;
 
 // Tile tints (Today "Continue" tiles): one soft family each, like app icons at rest.
@@ -103,6 +105,17 @@ export const shadow = {
   sheet: { shadowColor: color.ink, shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 12 },
   // Very soft lift for white cards on a white page.
   soft: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+} as const;
+
+// Today's depth tiers: a warm, diffuse shadow felt more than seen. One tier per role.
+const DEPTH_INK = "#2A1C15";
+export const depth = {
+  /** Cards and panels, gently lifted. */
+  card: { shadowColor: DEPTH_INK, shadowOpacity: 0.07, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  /** The one featured surface (the lead story). */
+  feature: { shadowColor: DEPTH_INK, shadowOpacity: 0.14, shadowRadius: 32, shadowOffset: { width: 0, height: 14 }, elevation: 6 },
+  /** Small circular controls and pills. */
+  control: { shadowColor: DEPTH_INK, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
 } as const;
 
 export const gutter = layout.pageX;

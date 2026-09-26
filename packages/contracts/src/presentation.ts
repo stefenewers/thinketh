@@ -111,3 +111,42 @@ export const graphLabel = (conceptId: string, fallback: string) => CONCEPT_LABEL
 
 /** The idea as a phrase inside a sentence ("evidence on ___"). */
 export const topicLabel = (conceptId: string, fallback: string) => CONCEPT_LABELS[conceptId]?.topic ?? fallback;
+
+// Plain-language display copy for the seeded developments, used where a development is the
+// headline of a consumer surface (Today's lead story). The development's real title and bullets
+// stay the record everywhere else (detail view, evidence, sources). Unknown ids keep their title.
+export const DEVELOPMENT_DISPLAY: Record<string, { headline: string; summary: string }> = {
+  "dev-persistent-agent-memory": {
+    headline: "AI can now remember what matters across sessions",
+    summary: "Agents keep the key facts from one conversation and pick them up in the next.",
+  },
+  "dev-evaluator-layer": {
+    headline: "A second AI now checks the first one's work",
+    summary: "Teams add a separate checker between steps instead of trusting the agent to grade itself.",
+  },
+  "dev-mcp-elicitation": {
+    headline: "AI tools can now pause and ask you a question",
+    summary: "Mid-task, a tool can stop, ask for what it needs, then carry on.",
+  },
+  "dev-compaction-api": {
+    headline: "AI now keeps long conversations tidy on its own",
+    summary: "Older turns are summarized automatically when a conversation gets long.",
+  },
+  "dev-memory-benchmarks": {
+    headline: "Good search scores no longer mean good memory",
+    summary: "Being great at looking things up doesn't make an AI good at remembering over time.",
+  },
+  "dev-tool-reliability": {
+    headline: "How reliably AI uses tools is now measured",
+    summary: "Getting tool calls right every time is becoming a headline number.",
+  },
+  "dev-function-calling-explainer": {
+    headline: "How AI hands work to other software",
+    summary: "A model can fill in a structured request that another program then runs.",
+  },
+};
+
+/** The development's consumer headline and one-line summary, or its real title and first bullet. */
+export function developmentDisplay(d: { id: string; title: string; summaryBullets: readonly string[] }): { headline: string; summary: string | undefined } {
+  return DEVELOPMENT_DISPLAY[d.id] ?? { headline: d.title, summary: d.summaryBullets[0] };
+}

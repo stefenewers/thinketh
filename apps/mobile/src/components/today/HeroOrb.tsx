@@ -6,7 +6,7 @@ import { warm } from "@/theme/tokens";
 
 const S = 232;
 const C = { x: S / 2, y: S / 2 };
-const ORB_R = 46;
+const ORB_R = 36;
 
 // Three tilted orbits (rx, ry, tilt in degrees), drawn as hairlines behind the text.
 const ORBITS = [
@@ -18,12 +18,12 @@ const ORBITS = [
 type Tone = "coral" | "stone" | "ink";
 // Satellites (offsets from the orb's centre) sit up and to the right, clear of the headline.
 const SATELLITES: { dx: number; dy: number; r: number; tone: Tone }[] = [
-  { dx: 58, dy: -70, r: 8.5, tone: "coral" },
-  { dx: -30, dy: -86, r: 5, tone: "stone" },
-  { dx: 96, dy: 26, r: 5.5, tone: "ink" },
-  { dx: 44, dy: 78, r: 6.5, tone: "coral" },
-  { dx: 100, dy: -30, r: 4, tone: "stone" },
-  { dx: 30, dy: 104, r: 4, tone: "coral" },
+  { dx: 54, dy: -66, r: 6.5, tone: "coral" },
+  { dx: -26, dy: -80, r: 4, tone: "stone" },
+  { dx: 92, dy: 24, r: 4.5, tone: "ink" },
+  { dx: 40, dy: 72, r: 5, tone: "coral" },
+  { dx: 96, dy: -30, r: 3.5, tone: "stone" },
+  { dx: 26, dy: 98, r: 3, tone: "coral" },
 ];
 
 /**
@@ -89,18 +89,19 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
         <Defs>
           <RadialGradient id="orbBody" cx="38%" cy="32%" r="72%" fx="34%" fy="28%">
               <Stop offset="0" stopColor={warm.orbLight} />
-              <Stop offset="0.5" stopColor={warm.orbMid} />
-              <Stop offset="1" stopColor={warm.orbDeep} />
+              <Stop offset="0.6" stopColor={warm.orbMid} stopOpacity={0.92} />
+              <Stop offset="1" stopColor="#EE8C68" stopOpacity={0.9} />
           </RadialGradient>
         </Defs>
         <Circle cx={C.x} cy={C.y} r={ORB_R} fill="url(#orbBody)" />
         {/* A soft specular highlight: light, not gloss. */}
-        <Ellipse cx={C.x - 14} cy={C.y - 17} rx={15} ry={10} fill="#FFFFFF" fillOpacity={0.28} />
+        <Ellipse cx={C.x - 11} cy={C.y - 13} rx={12} ry={8} fill="#FFFFFF" fillOpacity={0.28} />
       </Svg>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  box: { width: S, height: S },
+  // Atmosphere, not an object: the whole piece sits back behind the headline.
+  box: { width: S, height: S, opacity: 0.72 },
 });
