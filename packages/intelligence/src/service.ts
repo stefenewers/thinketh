@@ -234,11 +234,21 @@ export class ThinkethService {
     const hero = ordered[0];
     if (hero) runInBackground("warm-delta", this.phrasedDelta(userId, hero, states));
 
+    const recentTransitions = await this.recentPrimaryTransitions(userId);
+    const today = this.localDay(this.now());
+    const passedToday = new Set(
+      recentTransitions
+        .filter((t) => t.observation.kind === "diagnostic_correct" && this.localDay(t.createdAt) === today)
+        .map((t) => t.conceptId),
+    );
     const sourceIds = new Set(ordered.flatMap((d) => d.sourceIds));
     return {
       brief,
       developments: ordered,
       sources: [...this.sources.values()].filter((s) => sourceIds.has(s.id)),
+      concepts: [...this.concepts.values()],
+      understoodDevelopmentIds: ordered.filter((d) => d.conceptIds[0] && passedToday.has(d.conceptIds[0])).map((d) => d.id),
+      recentTransitions,
     };
   }
 
@@ -470,7 +480,7 @@ export class ThinkethService {
       return [{ concept, state, level: knowledgeLevel(state), ...(last ? { lastTransition: last } : {}) }];
     });
     items.sort((a, b) => b.state.mastery - a.state.mastery);
-    return { userId, items, edges: this.seed.edges };
+    return { userId, items, edges: this.seed.edges, recentTransitions: await this.recentPrimaryTransitions(userId) };
   }
 
   async conceptHistory(userId: string, conceptId: string): Promise<ConceptHistoryResponse> {

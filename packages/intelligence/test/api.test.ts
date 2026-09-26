@@ -52,6 +52,9 @@ describe("contract: six core endpoints", () => {
     expect(today.developments.map((d) => d.id)).toEqual(today.brief.developmentIds);
     const sourceIds = new Set((today.sources ?? []).map((s) => s.id));
     for (const d of today.developments) for (const id of d.sourceIds) expect(sourceIds.has(id)).toBe(true);
+    expect(today.concepts?.length).toBeGreaterThan(0);
+    expect(today.understoodDevelopmentIds).toEqual([]);
+    expect(today.recentTransitions).toEqual([]);
   });
 
   it("GET /developments/:id", async () => {
@@ -80,6 +83,7 @@ describe("contract: six core endpoints", () => {
     const mind = await get(KnowledgeResponseSchema, "/knowledge");
     expect(mind.userId).toBe(USER);
     expect(mind.items.length).toBe(9);
+    expect(mind.recentTransitions).toEqual([]);
   });
 
   it("GET /knowledge/:conceptId/history", async () => {
@@ -155,12 +159,18 @@ describe("golden loop over HTTP", () => {
     // The app relies on propagated side effects keeping the "propagated:" sourceRef prefix.
     const ctx = mind.items.find((i) => i.concept.id === "context-windows")!.lastTransition!;
     expect(ctx.observation.sourceRef).toBe(`propagated:${t.id}`);
+    expect(mind.recentTransitions?.[0]?.id).toBe(t.id); // "Just improved"
+    expect(mind.recentTransitions?.every((x) => !x.observation.sourceRef?.startsWith("propagated:"))).toBe(true);
 
     const history = await get(ConceptHistoryResponseSchema, "/knowledge/agent-memory/history");
     expect(history.transitions.at(-1)!.id).toBe(t.id);
     for (let i = 1; i < history.transitions.length; i++) {
       expect(history.transitions[i]!.createdAt >= history.transitions[i - 1]!.createdAt).toBe(true);
     }
+
+    const after = await get(BriefResponseSchema, "/brief/today");
+    expect(after.understoodDevelopmentIds).toEqual([heroId]); // "1 of 6 understood"
+    expect(after.recentTransitions?.[0]?.id).toBe(t.id);
 
   });
 

@@ -61,6 +61,15 @@ export const BriefResponseSchema = z.object({
   developments: z.array(DevelopmentSchema),
   /** Optional (mobile): sources for the listed developments, for publisher names on Today. */
   sources: z.array(SourceSchema).optional(),
+  /** Optional: all concepts, so Today can name them without a /knowledge call. */
+  concepts: z.array(ConceptSchema).optional(),
+  /**
+   * Optional: developments counted as understood today — a direct (non-propagated)
+   * diagnostic_correct today on the development's conceptIds[0]. Same rule the app uses.
+   */
+  understoodDevelopmentIds: z.array(z.string()).optional(),
+  /** Optional: newest first, primary transitions only (no "propagated:" side effects). */
+  recentTransitions: z.array(KnowledgeStateTransitionSchema).optional(),
 });
 export type BriefResponse = z.infer<typeof BriefResponseSchema>;
 
@@ -129,6 +138,8 @@ export const KnowledgeResponseSchema = z.object({
   userId: z.string(),
   items: z.array(KnowledgeItemSchema),
   edges: z.array(ConceptEdgeSchema),
+  /** Optional: newest first, primary transitions only (no "propagated:" side effects). */
+  recentTransitions: z.array(KnowledgeStateTransitionSchema).optional(),
 });
 export type KnowledgeResponse = z.infer<typeof KnowledgeResponseSchema>;
 
