@@ -35,6 +35,17 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 
 const VISIBLE_ROWS = 3;
 
+function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <View>
+      <T style={[styles.statValue, accent && { color: color.coral }]}>{value}</T>
+      <T variant="label" style={{ marginTop: 2 }}>
+        {label}
+      </T>
+    </View>
+  );
+}
+
 export default function Today() {
   const profile = useProfile();
   const { data, error, loading, reload } = useApi(
@@ -137,11 +148,35 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
         <T variant="display" style={{ marginTop: space.m }} accessibilityRole="header">
           You missed {brief.meaningfulCount} things worth knowing.
         </T>
-        <T variant="support" style={{ marginTop: space.m, fontSize: 16, lineHeight: 24 }}>
-          {understood.size > 0
-            ? `${understood.size} of ${brief.meaningfulCount} understood · about ${remainingMinutes} minutes left.`
-            : `${brief.majorCount} are major. Estimated catch-up: ${brief.estimatedMinutes} minutes.`}
-        </T>
+        {/* The evidence of the work, in type: what survived, how long, and how much was filtered out. */}
+        <View style={styles.stats} accessibilityRole="summary">
+          {understood.size > 0 ? (
+            <>
+              <Stat value={`${understood.size}/${brief.meaningfulCount}`} label="Understood" accent />
+              <Stat value={`~${remainingMinutes}`} label="Minutes left" />
+            </>
+          ) : (
+            <>
+              <Stat value={String(brief.majorCount)} label="Major" accent />
+              <Stat value={`~${brief.estimatedMinutes}`} label="Minutes" />
+            </>
+          )}
+          {brief.skippedCount ? (
+            <Pressable
+              onPress={() => setFilterOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`${brief.skippedCount} items filtered. See why.`}
+              hitSlop={6}
+            >
+              <Stat value={String(brief.skippedCount)} label="Filtered ⓘ" />
+            </Pressable>
+          ) : null}
+        </View>
+        {brief.skippedCount ? (
+          <T variant="support" style={{ marginTop: space.m }}>
+            Out of {brief.skippedCount + brief.meaningfulCount} items, only {brief.meaningfulCount} change what you understand.
+          </T>
+        ) : null}
 
         <View style={styles.ctaRow}>
           <Button
@@ -161,17 +196,6 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
           </Pressable>
         </View>
 
-        {brief.skippedCount ? (
-          <Pressable
-            onPress={() => setFilterOpen(true)}
-            accessibilityRole="button"
-            style={styles.filtered}
-            hitSlop={4}
-          >
-            <T variant="meta">{brief.skippedCount} items filtered for you</T>
-            <Icon name="info" size={15} color={color.ink2} />
-          </Pressable>
-        ) : null}
       </Gutter>
 
       {latest && latestConcept ? (
@@ -314,6 +338,8 @@ function UnderstoodTag() {
 }
 
 const styles = StyleSheet.create({
+  stats: { flexDirection: "row", gap: space.x3, marginTop: space.xl },
+  statValue: { fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.ink, fontVariant: ["tabular-nums"] },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   mindButton: {
     flexDirection: "row",
@@ -327,7 +353,6 @@ const styles = StyleSheet.create({
   },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: space.xl, marginTop: space.xl },
   listen: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
-  filtered: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.l, minHeight: 44, alignSelf: "flex-start" },
   changed: {
     paddingVertical: space.l,
     paddingLeft: space.l,
