@@ -582,7 +582,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
   return {
     profile: {
       id: userId,
-      displayName: "Jordan",
+      displayName: "Stefen",
       interests: [
         {
           topic: "AI agents",

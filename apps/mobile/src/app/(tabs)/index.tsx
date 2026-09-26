@@ -158,7 +158,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
           />
           <ActionTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
+          <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together" onPress={() => router.push("/playground")} />
         </View>
 
         {rest.length ? (

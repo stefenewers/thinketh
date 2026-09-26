@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -50,6 +50,7 @@ export default function PlaygroundScreen() {
   const [showDiag, setShowDiag] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+  const scroll = useRef<ScrollView>(null);
 
   const run = useCallback(async (kind: Busy, fn: () => Promise<PlaygroundRoom>) => {
     setBusy(kind);
@@ -108,6 +109,7 @@ export default function PlaygroundScreen() {
   };
 
   const scene = room?.scene ?? "waiting";
+  useEffect(() => { scroll.current?.scrollTo({ y: 0, animated: false }); }, [scene]);
   const following = ["peer_teaching", "transfer", "shared_gap"].includes(scene);
   // What this device is waiting on: shown as in progress, never as a finished step.
   const pending: Pending = busy === "conduct" ? "conduct" : busy === "answer" ? "answer" : busy === "explain" ? "explain" : null;
@@ -177,7 +179,7 @@ export default function PlaygroundScreen() {
         <Offline />
       ) : (
         <FollowContext.Provider value={followMuse || !following}>
-        <ScrollView contentContainerStyle={{ paddingBottom: space.x4 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: space.x4 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {scene === "waiting" ? (
             <Waiting
               room={room}
@@ -193,7 +195,7 @@ export default function PlaygroundScreen() {
           {room && scene === "arrival" ? <Arrival room={room} me={me} busy={busy === "compare"} onCompare={compare} /> : null}
           {/* One room: the rail and the canvas stay mounted across the whole exchange. */}
           {room && stage && RAIL_SCENES.has(scene) ? <EventRail steps={railSteps(room, pending)} next={pending ? null : nextHumanAction(room, me)} /> : null}
-          {room && stage && STAGE_SCENES.has(scene) && room.snapshots.length === 2 ? <RoomStage key={room.id} room={room} me={me} stage={stage} /> : null}
+          {room && stage && STAGE_SCENES.has(scene) && room.snapshots.length === 2 ? <RoomStageBoundary key={room.id}><RoomStage room={room} me={me} stage={stage} /></RoomStageBoundary> : null}
           {room && scene === "overview" ? <Overview room={room} me={me} busy={busy === "conduct"} onStart={() => run("conduct", () => playground.conduct(room.id, "next", me))} /> : null}
           {room && scene === "peer_teaching" ? (
             <PeerTeaching room={room} me={me} busy={busy === "explain"} onExplain={(text) => room.teaching && run("explain", () => playground.explain(room.id, text, { asUserId: actAs(room.teaching!.teacherId), as: me }))} />
@@ -249,6 +251,22 @@ function useSides(room: PlaygroundRoom) {
   return { left, right };
 }
 
+/** A malformed room snapshot must not blank the rest of a live demo. */
+class RoomStageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed ? (
+      <View style={{ marginHorizontal: gutter, marginTop: space.l, padding: space.l, borderRadius: radius.control, backgroundColor: color.surfaceMuted }}>
+        <T variant="support">The room view could not render this snapshot. The learning exchange is still available below.</T>
+        <Pressable onPress={() => this.setState({ failed: false })} accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }}>
+          <T variant="meta" style={{ color: color.ink }}>Retry room view</T>
+        </Pressable>
+      </View>
+    ) : this.props.children;
+  }
+}
+
 /** The one canvas for the exchange. Following Muse: the composed two-Mind room. Exploring: the full canvas. */
 function RoomStage({ room, me, stage }: { room: PlaygroundRoom; me: string; stage: StageState }) {
   const { width } = useWindowDimensions();
@@ -261,10 +279,17 @@ function RoomStage({ room, me, stage }: { room: PlaygroundRoom; me: string; stag
   const verifiedEvent = room.events.findLast((e) => e.type === "transfer_verified");
   const celebrateKey = verifiedEvent ? `${room.id}:${verifiedEvent.seq}` : undefined;
   const from = stage.teacherId === left.userId ? "left" : "right";
+  const focusConcept = stage.conceptId && (left.concepts.find((c) => c.conceptId === stage.conceptId) ?? right.concepts.find((c) => c.conceptId === stage.conceptId));
   return (
     <View style={{ alignItems: "center", marginTop: space.s }}>
+      {focusConcept ? (
+        <View style={{ alignSelf: "stretch", paddingHorizontal: gutter, marginTop: space.s }}>
+          <T variant="label" style={{ color: color.ink3 }}>IN FOCUS · {stage.beat === "verified" ? "VERIFIED" : stage.beat === "gap" ? "SHARED GAP" : "LEARNING PATH"}</T>
+          <T variant="section" numberOfLines={2} style={{ marginTop: 3 }}>{headline(stage.conceptId!, focusConcept.name)}</T>
+        </View>
+      ) : null}
       {followingMuse ? (
-        <MindVenn left={left} right={right} me={me} width={w} height={250} stage={stage} celebrateKey={celebrateKey} />
+        <MindVenn left={left} right={right} me={me} width={w} height={270} stage={stage} celebrateKey={celebrateKey} />
       ) : (
         // Exploring: the full two-Mind canvas, nothing dimmed, pan and pinch freely. The path is shown as
         // travelling until verified; a verified one is drawn complete, without replaying its animation.
@@ -335,11 +360,24 @@ function StageCaption({ room, me, stage }: { room: PlaygroundRoom; me: string; s
   );
 }
 
-/** Before snapshots exist (arrival), both Minds come from the Mind endpoint for the host and a quiet silhouette for the guest. */
-function ArrivalDuo({ room }: { room: PlaygroundRoom }) {
+/** A legible entrance before Thinketh has compared the two snapshots. */
+function ArrivalDuo({ room, me }: { room: PlaygroundRoom; me: string }) {
   return (
-    <View style={{ height: 292, alignItems: "center", justifyContent: "center" }}>
-      <T variant="meta">{room.participants.map((p) => p.displayName).join("  ·  ")}</T>
+    <View style={{ marginHorizontal: gutter, marginTop: space.xl, padding: space.l, borderRadius: 24, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline }}>
+      <T variant="label" style={{ color: color.ink3 }}>IN THE ROOM</T>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.l }}>
+        {room.participants.map((p) => (
+          <View key={p.userId} style={{ flex: 1, alignItems: "center", minWidth: 0 }}>
+            <View style={{ width: 74, height: 74, borderRadius: 37, borderWidth: 1.5, borderColor: p.userId === me ? color.coral : color.partner, backgroundColor: p.userId === me ? color.coralTint : color.partnerTint, alignItems: "center", justifyContent: "center" }}>
+              <T style={{ fontFamily: font.sansSemibold, fontSize: 29, color: p.userId === me ? color.coral : color.partner }}>{p.displayName.charAt(0)}</T>
+            </View>
+            <T variant="section" numberOfLines={1} style={{ marginTop: space.s }}>{p.userId === me ? "You" : p.displayName}</T>
+            <T variant="meta" style={{ color: color.ink3 }}>Mind ready</T>
+          </View>
+        ))}
+      </View>
+      <View style={{ height: 1, backgroundColor: color.hairline, marginTop: space.l }} />
+      <T variant="meta" style={{ marginTop: space.m, textAlign: "center", color: color.ink2 }}>Two perspectives are here. Compare to reveal what each can teach.</T>
     </View>
   );
 }
@@ -433,7 +471,7 @@ function Waiting({
       <SectionHeader title="How it works" />
       <ListCard>
         <StepRow icon="person" title="Invite someone" body="A collaborator on their phone, or Nadani on this one." />
-        <StepRow icon="people" title="Muse compares your Minds" body="Shared strengths, teaching opportunities, shared gaps." />
+        <StepRow icon="people" title="Thinketh compares your Minds" body="Shared strengths, teaching opportunities, shared gaps." />
         <StepRow icon="ask" title="Teach each other" body="One explains; the other applies it somewhere new." />
         <StepRow icon="sparkle" title="See what moves your thinking" body="A Mind changes only after demonstration." last />
       </ListCard>
@@ -447,7 +485,7 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
   return (
     <View>
       <DotTag tone="coral" label={guest?.userId === me ? `You joined ${nameOf(room, room.hostId)}` : `${guest?.displayName ?? "Someone"} joined`} style={{ marginHorizontal: gutter, marginTop: space.m }} />
-      <ArrivalDuo room={room} />
+      <ArrivalDuo room={room} me={me} />
       <View style={{ paddingHorizontal: gutter, marginTop: space.xl }}>
         <T variant="title">Two minds. One learning space.</T>
         <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
@@ -465,8 +503,8 @@ function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: strin
   const aName = nameOf(room, d.aId);
   const bName = nameOf(room, d.bId);
   const items: { tag: string; tone: DotTone; item: CollaborativeDeltaItem }[] = [
-    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(bName)} → ${upper(aName)}`, tone: (d.bId === me ? "coral" : "partner") as DotTone, item })),
-    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(aName)} → ${upper(bName)}`, tone: (d.aId === me ? "coral" : "partner") as DotTone, item })),
+    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(d.bId === me ? "You" : bName)} → ${upper(d.aId === me ? "You" : aName)}`, tone: (d.bId === me ? "coral" : "partner") as DotTone, item })),
+    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(d.aId === me ? "You" : aName)} → ${upper(d.bId === me ? "You" : bName)}`, tone: (d.aId === me ? "coral" : "partner") as DotTone, item })),
     ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "MUSE → BOTH", tone: "muted" as const, item })),
   ];
   const words = ["No", "One", "Two", "Three"][items.length] ?? String(items.length);
@@ -726,7 +764,9 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
               style={styles.answer}
               accessibilityLabel="Your answer"
             />
-            <Pill label={busy ? "Thinketh is checking…" : "Submit"} busy={busy} onPress={() => text.trim() && onAnswer(text.trim())} />
+            <View style={!text.trim() || busy ? { opacity: 0.4 } : undefined} pointerEvents={!text.trim() || busy ? "none" : "auto"}>
+              <Pill label={busy ? "Thinketh is checking…" : "Submit"} busy={busy} onPress={() => onAnswer(text.trim())} />
+            </View>
           </>
         ) : (
           <T variant="support" style={{ marginTop: space.l }}>
@@ -779,6 +819,18 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
         </T>
       </View>
       <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
+        {tn ? (
+          <View style={{ flexDirection: "row", gap: space.s, marginBottom: space.m }}>
+            <View style={styles.resultMeasure}>
+              <T variant="label">MASTERY</T>
+              <T style={styles.resultValue}>{fmt2(tn.before.mastery)} → {fmt2(tn.after.mastery)}</T>
+            </View>
+            <View style={styles.resultMeasure}>
+              <T variant="label">UNCERTAINTY</T>
+              <T style={styles.resultValue}>{fmt2(tn.before.uncertainty)} → {fmt2(tn.after.uncertainty)}</T>
+            </View>
+          </View>
+        ) : null}
         <ListCard>
           {verified ? (
             <>
@@ -801,7 +853,7 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
             <Pressable onPress={() => setWhy((w) => !w)} accessibilityRole="button" accessibilityState={{ expanded: why }} style={({ pressed }) => [styles.changeRow, { minHeight: 44 }, pressed && { backgroundColor: color.surfaceMuted }]}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.s }}>
                 <T variant="meta" style={{ color: color.ink, fontVariant: ["tabular-nums"], flex: 1 }}>
-                  {why ? "Why Thinketh changed its model" : `Mastery ${fmt2(tn.before.mastery)} → ${fmt2(tn.after.mastery)} · why?`}
+                  {why ? "Why Thinketh changed its model" : "Why did Thinketh change its model?"}
                 </T>
                 <View style={{ transform: [{ rotate: why ? "90deg" : "0deg" }] }}>
                   <Icon name="chevron" size={14} color={color.ink3} />
@@ -841,7 +893,7 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
         {tr.learnerId === me ? (
           <Button
             kind="secondary"
-            label={`See ${learner === HOST_NAME ? `${learner}'s` : "your"} Mind`}
+            label="See your Mind"
             onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId } })}
             style={{ alignSelf: "flex-start", marginTop: space.m }}
           />
@@ -1072,5 +1124,7 @@ const styles = StyleSheet.create({
   answer: { marginTop: space.l, minHeight: 104, padding: space.l, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink, textAlignVertical: "top", ...shadow.soft },
   changeRow: { paddingHorizontal: space.l, paddingVertical: space.m },
   changeDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
+  resultMeasure: { flex: 1, padding: space.m, borderRadius: radius.control, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
+  resultValue: { marginTop: space.s, fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23, color: color.ink, fontVariant: ["tabular-nums"] },
   colDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
 });

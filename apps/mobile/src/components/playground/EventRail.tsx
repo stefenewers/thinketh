@@ -44,7 +44,7 @@ export function EventRail({ steps, next }: { steps: RailStep[]; next: string | n
       </Pressable>
       {next && !open ? (
         <T variant="meta" style={styles.next} numberOfLines={1}>
-          Next: {next}
+          {next}
         </T>
       ) : null}
       {open ? (

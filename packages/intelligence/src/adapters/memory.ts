@@ -126,7 +126,8 @@ export class BackboardMemory implements MemoryProvider {
     const headers: Record<string, string> = { "X-API-Key": this.opts.apiKey };
     if (typeof init.body === "string") headers["Content-Type"] = "application/json";
     const res = await fetch(`${this.opts.baseUrl}${path}`, { ...init, headers });
-    return ensureOk(res, `backboard ${init.method ?? "GET"} ${path.split("/").slice(0, 2).join("/")}`);
+    const route = path.replace(/\/(assistants|memories|threads)\/[^/?]+/g, "/$1/:id");
+    return ensureOk(res, `backboard ${init.method ?? "GET"} ${route}`);
   }
 
   async createAssistant(name: string): Promise<string> {

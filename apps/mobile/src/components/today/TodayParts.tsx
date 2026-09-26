@@ -124,11 +124,11 @@ export function LeadStory({ development, concepts, people, onPress }: { developm
             <View style={styles.dot} />
             <T style={styles.leadTagText}>Lead development</T>
           </View>
-          <T style={styles.leadTitle} numberOfLines={3}>
+          <T style={styles.leadTitle} numberOfLines={4}>
             {display.headline}
           </T>
           {display.summary ? (
-            <T style={styles.leadSummary} numberOfLines={2}>
+            <T style={styles.leadSummary} numberOfLines={3}>
               {display.summary}
             </T>
           ) : null}
@@ -189,9 +189,9 @@ export function InsightItem({ development, category, meta, understood, last, onP
 const styles = StyleSheet.create({
   metrics: { flexDirection: "row" },
   metric: { paddingRight: 4, paddingVertical: 2 },
-  metricDivided: { paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(22,22,22,0.07)" },
+  metricDivided: { paddingLeft: 7, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(22,22,22,0.07)" },
   metricValue: { fontFamily: font.sansSemibold, fontSize: 28, lineHeight: 32, letterSpacing: -0.8, color: color.ink, fontVariant: ["tabular-nums"] },
-  metricLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1.3, textTransform: "uppercase", color: color.ink3, marginTop: 6 },
+  metricLabel: { fontFamily: font.sansSemibold, fontSize: 9.5, lineHeight: 13, letterSpacing: 0.7, textTransform: "uppercase", color: color.ink3, marginTop: 6 },
   metricSub: { fontFamily: font.sans, fontSize: 11.5, lineHeight: 17, color: color.ink3, marginTop: 2 },
 
 
@@ -202,8 +202,8 @@ const styles = StyleSheet.create({
   leadBody: { paddingHorizontal: space.xl, paddingTop: 18, paddingBottom: 16 },
   leadTag: { flexDirection: "row", alignItems: "center", gap: 7 },
   leadTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.8, textTransform: "uppercase", color: color.ink2 },
-  leadTitle: { fontFamily: font.sansBold, fontSize: 20.5, lineHeight: 25, letterSpacing: -0.6, color: color.ink, marginTop: 10, maxWidth: "62%" },
-  leadSummary: { fontFamily: font.sans, fontSize: 13.5, lineHeight: 19, color: color.ink2, marginTop: 6, maxWidth: "60%" },
+  leadTitle: { fontFamily: font.sansBold, fontSize: 20.5, lineHeight: 25, letterSpacing: -0.6, color: color.ink, marginTop: 10, maxWidth: "74%" },
+  leadSummary: { fontFamily: font.sans, fontSize: 13.5, lineHeight: 19, color: color.ink2, marginTop: 6, maxWidth: "72%" },
   leadFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
   connected: { flexDirection: "row", alignItems: "center", gap: space.s, flexShrink: 1 },
   person: { backgroundColor: color.canvas, alignItems: "center", justifyContent: "center" },
