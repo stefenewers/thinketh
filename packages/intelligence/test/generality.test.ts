@@ -78,7 +78,7 @@ describe("dynamic transfer challenges", () => {
     const ch = await t.service.transferChallenge("agent-tool-use");
     expect(ch.source).toBe("fallback");
     expect(ch.item.rubric!.length).toBeGreaterThanOrEqual(3);
-    expect(ch.item.prompt).toMatch(/Agent Tool Use/);
+    expect(ch.item.prompt).toMatch(/when AI should use a tool/);
   });
 
   it("falls back when generation times out", async () => {
@@ -92,7 +92,7 @@ describe("dynamic transfer challenges", () => {
     const t = make();
     const ch = await t.service.transferChallenge("retrieval");
     expect(ch.source).toBe("fallback");
-    expect(ch.item.prompt).toMatch(/^Apply Retrieval/);
+    expect(ch.item.prompt).toMatch(/^Picture .*when AI should look something up/);
     expect(ch.item.rubric!.every((r) => r.keywords.length >= 2)).toBe(true);
   });
 
@@ -204,7 +204,7 @@ describe("session planner", () => {
     expect(p.items.map((i) => i.id)).toEqual(["peer:evals:b", "peer:tools:a", "gap:consol"]);
     expect(p.estimatedMinutes).toBe(ACTIVITY_MINUTES.peer_teach * 2 + ACTIVITY_MINUTES.shared_gap);
     expect(p.estimatedMinutes).toBeLessThanOrEqual(7);
-    expect(p.items[0]!.rationale).toBe("Nadani has strong verified evidence here while Stefen is only starting out.");
+    expect(p.items[0]!.rationale).toBe("Nadani has strong verified evidence on evals while Stefen is only starting out.");
     expect(p.items.map((i) => i.priority)).toEqual([1, 2, 3]);
   });
 

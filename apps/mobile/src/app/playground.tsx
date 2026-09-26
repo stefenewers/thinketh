@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import type { CollaborativeDeltaItem, PlaygroundRoom } from "@thinketh/contracts";
+import { narrativeLabel, topicLabel } from "@thinketh/contracts";
 import { DEMO_USER_ID } from "@/api";
 import { playground, PLAYGROUND_AVAILABLE, PlaygroundError } from "@/api/playground";
 import { Icon } from "@/components/Icon";
@@ -232,6 +233,9 @@ const nameOf = (room: PlaygroundRoom, id: string | undefined) => room.participan
 const upper = (s: string) => s.toUpperCase();
 /** Figma sets concept titles in sentence case ("Evaluator architectures"); keep acronyms. */
 const sentence = (s: string) => s.split(" ").map((w, i) => (i === 0 || /^[A-Z0-9]{2,}/.test(w) ? w : w.toLowerCase())).join(" ");
+// The live flow speaks in plain language; the canonical name stays one tap away (docs/PLAYGROUND.md).
+const headline = (id: string, name: string) => narrativeLabel(id, sentence(name));
+const topic = (id: string, name: string) => topicLabel(id, sentence(name).toLowerCase());
 
 /** Host on the left, the other Mind on the right (Figma). */
 function useSides(room: PlaygroundRoom) {
@@ -469,7 +473,7 @@ function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: strin
         ) : null}
         {d.conflicts.length ? (
           <T variant="meta" style={{ marginTop: space.l }}>
-            Not assigned yet: {d.conflicts.map((c) => c.conceptName).join(", ")}. The evidence can&apos;t tell who should teach.
+            Not assigned yet: {d.conflicts.map((c) => headline(c.conceptId, c.conceptName)).join(", ")}. The evidence can&apos;t tell who should teach.
           </T>
         ) : null}
         {/* The budget is a planning constraint, not a countdown: Start begins the first move at once. */}
@@ -515,7 +519,7 @@ function PlanDisclosure({ room }: { room: PlaygroundRoom }) {
                   <T variant="meta" style={{ color: color.ink2 }}>
                     {who(i)}
                   </T>
-                  <T style={styles.planTitle}>{i.conceptName ? sentence(i.conceptName) : "One source, two deltas"}</T>
+                  <T style={styles.planTitle}>{i.conceptName && i.conceptId ? headline(i.conceptId, i.conceptName) : "One source, two deltas"}</T>
                   <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
                     {i.rationale}
                   </T>
@@ -577,7 +581,7 @@ function DeltaRow({ tag, tone, item, names, last }: { tag: string; tone: DotTone
         <View style={{ flex: 1 }}>
           <DotTag tone={tone} label={tag} />
           <T variant="section" style={{ marginTop: space.s }}>
-            {sentence(item.conceptName)}
+            {headline(item.conceptId, item.conceptName)}
           </T>
           <T variant="support" style={{ marginTop: space.xs }}>
             {item.reason}
@@ -596,6 +600,9 @@ function DeltaRow({ tag, tone, item, names, last }: { tag: string; tone: DotTone
           ))}
           <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
             Rule: {item.rule.replace("_", " ")}. Computed from evidence, not chosen by a model.
+          </T>
+          <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
+            Technical concept: {item.conceptName}
           </T>
         </View>
       ) : null}
@@ -616,7 +623,7 @@ function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me:
       <View style={{ paddingHorizontal: gutter }}>
         <DotTag tone="coral" label={`${upper(teacher)} → ${upper(nameOf(room, t.learnerId))}`} style={{ marginTop: space.l }} />
         <T variant="display" style={styles.conceptTitle}>
-          {sentence(t.conceptName)}
+          {headline(t.conceptId, t.conceptName)}
         </T>
       </View>
       <Duo room={room} me={me} compact focus={t.conceptId} trace={{ conceptId: t.conceptId, from, mode: "teaching" }} />
@@ -762,13 +769,13 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
         <ListCard>
           {verified ? (
             <>
-              <OutcomeRow icon="sparkle" title={`Strengthened ${tr.learnerId === me ? "your" : `${learner}'s`} thinking on ${sentence(t?.conceptName ?? "")}`} body="New connection verified" />
+              <OutcomeRow icon="sparkle" title={`Strengthened ${tr.learnerId === me ? "your" : `${learner}'s`} thinking on ${topic(tr.conceptId, t?.conceptName ?? "")}`} body="New connection verified" />
               {t?.explanation ? <OutcomeRow icon="people" title={`Added a new perspective from ${t.teacherId === me ? "you" : teacher}`} body={`“${t.explanation}”`} /> : null}
               {related.length ? <OutcomeRow icon="mind" title={`Connected to ${related.length} related concept${related.length === 1 ? "" : "s"}`} body={related.join(" · ")} last={!tn} /> : null}
             </>
           ) : (
             <View style={[styles.changeRow, tn ? styles.changeDivided : null]}>
-              <DotTag tone="muted" label={upper(t?.conceptName ?? "")} />
+              <DotTag tone="muted" label={upper(headline(tr.conceptId, t?.conceptName ?? ""))} />
               <T variant="section" style={{ marginTop: space.s }}>
                 Recorded, not verified
               </T>
@@ -789,7 +796,12 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
               </View>
               {why ? (
                 <View style={styles.why}>
-                  <T variant="support">{tn.reason}</T>
+                  <T variant="meta" style={{ color: color.ink3 }}>
+                    Technical concept: {t?.conceptName}
+                  </T>
+                  <T variant="support" style={{ marginTop: space.xs }}>
+                    {tn.reason}
+                  </T>
                   {verified && tr.feedback ? (
                     <T variant="meta" style={{ marginTop: space.s }}>
                       Grader: {tr.feedback}
@@ -805,7 +817,7 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
         ) : null}
         {nextItem?.type === "peer_teach" ? (
           <Button
-            label={`Next: ${nameOf(room, nextItem.teacherId)} teaches ${nameOf(room, nextItem.learnerId)} ${sentence(nextItem.conceptName ?? "").toLowerCase()}`}
+            label={`Next: ${nameOf(room, nextItem.teacherId)} teaches ${nameOf(room, nextItem.learnerId)} ${topic(nextItem.conceptId ?? "", nextItem.conceptName ?? "")}`}
             kind="quiet"
             icon="arrow"
             loading={busy}
@@ -838,7 +850,7 @@ function SharedGap({ room, me, busy, sourceBusy, onNext, onCustomSource }: { roo
       <View style={{ paddingHorizontal: gutter }}>
         <DotTag tone="muted" label="Shared gap" style={{ marginTop: space.l }} />
         <T variant="display" style={styles.conceptTitle}>
-          {sentence(g.conceptName)}
+          {headline(g.conceptId, g.conceptName)}
         </T>
       </View>
       <Duo room={room} me={me} focus={g.conceptId} muse />

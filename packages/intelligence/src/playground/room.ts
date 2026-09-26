@@ -13,6 +13,7 @@ import type {
   RoomEventType,
   RoomParticipant,
 } from "../contracts.ts";
+import { CONCEPT_LABELS, narrativeLabel, topicLabel } from "../contracts.ts";
 import { collaborativeDelta } from "../engine/collaborative.ts";
 import { knowledgeLevel } from "../engine/knowledgeState.ts";
 import { logEvent } from "../log.ts";
@@ -37,17 +38,8 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
  */
 export const DEFAULT_ROOM_RESOURCE = "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview";
 
-export const SHORT_LABELS: Record<string, string> = {
-  "agent-memory": "Agent Memory",
-  "long-running-agents": "Long-running",
-  "agent-tool-use": "Tool Use",
-  "evaluator-architectures": "Evaluators",
-  "context-windows": "Context",
-  "retrieval": "Retrieval",
-  "mcp": "MCP",
-  "memory-consolidation": "Consolidation",
-  "context-compaction": "Compaction",
-};
+/** Compact graph labels: the shared presentation layer (packages/contracts/src/presentation.ts). */
+export const SHORT_LABELS: Record<string, string> = Object.fromEntries(Object.entries(CONCEPT_LABELS).map(([id, l]) => [id, l.graph]));
 
 const SNAPSHOT_EXCLUDES = ["Ask history", "Saved memories and preferences", "Which misconception (only that one exists)", "Sources you've read"];
 
@@ -224,13 +216,14 @@ export class PlaygroundService {
       participants: room.participants.map((p) => ({ id: p.userId, name: p.displayName })),
       teachable: [...d.aTeachesB, ...d.bTeachesA]
         .sort((x, y) => y.score - x.score)
-        .map((t) => ({ conceptId: t.conceptId, conceptName: t.conceptName, teacherId: t.teacherId!, learnerId: t.learnerId!, assessmentAvailable: this.svc.isTransferAssessable(t.conceptId) })),
-      sharedGaps: d.sharedGaps.map((g) => ({ conceptId: g.conceptId, conceptName: g.conceptName })),
+        .map((t) => ({ conceptId: t.conceptId, conceptName: t.conceptName, topic: this.topic(t.conceptId), teacherId: t.teacherId!, learnerId: t.learnerId!, assessmentAvailable: this.svc.isTransferAssessable(t.conceptId) })),
+      sharedGaps: d.sharedGaps.map((g) => ({ conceptId: g.conceptId, conceptName: g.conceptName, topic: this.topic(g.conceptId) })),
       plan: (room.plan?.items ?? []).map((i) => ({
         id: i.id,
         type: i.type,
         ...(i.conceptId ? { conceptId: i.conceptId } : {}),
         ...(i.conceptName ? { conceptName: i.conceptName } : {}),
+        ...(i.conceptId ? { topic: this.topic(i.conceptId) } : {}),
         ...(i.teacherId ? { teacherId: i.teacherId } : {}),
         ...(i.learnerId ? { learnerId: i.learnerId } : {}),
         done: i.done,
@@ -277,11 +270,11 @@ export class PlaygroundService {
           conceptName: concept.name,
           teacherId: s("teacherId"),
           learnerId: s("learnerId"),
-          prompt: PEER_PROMPTS[concept.id] ?? `What matters most about ${concept.name}?`,
+          prompt: PEER_PROMPTS[concept.id] ?? `What matters most about ${this.topic(concept.id)}?`,
         };
         room.scene = "peer_teaching";
         room.spotlight = { conceptId: concept.id, participantId: s("teacherId") };
-        this.emit(room, "teacher_assigned", "muse", `${this.name(room, s("teacherId"))} → ${this.name(room, s("learnerId"))}: ${concept.name}`, {
+        this.emit(room, "teacher_assigned", "muse", `${this.name(room, s("teacherId"))} → ${this.name(room, s("learnerId"))}: ${narrativeLabel(concept.id, concept.name)}`, {
           conceptId: concept.id,
           teacherId: s("teacherId"),
           learnerId: s("learnerId"),
@@ -318,7 +311,7 @@ export class PlaygroundService {
         this.markDone(room, (i) => i.type === "shared_gap");
         room.scene = "shared_gap";
         room.spotlight = { conceptId: concept.id };
-        this.emit(room, "shared_gap_taught", "muse", say ?? `Shared gap: ${concept.name}`, { conceptId: concept.id, by: a.by, resourceTitle: lesson.resourceTitle ?? null });
+        this.emit(room, "shared_gap_taught", "muse", say ?? `Shared gap: ${narrativeLabel(concept.id, concept.name)}`, { conceptId: concept.id, by: a.by, resourceTitle: lesson.resourceTitle ?? null });
         return;
       }
       case "introduce_resource":
@@ -347,7 +340,7 @@ export class PlaygroundService {
     const actor = this.actingAs(room, userId, asUserId);
     if (actor !== t.teacherId) throw new ForbiddenError("Only the assigned teacher can explain.");
     t.explanation = text.trim();
-    this.emit(room, "explanation_submitted", actor, `${this.name(room, actor)} explained ${t.conceptName}.`, { conceptId: t.conceptId });
+    this.emit(room, "explanation_submitted", actor, `${this.name(room, actor)} explained ${this.topic(t.conceptId)}.`, { conceptId: t.conceptId });
     // The teacher explaining is not evidence of anything for the learner; the transfer question is.
     return this.conduct(roomId, userId);
   }
@@ -429,8 +422,8 @@ export class PlaygroundService {
       if (r.estimatedUsefulMinutes !== undefined) side.usefulMinutes = r.estimatedUsefulMinutes;
       const focus = r.newToYou[0];
       const skip = r.alreadyUnderstood[0];
-      if (focus) side.focus = focus.conceptId ? lowerName(this.conceptName(focus.conceptId)) : focus.idea;
-      if (skip) side.skip = skip.conceptId ? lowerName(this.conceptName(skip.conceptId)) : skip.idea;
+      if (focus) side.focus = focus.conceptId ? this.topic(focus.conceptId) : focus.idea;
+      if (skip) side.skip = skip.conceptId ? this.topic(skip.conceptId) : skip.idea;
       res.title = r.title;
       if (r.publisher) res.publisher = r.publisher;
       if (r.estimatedReadMinutes !== undefined) res.readMinutes = r.estimatedReadMinutes;
@@ -504,6 +497,11 @@ export class PlaygroundService {
 
   private name(room: Room, userId: string): string {
     return room.participants.find((p) => p.userId === userId)?.displayName ?? "Someone";
+  }
+
+  /** Plain-language wording for a concept inside a sentence (presentation only). */
+  private topic(id: string): string {
+    return topicLabel(id, lowerName(this.conceptName(id)));
   }
 
   private conceptName(id: string): string {

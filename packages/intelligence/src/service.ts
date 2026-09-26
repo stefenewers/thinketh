@@ -32,6 +32,7 @@ import type {
   TeachDeltaResponse,
   VoiceSession,
 } from "./contracts.ts";
+import { CONCEPT_LABELS } from "./contracts.ts";
 import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
 import { BackboardMemory } from "./adapters/memory.ts";
 import { ClaudeModel } from "./adapters/model/claude.ts";
@@ -1176,7 +1177,9 @@ export class ThinkethService {
     if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
     const claims = [...this.claims.values()].filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
     const source = claims.flatMap((c) => c.sourceIds).map((id) => this.sources.get(id)).find(Boolean);
+    const plain = CONCEPT_LABELS[conceptId]?.explanation;
     const sections = [
+      ...(plain ? [{ heading: "In plain terms", body: `${plain}.` }] : []),
       { heading: "The idea", body: concept.description },
       ...claims.slice(0, 2).map((c, i) => ({ heading: i === 0 ? "What the evidence says" : "And", body: c.text })),
     ];

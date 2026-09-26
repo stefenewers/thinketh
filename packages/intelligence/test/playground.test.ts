@@ -132,8 +132,8 @@ describe("Playground golden path (HTTP)", () => {
     expect(JSON.stringify(room.snapshots)).not.toMatch(/misconceptionFlags|memory-equals-context-window/);
     room = await ok("POST", `/playground/rooms/${room.id}/conduct`, {});
     expect(room.scene).toBe("peer_teaching");
-    expect(room.teaching).toMatchObject({ teacherId: "nadani", learnerId: "demo-user", prompt: "Why should an evaluator sometimes be separate from the generating model?" });
-    expect(room.museLine).toBe("Nadani, teach this in your own words.");
+    expect(room.teaching).toMatchObject({ teacherId: "nadani", learnerId: "demo-user", prompt: "Why shouldn't an AI always be the final judge of its own output?" });
+    expect(room.museLine).toBe("Nadani, teach Stefen how AI should check its own work.");
     expect(room.conductor.mode).toBe("fallback");
     // Stefen can't explain for Nadani unless he is the host acting for a demo persona.
     expect((await call("POST", `/playground/rooms/${room.id}/explain`, { text: "x" })).status).toBe(403);
@@ -142,7 +142,7 @@ describe("Playground golden path (HTTP)", () => {
       asUserId: "nadani",
     });
     expect(room.scene).toBe("transfer");
-    expect(room.transfer!.prompt).toMatch(/autonomous coding agent/);
+    expect(room.transfer!.prompt).toMatch(/approve customer refunds/);
     return room;
   }
 

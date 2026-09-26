@@ -63,33 +63,37 @@ export function buildPersonas(now: Date, concepts: Concept[]): Record<string, Pe
  * architectures, the learner applies it in a new context. Graded by the same
  * short-answer rubric path as every diagnostic. Never picked by normal
  * adaptive selection (it only makes sense right after a peer explanation).
+ *
+ * Worded for a smart non-specialist (a refund agent, not a coding agent), but the
+ * rubric's four ideas are unchanged: keywords were only ADDED, so answers in either
+ * register grade the same way. The id is stable (it predates the rewording).
  */
 export const PLAYGROUND_DIAGNOSTICS: DiagnosticItem[] = [
   {
     id: "dq-evaluators-transfer-coding-agent",
     conceptId: "evaluator-architectures",
     type: "short_answer",
-    prompt: "Apply that idea to an autonomous coding agent. Where should evaluation happen, and why?",
+    prompt: "An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?",
     expectedConcepts: ["evaluator-architectures", "long-running-agents"],
     rationale: "A transfer question in a new context: explaining it back isn't enough, the learner has to use it.",
-    evidencePhrase: "a transfer question applying peer-taught evaluator design to a coding agent",
+    evidencePhrase: "a transfer question applying peer-taught evaluator design to a refund-approving agent",
     playgroundOnly: true,
     rubric: [
       {
         idea: "A separate, independent evaluator (not the generating model grading itself)",
-        keywords: ["separate", "independent", "different model", "another model", "not the same", "second model", "external"],
+        keywords: ["separate", "independent", "different model", "another model", "not the same", "second model", "external", "second check", "another check", "different agent", "another agent", "second agent", "human review"],
       },
       {
-        idea: "Evaluate at checkpoints in the loop: after steps, before commit/merge, via tests or CI",
+        idea: "Evaluate at checkpoints in the loop, before the action takes effect: after steps, before commit/merge or before money is sent, via tests or CI",
         keywords: ["test", "commit", "merge", "step", "checkpoint", "before", "ci", "each", "gate", "pull request"],
       },
       {
         idea: "Self-grading is biased: a model tends to approve its own output",
-        keywords: ["bias", "own work", "own output", "self", "approve", "blind spot", "same mistakes"],
+        keywords: ["bias", "own work", "own output", "self", "approve", "blind spot", "same mistakes", "own mistake", "own decision", "grade itself", "grading itself", "check itself", "checking itself", "judge itself", "same agent"],
       },
       {
         idea: "The verdict feeds back so the agent retries or fixes before continuing",
-        keywords: ["retry", "fix", "feedback", "loop", "revise", "reject", "iterate", "roll back"],
+        keywords: ["retry", "fix", "feedback", "loop", "revise", "reject", "iterate", "roll back", "send it back", "sent back", "goes back", "block", "on hold", "escalate", "flag"],
       },
     ],
   },
@@ -97,11 +101,11 @@ export const PLAYGROUND_DIAGNOSTICS: DiagnosticItem[] = [
 
 /** The peer-teaching prompt the teacher answers out loud, per concept. */
 export const PEER_PROMPTS: Record<string, string> = {
-  "evaluator-architectures": "Why should an evaluator sometimes be separate from the generating model?",
-  "agent-tool-use": "How does an agent decide when to call a tool, and what can go wrong?",
-  "retrieval": "When is retrieval the right answer, and when isn't it?",
-  "mcp": "What problem does the Model Context Protocol actually solve?",
-  "context-windows": "What does a bigger context window buy you, and what doesn't it?",
+  "evaluator-architectures": "Why shouldn't an AI always be the final judge of its own output?",
+  "agent-tool-use": "How does an AI decide when to use a tool, and what can go wrong?",
+  "retrieval": "When should an AI look something up instead of answering from what it knows?",
+  "mcp": "Why does it help for AI tools to share one common way of connecting?",
+  "context-windows": "What does it buy you when an AI can keep more in mind at once, and what doesn't it?",
 };
 
 /** Transfer questions available after a peer explanation, per concept. */

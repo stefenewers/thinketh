@@ -1,4 +1,4 @@
-import type { ConceptEdge, KnowledgeItem, MindSnapshot } from "@thinketh/contracts";
+import { CONCEPT_LABELS, type ConceptEdge, type KnowledgeItem, type MindSnapshot } from "@thinketh/contracts";
 import type { LayoutEdge, LayoutNode } from "@thinketh/mindprint";
 
 /** One concept as the Mindprint draws it. Fill follows evidence, never decoration. */
@@ -9,21 +9,8 @@ export type MindNode = LayoutNode & {
   tone: "strong" | "developing" | "changed";
 };
 
-// Compact on-canvas names (Figma 1:6); the full name lives in the sheet.
-export const SHORT: Record<string, string> = {
-  "agent-memory": "Agent Memory",
-  "long-running-agents": "Long-running",
-  "agent-tool-use": "Tool Use",
-  "evaluator-architectures": "Evaluators",
-  "context-windows": "Context",
-  retrieval: "Retrieval",
-  mcp: "MCP",
-  "memory-consolidation": "Consolidation",
-  "context-compaction": "Compaction",
-  "reasoning-models": "Reasoning",
-  "multimodal-reasoning": "Multimodal",
-  "computer-use": "Computer Use",
-};
+// Compact on-canvas names (Figma 1:6), from the shared presentation layer; the full name lives in the sheet.
+export const SHORT: Record<string, string> = Object.fromEntries(Object.entries(CONCEPT_LABELS).map(([id, l]) => [id, l.graph]));
 
 export const toneOf = (mastery: number, changed: boolean): MindNode["tone"] => (changed ? "changed" : mastery >= 0.55 ? "strong" : "developing");
 

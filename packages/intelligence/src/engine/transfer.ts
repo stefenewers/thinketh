@@ -7,7 +7,7 @@
  * already owns (the concept's definition and the claims attached to it). If there isn't enough
  * grounding for a fair rubric, there is no challenge, and the concept is not assessable (fail closed).
  */
-import type { Claim, Concept } from "../contracts.ts";
+import { topicLabel, type Claim, type Concept } from "../contracts.ts";
 
 export type TransferContext = {
   concept: Concept;
@@ -104,10 +104,12 @@ export function groundedFallback(ctx: TransferContext): TransferDraft | null {
   for (const c of ctx.claims) add(firstSentence(c.text));
   if (ideas.length < TRANSFER_LIMITS.ideasMin) return null;
   const context = applicationContextFor(ctx.concept);
+  const topic = topicLabel(ctx.concept.id, ctx.concept.name);
   return {
-    prompt: `Apply ${ctx.concept.name} to ${context}. What would you design differently, and why?`,
+    // Plain wording for the learner (presentation only); the rubric stays grounded and precise.
+    prompt: `Picture ${context}. Using what you just learned about ${topic}, what would you do differently, and why?`,
     applicationContext: context,
-    rationale: `Applying ${ctx.concept.name} to a new system, not repeating the explanation, is what shows it transferred.`,
+    rationale: `Using ${topic} in a new situation, not repeating the explanation, is what shows it transferred.`,
     rubric: ideas,
     expectedConcepts: [ctx.concept.id],
   };

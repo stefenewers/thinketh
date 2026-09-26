@@ -8,7 +8,7 @@
  * A peer move is a candidate only if Thinketh can verify the learning afterwards (assessable).
  * Durations are planning estimates, not predictions.
  */
-import type { CollaborativeDelta, CollaborativeDeltaItem, SessionPlan, SessionPlanItem } from "../contracts.ts";
+import { topicLabel, type CollaborativeDelta, type CollaborativeDeltaItem, type SessionPlan, type SessionPlanItem } from "../contracts.ts";
 
 /** Planning estimates (minutes). One place, so nothing else carries magic durations. */
 export const ACTIVITY_MINUTES = {
@@ -36,7 +36,7 @@ function peerRationale(item: CollaborativeDeltaItem, delta: CollaborativeDelta, 
   const l = item.learnerId === delta.aId ? item.a : item.b;
   const evidence = t.verified ? "strong verified evidence" : "stronger recent evidence";
   const need = l.mastery < 0.35 ? "is only starting out" : "is still uncertain";
-  return `${teacher} has ${evidence} here while ${learner} ${need}.`;
+  return `${teacher} has ${evidence} on ${topicLabel(item.conceptId, item.conceptName.toLowerCase())} while ${learner} ${need}.`;
 }
 
 export function planSession(input: {

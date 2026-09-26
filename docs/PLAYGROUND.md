@@ -50,9 +50,9 @@ Muse chooses **what the room looks at next**, and nothing else. Its entire world
 Only the evidence engine changes a Mind, and only through the path every diagnostic uses:
 
 1. The teacher explains in their own words. That is **not** evidence for anyone.
-2. The learner answers a **transfer question** in a new context (for example, "Apply that idea to an autonomous coding agent. Where should evaluation happen, and why?"). It is a Playground-only rubric item that normal adaptive selection never picks.
+2. The learner answers a **transfer question** in a new context (for example, "An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?"). It is a Playground-only rubric item that normal adaptive selection never picks.
 3. `service.answerDiagnostic(learner, questionId, answer)` runs. Claude reports which rubric ideas the answer covered; `scoreRubric` scores them deterministically; and `kindForCorrectness` turns the score into an observation.
-4. `transition()` applies the deterministic update rule and writes a reason ("Updated because you correctly answered a transfer question applying peer-taught evaluator design to a coding agent. Mastery rose 0.30 → 0.43 …"). The previous state, observation, resulting state and timestamp are stored.
+4. `transition()` applies the deterministic update rule and writes a reason ("Updated because you correctly answered a transfer question applying peer-taught evaluator design to a refund-approving agent. Mastery rose 0.30 → 0.43 …"). The previous state, observation, resulting state and timestamp are stored.
 5. Tiger records the transition (`appendObservation` + `appendTransition`), exactly as for any diagnostic.
 6. The room shows "Knowledge moved" only if the observation was `diagnostic_correct`. Otherwise it says "Not yet" and shows what the answer did show.
 
@@ -66,7 +66,7 @@ Peer teaching is no longer limited to concepts with a prepared question. Any tea
    - a prompt that tests application in a genuinely new context rather than recall;
    - no rubric idea and no stretch of the teacher's words in the prompt;
    - it must assess the taught concept.
-3. **Grounded fallback.** If Claude times out, errors or fails validation, a deterministic challenge is built from the concept's definition and its claims. For example: "Apply Agent Tool Use to a customer-support agent… What would you design differently, and why?"
+3. **Grounded fallback.** If Claude times out, errors or fails validation, a deterministic challenge is built from the concept's definition and its claims. For example: "Picture a customer-support agent… Using what you just learned about when AI should use a tool, what would you do differently, and why?"
 4. **Fail closed.** If there isn't enough grounding for at least three rubric ideas (today: MCP, memory consolidation and context compaction), the concept is not assessable. It's never assigned, so nobody is handed a question Thinketh can't grade fairly.
 
 The challenge is registered as a Playground-only diagnostic, and the room stores its id. The learner sees exactly that item's prompt, and `answerDiagnostic` grades exactly that item, with no regeneration in between. It then follows the same steps as every diagnostic: grader → `scoreRubric` → observation → deterministic update → Tiger. Claude creates assessment structure; Thinketh evaluates the evidence.
@@ -122,6 +122,32 @@ The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry
 
 `POST /playground/rooms` · `POST /playground/join` · `GET /playground/rooms/:id` · `POST …/demo-guest` · `…/compare` · `…/conduct` · `…/explain` · `…/answer` · `…/resource` · `…/leave`. All require the app key. Rooms are visible only to their participants, and only the host can act for a seeded demo persona in their own room.
 
+## Presentation labels (simple outside, deep inside)
+
+Concept wording lives in one place, `packages/contracts/src/presentation.ts`, with three levels. Each surface uses the one that fits it:
+
+| Level | Example | Where |
+|---|---|---|
+| Canonical | Evaluator Architectures | Concept inspector, evidence, "Why Thinketh changed its model", delta details ("Technical concept: …"), docs |
+| Graph | Evaluators | Compact Mindprint node labels |
+| Narrative | AI checking its own work | Headlines in the live learning flow: overview, plan, peer teaching, shared gap, Not yet |
+
+A fourth form, `topic` ("how AI should check its own work"), is the narrative idea as a phrase inside a sentence: Muse's lines, the plan rationale, "Next: …", "Strengthened your thinking on …", the shared-source focus. Muse's room view carries the topic, and its system prompt asks for plain language.
+
+| Concept id | Canonical | Graph | Narrative |
+|---|---|---|---|
+| evaluator-architectures | Evaluator Architectures | Evaluators | AI checking its own work |
+| agent-tool-use | Agent Tool Use | Tool Use | When should AI use a tool? |
+| agent-memory | Agent Memory | Agent Memory | What should AI remember? |
+| retrieval | Retrieval (RAG) | Retrieval | When should AI look something up? |
+| context-windows | Context Windows | Context | How much can AI keep in mind? |
+| memory-consolidation | Memory Consolidation | Consolidation | What is worth remembering long-term? |
+| long-running-agents | Long-running Agents | Long-running | How can AI keep working without losing the plot? |
+| context-compaction | Context Compaction | Compaction | How does AI keep the important parts? |
+| mcp | Model Context Protocol | MCP | How does AI connect to tools? |
+
+This is wording only. Concept ids, the graph, knowledge state, the update math, Tiger history, diagnostic ids and the collaborative delta are unchanged. The golden transfer question was reworded from a coding agent to a refund agent, but it keeps the id `dq-evaluators-transfer-coding-agent` and the same four rubric ideas; keywords were only added, so strong answers grade correct in either register (`test/presentation.test.ts`). Claude's transfer-challenge and teach prompts get the same plain-language instruction. It's never applied to source quotes, source titles, stored evidence or canonical names.
+
 ## Demo
 
 ### Safe golden path
@@ -129,11 +155,11 @@ The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry
 1. Reset (Demo controls: long-press the Thinketh mark on Today → Reset demo).
 2. Today → Catch Me Up: captions and the Mind react; interrupt; ask; say "I'm done".
 3. Playground → Invite a collaborator → Bring in Nadani → Compare our Minds. "3 learning moves planned for the next 7 minutes" appears; "View learning plan" shows them.
-4. Start: Nadani teaches Evaluator Architectures (the seeded question), and Stefen answers. Knowledge moved, recorded in Tiger.
+4. Start session. Muse: "Nadani, teach Stefen how AI should check its own work." Nadani answers the prompt "Why shouldn't an AI always be the final judge of its own output?" in about ten seconds. Thinketh: "Apply it somewhere new." Transfer question: "An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?" Stefen answers (a strong answer names a separate check, where it sits, why self-checking misses mistakes, and what happens when the check fails). Knowledge moved: "Strengthened your thinking on how AI should check its own work", recorded in Tiger.
 5. "Next: the shared gap" → Teach us the delta → Bring in a shared source (the safe default) → two personal deltas → End session.
 
 ### Judge challenges
 
-1. **"Give us another concept."** After the first knowledge moved, take the plan's next move ("Next: Stefen teaches Nadani agent tool use"). Thinketh generates a grounded transfer challenge for Agent Tool Use and grades Nadani's answer through the same evidence path. A weak answer shows "Not yet" and verifies nothing.
+1. **"Give us another concept."** After the first knowledge moved, take the plan's next move ("Next: Stefen teaches Nadani when AI should use a tool"). Thinketh generates a grounded transfer challenge for Agent Tool Use and grades Nadani's answer through the same evidence path. A weak answer shows "Not yet" and verifies nothing.
 2. **"Give us another article."** On the shared-gap or shared-source screen, tap "Use another source" and paste any article, PDF, docs page or YouTube link. It's fetched once, and each Mind gets its own useful minutes, new ideas and focus. "Different delta" appears only if they really differ.
 3. **"Why did Muse choose this?"** Open "View learning plan" on the overview. Every move comes from Thinketh's deterministic plan over the evidence asymmetry, with its reason; Muse only conducts it, and validation rejects anything outside the plan.
