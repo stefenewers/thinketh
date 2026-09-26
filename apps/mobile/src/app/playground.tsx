@@ -332,7 +332,7 @@ function Waiting({
             <Dot tone="coral" size={5} />
             <T variant="label">Room code</T>
           </View>
-          <T style={{ fontFamily: font.sansSemibold, fontSize: 30, letterSpacing: 6, marginTop: space.xs, color: color.ink, fontVariant: ["tabular-nums"] }} selectable>
+          <T style={{ fontFamily: font.sansSemibold, fontSize: 30, lineHeight: 38, letterSpacing: 6, marginTop: space.xs, color: color.ink, fontVariant: ["tabular-nums"] }} selectable>
             {room.code}
           </T>
           <T variant="support" style={{ marginTop: space.s }}>
@@ -886,7 +886,7 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44 },
   headerTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
   cta: { alignSelf: "stretch", minHeight: 52 },
-  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, letterSpacing: 6, color: color.ink, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline, paddingVertical: space.s, marginTop: space.s },
+  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 34, letterSpacing: 6, color: color.ink, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline, paddingVertical: space.s, marginTop: space.s },
   pill: { alignSelf: "flex-start", marginTop: space.l, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 46 },
   check: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: color.edge, alignItems: "center", justifyContent: "center" },
   why: { marginTop: space.s, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.control, gap: 2 },
