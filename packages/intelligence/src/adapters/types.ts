@@ -3,6 +3,7 @@
  * reads the service needs. The mobile app never sees these: it only sees the
  * Thinketh domain API.
  */
+import type { ResourceAnalysis, ResourceContext, TeachContext, TeachResult } from "../resources/analyze.ts";
 import type {
   Claim,
   Concept,
@@ -125,6 +126,10 @@ export interface IntelligenceModel {
   makeItStick(input: LearningContext): Promise<MemoryAid>;
   visualize(input: LearningContext): Promise<DiagramSpec>;
   ask(input: AskContext): Promise<AskResult>;
+  /** Compare a user-supplied page with the user's knowledge. Language only; never sets knowledge state. */
+  analyzeResource(input: ResourceContext): Promise<ResourceAnalysis>;
+  /** Teach what's new in a resource, skipping what the user already understands. */
+  teachDelta(input: TeachContext): Promise<TeachResult>;
 }
 
 export type VoiceContext = { userId: string; displayName: string; script: string[]; briefDate: string; minutes: number };

@@ -6,6 +6,14 @@ import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source }
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
 import { newId } from "../../util.ts";
+import {
+  deterministicAnalysis,
+  deterministicTeach,
+  type ResourceAnalysis,
+  type ResourceContext,
+  type TeachContext,
+  type TeachResult,
+} from "../../resources/analyze.ts";
 import type {
   AskContext,
   AskResult,
@@ -166,5 +174,13 @@ export class DeterministicModel implements IntelligenceModel {
       infers.push(`${ctx.focus.name} is still developing for you (mastery ${ctx.focus.mastery.toFixed(2)}), so a quick understanding check here would tell Thinketh a lot.`);
     }
     return { thinkethInfers: infers };
+  }
+
+  async analyzeResource(ctx: ResourceContext): Promise<ResourceAnalysis> {
+    return deterministicAnalysis(ctx);
+  }
+
+  async teachDelta(ctx: TeachContext): Promise<TeachResult> {
+    return deterministicTeach(ctx);
   }
 }

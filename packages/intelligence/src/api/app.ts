@@ -7,6 +7,7 @@
 import {
   AppConfigResponseSchema,
   AskRequestSchema,
+  AddResourceRequestSchema,
   AskResponseSchema,
   BriefResponseSchema,
   ConceptHistoryResponseSchema,
@@ -21,6 +22,9 @@ import {
   KnowledgeResponseSchema,
   LearningRequestSchema,
   MemoryAidSchema,
+  ResourceListResponseSchema,
+  ResourceSchema,
+  TeachDeltaResponseSchema,
   SourceSchema,
   VoiceSessionSchema,
 } from "../contracts.ts";
@@ -150,6 +154,21 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     const input = await body(c, LearningRequestSchema);
     return c.json(MemoryAidSchema.parse(await service.makeItStick(c.get("userId"), input)));
   });
+
+  // Learning Queue: save a URL to learn from. Reading runs in the background; poll GET /resources/:id.
+  app.get("/resources", (c) => c.json(ResourceListResponseSchema.parse({ resources: service.listResources(c.get("userId")) })));
+
+  app.post("/resources", async (c) => {
+    const { url } = await body(c, AddResourceRequestSchema);
+    if (url.length > 2_000) throw new BadRequestError("url: that address is too long");
+    return c.json(ResourceSchema.parse(await service.addResource(c.get("userId"), url)));
+  });
+
+  app.get("/resources/:id", (c) => c.json(ResourceSchema.parse(service.getResource(c.get("userId"), c.req.param("id")))));
+
+  app.post("/resources/:id/teach", async (c) =>
+    c.json(TeachDeltaResponseSchema.parse(await service.teachResource(c.get("userId"), c.req.param("id")))),
+  );
 
   app.post("/voice/session", async (c) => c.json(VoiceSessionSchema.parse(await service.voiceSession(c.get("userId")))));
 
