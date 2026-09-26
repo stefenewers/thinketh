@@ -48,7 +48,7 @@ export type Recommendation = { title: string; why: string; conceptId?: string; d
  */
 export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
   {
-    reason: "Builds on what you learned today",
+    reason: "Builds on today's learning",
     items: [
       {
         title: "How agents decide what to remember",
@@ -78,7 +78,7 @@ export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
     ],
   },
   {
-    reason: "Connects two of your interests",
+    reason: "Connects two things you know",
     items: [
       {
         title: "When a tool server pauses to ask you",

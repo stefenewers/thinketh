@@ -150,6 +150,7 @@ function ConceptPanel({
 }) {
   const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
   const history = data?.transitions;
+  const [numbersOpen, setNumbersOpen] = useState(false);
 
   return (
     <View style={styles.panel}>
@@ -166,11 +167,15 @@ function ConceptPanel({
         <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />
       </View>
       <View style={styles.stats}>
-        <Stat label="Mastery" value={fmt2(state.mastery)} />
-        <Stat label="Uncertainty" value={fmt2(state.uncertainty)} />
-        <Stat label="Evidence" value={String(state.evidenceCount)} />
+        <Stat label="Level" value={levelLabel[level]} />
+        <Stat label="Evidence" value={`${state.evidenceCount} ${state.evidenceCount === 1 ? "signal" : "signals"}`} />
         <Stat label="Last seen" value={relativeTime(state.lastObservedAt)} />
       </View>
+      <Pressable onPress={() => setNumbersOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: numbersOpen }} hitSlop={8} style={{ marginTop: space.s, alignSelf: "flex-start" }}>
+        <T variant="meta">
+          {numbersOpen ? `Mastery ${fmt2(state.mastery)} · uncertainty ${fmt2(state.uncertainty)} · confidence ${fmt2(state.confidence)}` : "See the numbers"}
+        </T>
+      </Pressable>
       <T variant="body" style={{ marginTop: space.l, color: color.ink2 }}>
         {concept.description}
       </T>
@@ -255,7 +260,7 @@ function History({ transitions }: { transitions: KnowledgeStateTransition[] }) {
                 {observationLabel[t.observation.kind]}
               </T>
               <T variant="meta" style={{ fontVariant: ["tabular-nums"] }}>
-                {shortDate(t.createdAt)} · {fmt2(t.before.mastery)} → {fmt2(t.after.mastery)}
+                {shortDate(t.createdAt)} · {direction(t)}
               </T>
             </View>
             <T variant="support" style={{ marginTop: 2 }}>
@@ -301,3 +306,11 @@ const styles = StyleSheet.create({
   },
 });
 
+
+/** A change in words; the engine's reason below it carries the numbers. */
+function direction(t: KnowledgeStateTransition): string {
+  const d = t.after.mastery - t.before.mastery;
+  if (d > 0.005) return "Stronger";
+  if (d < -0.005) return "Weaker";
+  return t.after.uncertainty < t.before.uncertainty - 0.005 ? "More certain" : "Unchanged";
+}

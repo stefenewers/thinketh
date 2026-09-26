@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle, G, Line, Text as SvgText } from "react-native-svg";
 import type { Concept, ConceptEdge, KnowledgeState } from "@thinketh/contracts";
+import { useReducedMotion } from "@/lib/hooks";
 import { color, font, space } from "@/theme/tokens";
 import { T } from "./Text";
 
@@ -54,6 +55,35 @@ type Props = {
   onSelect?: (id: string) => void;
 };
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/** The knowledge trace on a concept that just changed: one ring out, then still. */
+function PulseRing({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  const reduced = useReducedMotion();
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduced) return;
+    const anim = Animated.sequence([
+      Animated.delay(450),
+      Animated.timing(v, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [reduced, v]);
+  if (reduced) return null;
+  return (
+    <AnimatedCircle
+      cx={cx}
+      cy={cy}
+      r={v.interpolate({ inputRange: [0, 1], outputRange: [r + 1.6, r + 7] })}
+      fill="none"
+      stroke={color.coral}
+      strokeWidth={0.5}
+      opacity={v.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 0.85, 0] })}
+    />
+  );
+}
+
 export function MindGraph({ concepts, states, edges, selectedId, updatedIds, onSelect }: Props) {
   const pos = new Map(concepts.map((c, i) => [c.id, positionFor(c.id, i, concepts.length)]));
   const stateOf = new Map(states.map((s) => [s.conceptId, s]));
@@ -100,6 +130,7 @@ export function MindGraph({ concepts, states, edges, selectedId, updatedIds, onS
             return (
               <G key={c.id}>
                 {updated ? <Circle cx={p[0]} cy={p[1]} r={r + 1.6} fill="none" stroke={color.coral} strokeWidth={0.5} /> : null}
+                {updated ? <PulseRing cx={p[0]} cy={p[1]} r={r} /> : null}
                 {selected ? <Circle cx={p[0]} cy={p[1]} r={r + (updated ? 2.8 : 1.4)} fill="none" stroke={color.ink} strokeWidth={0.35} /> : null}
                 <Circle
                   cx={p[0]}

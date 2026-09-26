@@ -40,7 +40,7 @@ export const DEFAULT_RATE_RULES: RateRule[] = [
     name: "generative",
     limit: 30,
     windowMs: 60_000,
-    match: (m, p) => m === "POST" && ["/ask", "/visualize", "/make-it-stick", "/voice/session"].includes(p),
+    match: (m, p) => m === "POST" && (["/ask", "/visualize", "/make-it-stick", "/voice/session", "/resources"].includes(p) || /^\/resources\/[^/]+\/teach$/.test(p)),
   },
   { name: "all", limit: 300, windowMs: 60_000, match: () => true },
 ];

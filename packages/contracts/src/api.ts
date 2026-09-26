@@ -156,9 +156,15 @@ export const ConceptHistoryResponseSchema = z.object({
 export type ConceptHistoryResponse = z.infer<typeof ConceptHistoryResponseSchema>;
 
 // POST /ask
+/** Ask learning modes: how much to explain. Presentation only; never touches knowledge state. */
+export const AskModeSchema = z.enum(["quick", "teach", "deep"]);
+export type AskMode = z.infer<typeof AskModeSchema>;
+
 export const AskRequestSchema = z.object({
   question: z.string().min(1),
   developmentId: z.string().optional(),
+  /** Optional; defaults to "quick". */
+  mode: AskModeSchema.optional(),
 });
 export type AskRequest = z.infer<typeof AskRequestSchema>;
 
@@ -191,3 +197,69 @@ export type LearningRequest = z.infer<typeof LearningRequestSchema>;
 /** Feature flags for hiding unstable features in the app (voice, visualize, …). */
 export const AppConfigResponseSchema = z.object({ flags: z.record(z.string(), z.boolean()) });
 export type AppConfigResponse = z.infer<typeof AppConfigResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Learning Queue: "save to learn". A user-supplied URL, read and compared with
+// the user's knowledge state. Analysis never changes knowledge state; the
+// diagnostic remains the only path that does.
+
+/** What the URL is, judged only from where it lives (no claims beyond that). */
+export const ResourceSourceTypeSchema = z.enum(["primary", "documentation", "research", "preprint", "repository", "reporting", "article"]);
+export type ResourceSourceType = z.infer<typeof ResourceSourceTypeSchema>;
+
+export const ResourceStatusSchema = z.enum(["processing", "ready", "failed", "learned"]);
+/** The step actually running, so the app can say what Thinketh is doing. */
+export const ResourceStageSchema = z.enum(["reading", "mapping", "comparing", "done"]);
+
+export const ResourceIdeaSchema = z.object({ idea: z.string(), conceptId: z.string().optional() });
+export type ResourceIdea = z.infer<typeof ResourceIdeaSchema>;
+
+export const ResourceSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  canonicalUrl: z.string().optional(),
+  title: z.string(),
+  publisher: z.string().optional(),
+  author: z.string().optional(),
+  publishedAt: z.string().optional(),
+  sourceType: ResourceSourceTypeSchema,
+  createdAt: z.string(),
+  fetchedAt: z.string().optional(),
+  status: ResourceStatusSchema,
+  stage: ResourceStageSchema,
+  /** Shown to the user when status is "failed". */
+  error: z.string().optional(),
+  estimatedReadMinutes: z.number().optional(),
+  estimatedUsefulMinutes: z.number().optional(),
+  summary: z.string().optional(),
+  extractedConcepts: z.array(z.string()),
+  matchedConceptIds: z.array(z.string()),
+  alreadyUnderstood: z.array(ResourceIdeaSchema),
+  newToYou: z.array(ResourceIdeaSchema),
+  relevantConnections: z.array(z.object({ conceptId: z.string(), why: z.string() })),
+  whyNow: z.string().optional(),
+  /** Which layer wrote the analysis: Claude, or the deterministic fallback. */
+  analyzedBy: z.enum(["claude", "deterministic"]).optional(),
+});
+export type Resource = z.infer<typeof ResourceSchema>;
+
+// GET /resources
+export const ResourceListResponseSchema = z.object({ resources: z.array(ResourceSchema) });
+export type ResourceListResponse = z.infer<typeof ResourceListResponseSchema>;
+
+// POST /resources
+export const AddResourceRequestSchema = z.object({ url: z.string().min(1) });
+export type AddResourceRequest = z.infer<typeof AddResourceRequestSchema>;
+
+// POST /resources/:id/teach
+export const TeachDeltaResponseSchema = z.object({
+  resourceId: z.string(),
+  /** Short teaching sections, new ideas first. */
+  sections: z.array(z.object({ heading: z.string(), body: z.string() })),
+  /** Ideas compressed or skipped because the user already understands them. */
+  skipped: z.array(z.string()),
+  /** The concept "Check my understanding" should test. */
+  conceptId: z.string().optional(),
+  generatedBy: z.enum(["claude", "deterministic"]),
+});
+export type TeachDeltaResponse = z.infer<typeof TeachDeltaResponseSchema>;

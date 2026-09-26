@@ -27,6 +27,8 @@ import type {
   Source,
   Storyline,
   PersonaProfile,
+  Resource,
+  TeachDeltaResponse,
   VoiceSession,
 } from "./contracts.ts";
 import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
@@ -49,6 +51,22 @@ import { logEvent } from "./log.ts";
 import { MISCONCEPTIONS } from "./seed/misconceptions.ts";
 import type { DevelopmentMeta, DiagnosticItem, SeedCorpus } from "./seed/types.ts";
 import { newId, round } from "./util.ts";
+import {
+  enforceAnalysis,
+  inferSourceType,
+  MAX_EXCERPT_CHARS,
+  publisherFromUrl,
+  readMinutes,
+  usefulMinutes,
+  type ConceptView,
+  type TeachContext,
+} from "./resources/analyze.ts";
+import { fetchPage, ResourceReadError, validateUrl } from "./resources/fetchPage.ts";
+
+/** Background analysis of a saved resource: nobody waits on it, so Claude gets room. */
+const RESOURCE_ANALYSIS_TIMEOUT_MS = 50_000;
+const MAX_QUEUE = 30;
+const READ_FAILED = "Thinketh couldn't reliably read this source yet.";
 
 export class NotFoundError extends Error {}
 export class BadRequestError extends Error {}
@@ -601,7 +619,7 @@ export class ThinkethService {
     return r.value;
   }
 
-  async ask(userId: string, input: { question: string; developmentId?: string }): Promise<AskResponse> {
+  async ask(userId: string, input: { question: string; developmentId?: string; mode?: "quick" | "teach" | "deep" }): Promise<AskResponse> {
     const { semantic, localSemantic } = this.adapters;
     const [memories, hits] = await Promise.all([
       this.recall(userId, input.question),
@@ -676,6 +694,7 @@ export class ThinkethService {
       const shiftDev = citedDevelopmentIds.map((id) => this.meta[id]?.mentalModelShift).find((m) => m?.after);
       const ctx: AskContext = {
         question: input.question,
+        mode: input.mode ?? "quick",
         profile: this.profileFor(userId),
         memories,
         sourcesSay: said.map((c) => c.text),
@@ -806,7 +825,204 @@ export class ThinkethService {
     return { ...defaults, ...remote.value };
   }
 
+  // -------------------------------------------------------------------------
+  // Learning Queue: save to learn. Reading and analysis never change knowledge
+  // state; the diagnostic stays the only path that does.
+
+  private readonly resources = new Map<string, Map<string, Resource>>();
+  private readonly resourceText = new Map<string, { excerpt: string }>();
+  private readonly teachings = new Map<string, TeachDeltaResponse>();
+  private readonly teachPending = new Map<string, Promise<TeachDeltaResponse>>();
+
+  private queue(userId: string): Map<string, Resource> {
+    let q = this.resources.get(userId);
+    if (!q) {
+      q = new Map();
+      this.resources.set(userId, q);
+    }
+    return q;
+  }
+
+  listResources(userId: string): Resource[] {
+    return [...this.queue(userId).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getResource(userId: string, id: string): Resource {
+    const r = this.queue(userId).get(id);
+    if (!r) throw new NotFoundError(`No resource ${id}`);
+    return r;
+  }
+
+  private updateResource(userId: string, id: string, patch: Partial<Resource>): void {
+    const q = this.queue(userId);
+    const r = q.get(id);
+    if (r) q.set(id, { ...r, ...patch });
+  }
+
+  /** Save a URL and start reading it in the background. Returns immediately with status "processing". */
+  async addResource(userId: string, rawUrl: string): Promise<Resource> {
+    let url: URL;
+    try {
+      url = validateUrl(rawUrl);
+    } catch (err) {
+      throw new BadRequestError(err instanceof ResourceReadError ? err.message : "That doesn't look like a web address.");
+    }
+    const q = this.queue(userId);
+    const existing = [...q.values()].find((r) => r.url === url.toString() && r.status !== "failed");
+    if (existing) return existing;
+    if (q.size >= MAX_QUEUE) {
+      const oldest = this.listResources(userId).at(-1);
+      if (oldest) q.delete(oldest.id);
+    }
+    const resource: Resource = {
+      id: newId("res"),
+      url: url.toString(),
+      title: url.hostname.replace(/^www\./, ""),
+      sourceType: inferSourceType(url.toString()),
+      createdAt: this.now().toISOString(),
+      status: "processing",
+      stage: "reading",
+      extractedConcepts: [],
+      matchedConceptIds: [],
+      alreadyUnderstood: [],
+      newToYou: [],
+      relevantConnections: [],
+    };
+    q.set(resource.id, resource);
+    runInBackground("resource.analyze", this.processResource(userId, resource.id));
+    return resource;
+  }
+
+  private async conceptViews(userId: string): Promise<ConceptView[]> {
+    const states = await this.statesFor(userId);
+    return [...this.concepts.values()].map((c) => {
+      const s = states.get(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        level: s ? knowledgeLevel(s) : "weak",
+        misconceptions: s?.misconceptionFlags ?? [],
+      };
+    });
+  }
+
+  private async processResource(userId: string, id: string): Promise<void> {
+    const started = Date.now();
+    try {
+      const page = await fetchPage(this.getResource(userId, id).url);
+      const readMin = readMinutes(page.words);
+      this.updateResource(userId, id, {
+        title: page.title ?? this.getResource(userId, id).title,
+        ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
+        ...((page.publisher ?? publisherFromUrl(page.url)) ? { publisher: page.publisher ?? publisherFromUrl(page.url)! } : {}),
+        ...(page.author ? { author: page.author } : {}),
+        ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
+        fetchedAt: this.now().toISOString(),
+        estimatedReadMinutes: readMin,
+        stage: "mapping",
+      });
+      const concepts = await this.conceptViews(userId);
+      const excerpt = page.text.slice(0, MAX_EXCERPT_CHARS);
+      this.resourceText.set(id, { excerpt });
+      this.updateResource(userId, id, { stage: "comparing" });
+      const ctx = { page, excerpt, concepts, preferences: this.profileFor(userId).explanationPreferences };
+      const model = this.model();
+      const r = await guarded(
+        "claude",
+        "analyzeResource",
+        model ? () => model.analyzeResource(ctx) : undefined,
+        () => this.adapters.fallbackModel.analyzeResource(ctx),
+        RESOURCE_ANALYSIS_TIMEOUT_MS,
+      );
+      const a = enforceAnalysis(r.value, concepts);
+      this.updateResource(userId, id, {
+        status: "ready",
+        stage: "done",
+        summary: a.summary,
+        extractedConcepts: a.extractedConcepts,
+        matchedConceptIds: a.matchedConceptIds,
+        alreadyUnderstood: a.alreadyUnderstood,
+        newToYou: a.newToYou,
+        relevantConnections: a.relevantConnections,
+        whyNow: a.whyNow,
+        estimatedUsefulMinutes: usefulMinutes(readMin, a.usefulFraction),
+        analyzedBy: r.source === "live" ? "claude" : "deterministic",
+      });
+      logEvent("resource.ready", { userId, id, ms: Date.now() - started, words: page.words, analyzedBy: r.source, matched: a.matchedConceptIds.length });
+      // Warm the lesson so "Teach me the delta" is instant.
+      runInBackground("resource.teach", this.pendingTeach(userId, id).catch(() => undefined));
+    } catch (err) {
+      const message = err instanceof ResourceReadError ? err.message : READ_FAILED;
+      this.updateResource(userId, id, { status: "failed", stage: "done", error: message });
+      logEvent("resource.failed", { userId, id, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) }, "warn");
+    }
+  }
+
+  private async teachContext(userId: string, r: Resource): Promise<TeachContext> {
+    return {
+      title: r.title,
+      summary: r.summary ?? "",
+      excerpt: this.resourceText.get(r.id)?.excerpt ?? r.summary ?? "",
+      newToYou: r.newToYou,
+      alreadyUnderstood: r.alreadyUnderstood,
+      concepts: (await this.conceptViews(userId)).filter((c) => r.matchedConceptIds.includes(c.id)),
+      preferences: this.profileFor(userId).explanationPreferences,
+    };
+  }
+
+  /** One Claude lesson per resource, shared by the background warm-up and the request. */
+  private pendingTeach(userId: string, id: string): Promise<TeachDeltaResponse> {
+    const cached = this.teachings.get(id);
+    if (cached) return Promise.resolve(cached);
+    let p = this.teachPending.get(id);
+    if (!p) {
+      p = (async () => {
+        const r = this.getResource(userId, id);
+        const ctx = await this.teachContext(userId, r);
+        const model = this.model();
+        const out = await guarded(
+          "claude",
+          "teachDelta",
+          model ? () => model.teachDelta(ctx) : undefined,
+          () => this.adapters.fallbackModel.teachDelta(ctx),
+          RESOURCE_ANALYSIS_TIMEOUT_MS,
+        );
+        const conceptId = out.value.conceptId && r.matchedConceptIds.includes(out.value.conceptId) ? out.value.conceptId : r.newToYou.find((i) => i.conceptId)?.conceptId;
+        const lesson: TeachDeltaResponse = {
+          resourceId: id,
+          sections: out.value.sections,
+          skipped: out.value.skipped,
+          ...(conceptId ? { conceptId } : {}),
+          generatedBy: out.source === "live" ? "claude" : "deterministic",
+        };
+        if (out.source === "live") this.teachings.set(id, lesson);
+        return lesson;
+      })().finally(() => this.teachPending.delete(id));
+      this.teachPending.set(id, p);
+    }
+    return p;
+  }
+
+  /** Teach the delta. Waits briefly for Claude's lesson, else answers from the source's own words. */
+  async teachResource(userId: string, id: string): Promise<TeachDeltaResponse> {
+    const r = this.getResource(userId, id);
+    if (r.status !== "ready" && r.status !== "learned") throw new BadRequestError("Thinketh is still reading this source.");
+    try {
+      return await withTimeout(this.pendingTeach(userId, id), this.claudeTimeout(), "teach");
+    } catch {
+      const out = await this.adapters.fallbackModel.teachDelta(await this.teachContext(userId, r));
+      const conceptId = out.conceptId ?? r.newToYou.find((i) => i.conceptId)?.conceptId;
+      return { resourceId: id, sections: out.sections, skipped: out.skipped, ...(conceptId ? { conceptId } : {}), generatedBy: "deterministic" };
+    }
+  }
+
   async reset(userId: string): Promise<void> {
+    for (const id of this.queue(userId).keys()) {
+      this.resourceText.delete(id);
+      this.teachings.delete(id);
+    }
+    this.resources.delete(userId);
     await this.adapters.temporal.reset(userId);
     await this.adapters.localMemory.reset(userId);
     // Rehearsals should start from the persona's seeded memories, not accumulated

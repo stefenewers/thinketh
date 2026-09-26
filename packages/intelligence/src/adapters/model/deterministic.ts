@@ -6,6 +6,14 @@ import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source }
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
 import { newId } from "../../util.ts";
+import {
+  deterministicAnalysis,
+  deterministicTeach,
+  type ResourceAnalysis,
+  type ResourceContext,
+  type TeachContext,
+  type TeachResult,
+} from "../../resources/analyze.ts";
 import type {
   AskContext,
   AskResult,
@@ -163,8 +171,19 @@ export class DeterministicModel implements IntelligenceModel {
     if (ctx.focus?.misconception) {
       infers.push(`You've previously leaned toward the idea ${ctx.focus.misconception}. This is the part worth re-checking.`);
     } else if (ctx.focus && ctx.focus.mastery < 0.55) {
-      infers.push(`${ctx.focus.name} is still developing for you (mastery ${ctx.focus.mastery.toFixed(2)}), so a quick understanding check here would tell Thinketh a lot.`);
+      infers.push(`${ctx.focus.name} is still developing for you, so a quick understanding check here would tell Thinketh a lot.`);
     }
+    const mode = ctx.mode ?? "quick";
+    if (mode === "quick") return { thinkethInfers: infers.slice(0, 1) };
+    if (mode === "deep" && ctx.stillUncertain.length) infers.push(`Still open: ${ctx.stillUncertain.join(" ")}`);
     return { thinkethInfers: infers };
+  }
+
+  async analyzeResource(ctx: ResourceContext): Promise<ResourceAnalysis> {
+    return deterministicAnalysis(ctx);
+  }
+
+  async teachDelta(ctx: TeachContext): Promise<TeachResult> {
+    return deterministicTeach(ctx);
   }
 }

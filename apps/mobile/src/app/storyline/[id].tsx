@@ -6,7 +6,7 @@ import { T } from "@/components/Text";
 import { BackBar, Button, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { agentMemoryStoryline as story } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
-import { fmt2, masteryLabel, misconceptionLabel, shortDate, significanceLabel } from "@/lib/knowledge";
+import { evidenceLabel, masteryLabel, misconceptionLabel, shortDate, significanceLabel } from "@/lib/knowledge";
 import { color, font, space } from "@/theme/tokens";
 
 // A storyline shows two timelines side by side in meaning: how the world's
@@ -101,7 +101,6 @@ function Storyline({
               <View style={{ flex: 1, paddingBottom: space.xxl }}>
                 <T variant="label" tone={p.current ? "coral" : undefined}>
                   {p.label}
-                  {devs[0] ? ` · ${shortDate(devs[0].happenedAt)}` : ""}
                 </T>
                 <T variant="body" style={{ fontFamily: font.sansMedium, marginTop: space.xs }}>
                   {p.headline}
@@ -126,7 +125,7 @@ function Storyline({
           when="Before"
           text={
             priorMastery !== undefined && priorMastery >= 0.6
-              ? `You already understood ${priorName.toLowerCase()} (${masteryLabel(priorMastery).toLowerCase()}, ${fmt2(priorMastery)}).`
+              ? `You already understood ${priorName.toLowerCase()} (${masteryLabel(priorMastery).toLowerCase()}).`
               : `${priorName}: ${priorMastery !== undefined ? masteryLabel(priorMastery).toLowerCase() : "not yet measured"}.`
           }
         />
@@ -136,7 +135,7 @@ function Storyline({
         <Milestone
           when="Now"
           current
-          text={`${history.concept.name}: ${masteryLabel(current.mastery).toLowerCase()} (mastery ${fmt2(current.mastery)}, uncertainty ${fmt2(current.uncertainty)}).${
+          text={`${history.concept.name}: ${masteryLabel(current.mastery).toLowerCase()}, ${evidenceLabel(current.uncertainty).toLowerCase()}.${
             current.misconceptionFlags.length ? ` Still open: ${current.misconceptionFlags.map(misconceptionLabel).join("; ")}.` : ""
           }`}
           last
@@ -170,7 +169,7 @@ function DevLink({ d }: { d: Development }) {
   return (
     <Row onPress={() => router.push({ pathname: "/development/[id]", params: { id: d.id } })} style={styles.devLink}>
       <T variant="meta">
-        {significanceLabel(d)} · credibility {fmt2(d.credibility)}
+        {significanceLabel(d)} · {d.credibility >= 0.85 ? "high credibility" : d.credibility >= 0.7 ? "credible sources" : "early reports"}
       </T>
       <T variant="body" style={{ color: color.ink }}>
         {d.title}
@@ -213,7 +212,9 @@ function milestoneText(t: KnowledgeStateTransition): string {
 
 function masteryChange(t: KnowledgeStateTransition): string | undefined {
   if (Math.abs(t.after.mastery - t.before.mastery) < 0.005) return undefined;
-  return `Mastery ${fmt2(t.before.mastery)} → ${fmt2(t.after.mastery)}`;
+  const [from, to] = [masteryLabel(t.before.mastery).toLowerCase(), masteryLabel(t.after.mastery).toLowerCase()];
+  const dir = t.after.mastery > t.before.mastery ? "Stronger" : "Weaker";
+  return from === to ? `${dir}, still ${to}` : `${dir}: ${from} → ${to}`;
 }
 
 const styles = StyleSheet.create({

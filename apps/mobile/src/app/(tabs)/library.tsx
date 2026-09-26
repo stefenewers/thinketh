@@ -4,15 +4,18 @@ import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MindGraph } from "@/components/MindGraph";
 import { T } from "@/components/Text";
-import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
+import { Button, Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { improvedTodayIds } from "@/lib/knowledge";
-import { color, radius, space } from "@/theme/tokens";
+import { hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
+import { color, font, radius, space } from "@/theme/tokens";
 
 export default function Library() {
   const { data } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
   const updatedIds = improvedTodayIds(data?.items ?? []);
+  const queue = useApi(() => api.listResources(), [], { refetchOnFocus: true });
+  const resources = queue.data ?? [];
 
   return (
     <Screen>
@@ -52,6 +55,52 @@ export default function Library() {
         </Pressable>
       </Gutter>
 
+      {/* Save to learn: resources waiting to become part of what you understand. */}
+      <View style={{ marginTop: space.x3 }}>
+        <Gutter style={styles.sectionHead}>
+          <SectionLabel>Learning queue</SectionLabel>
+          {resources.length ? (
+            <Pressable onPress={() => router.push("/resource/add")} accessibilityRole="button" hitSlop={8}>
+              <T variant="meta" style={{ color: color.ink }}>
+                + Add a resource
+              </T>
+            </Pressable>
+          ) : null}
+        </Gutter>
+        {resources.length === 0 ? (
+          <Gutter>
+            <T variant="section">Give Thinketh something you want to understand.</T>
+            <T variant="support" style={{ marginTop: space.xs }}>
+              An article, paper or docs page. Thinketh reads it and shows only what&apos;s new to you.
+            </T>
+            <Button kind="secondary" label="Add a resource" style={{ marginTop: space.l }} onPress={() => router.push("/resource/add")} />
+          </Gutter>
+        ) : (
+          <>
+            <Divider />
+            {resources.slice(0, 5).map((r) => (
+              <Row key={r.id} onPress={() => router.push({ pathname: "/resource/[id]", params: { id: r.id } })}>
+                <T variant="meta">
+                  {r.status === "ready" || r.status === "learned"
+                    ? `${SOURCE_TYPE_LABEL[r.sourceType]} · ${r.publisher ?? hostOf(r.url)}`
+                    : hostOf(r.url)}
+                </T>
+                <T variant="body" style={{ fontFamily: font.sansMedium, marginTop: 2 }} numberOfLines={2}>
+                  {r.title}
+                </T>
+                <T variant="support" tone={r.status === "ready" ? "coral" : undefined}>
+                  {r.status === "processing"
+                    ? STAGE_COPY[r.stage]
+                    : r.status === "failed"
+                      ? "Couldn't read this one"
+                      : `~${r.estimatedUsefulMinutes ?? "?"} useful min of ~${r.estimatedReadMinutes ?? "?"} · ${r.newToYou.length} new to you`}
+                </T>
+              </Row>
+            ))}
+          </>
+        )}
+      </View>
+
       <Gutter style={{ marginTop: space.x3 }}>
         <SectionLabel>Storyline</SectionLabel>
         <Pressable
@@ -90,7 +139,7 @@ export default function Library() {
         </Pressable>
       </Gutter>
 
-      <View style={{ marginTop: space.l }}>
+      <View style={{ marginTop: space.xxl }}>
         <Gutter>
           <SectionLabel>Browse</SectionLabel>
         </Gutter>
@@ -117,6 +166,7 @@ const styles = StyleSheet.create({
     borderColor: color.edge,
   },
   previewLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.m, minHeight: 32 },
+  sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   event: { flexDirection: "row", gap: space.l },
   rail: { width: 12, alignItems: "center" },
   node: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: color.ink2, backgroundColor: color.ground, marginTop: 2 },

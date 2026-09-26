@@ -141,16 +141,17 @@ export function initialHistory(): Record<string, KnowledgeStateTransition[]> {
 }
 
 export const sources: Source[] = [
-  { id: "src-am-1", title: "Persistent memory for Claude agents", sourceType: "announcement", publisher: "Anthropic", url: "https://www.anthropic.com/news", publishedAt: hoursAgo(2), credibility: 0.95 },
-  { id: "src-am-2", title: "Memory tool: storing and recalling state across sessions", sourceType: "docs", publisher: "Anthropic Docs", url: "https://docs.anthropic.com", publishedAt: hoursAgo(2), credibility: 0.93 },
-  { id: "src-am-3", title: "Towards agents that remember: evaluation of cross-session memory", sourceType: "paper", publisher: "arXiv", url: "https://arxiv.org", publishedAt: daysAgo(6), credibility: 0.8 },
-  { id: "src-am-4", title: "Reference implementation of a file-backed memory store", sourceType: "github", publisher: "GitHub", url: "https://github.com", publishedAt: hoursAgo(1), credibility: 0.75 },
-  { id: "src-mm-1", title: "Native multimodal reasoning in Gemini", sourceType: "announcement", publisher: "Google DeepMind", url: "https://deepmind.google", publishedAt: hoursAgo(5), credibility: 0.93 },
-  { id: "src-ev-1", title: "Evaluator agents in production pipelines", sourceType: "article", publisher: "The Gradient", url: "https://thegradient.pub", publishedAt: hoursAgo(9), credibility: 0.8 },
-  { id: "src-ev-2", title: "Generator–verifier loops for long-horizon tasks", sourceType: "paper", publisher: "arXiv", url: "https://arxiv.org", publishedAt: daysAgo(2), credibility: 0.78 },
-  { id: "src-mcp-1", title: "MCP specification update: streaming results and remote auth", sourceType: "docs", publisher: "modelcontextprotocol.io", url: "https://modelcontextprotocol.io", publishedAt: hoursAgo(11), credibility: 0.9 },
-  { id: "src-rm-1", title: "Small reasoning models on structured benchmarks", sourceType: "article", publisher: "OpenAI", url: "https://openai.com/news", publishedAt: hoursAgo(14), credibility: 0.85 },
-  { id: "src-cu-1", title: "An open computer-use toolkit for agents", sourceType: "github", publisher: "Meta AI", url: "https://github.com", publishedAt: hoursAgo(16), credibility: 0.7 },
+  // Real, verified pages where they support the claims that cite them; the rest are marked (demo), never credited to a real org.
+  { id: "src-am-1", title: "Managing context on the Claude Developer Platform", sourceType: "announcement", publisher: "Anthropic", url: "https://claude.com/blog/context-management", credibility: 0.95 },
+  { id: "src-am-2", title: "Memory tool", sourceType: "docs", publisher: "Claude Platform Docs", url: "https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool", credibility: 0.93 },
+  { id: "src-am-3", title: "Towards agents that remember: evaluation of cross-session memory", sourceType: "paper", publisher: "Preprint (demo)", publishedAt: daysAgo(6), credibility: 0.8 },
+  { id: "src-am-4", title: "letta-ai/letta: Platform for stateful agents with advanced memory", sourceType: "github", publisher: "GitHub", url: "https://github.com/letta-ai/letta", credibility: 0.75 },
+  { id: "src-mm-1", title: "Native multimodal reasoning in production models", sourceType: "announcement", publisher: "Frontier lab blog (demo)", publishedAt: hoursAgo(5), credibility: 0.9 },
+  { id: "src-ev-1", title: "Evaluator agents in production pipelines", sourceType: "article", publisher: "Applied ML newsletter (demo)", publishedAt: hoursAgo(9), credibility: 0.8 },
+  { id: "src-ev-2", title: "Building Effective AI Agents", sourceType: "article", publisher: "Anthropic", url: "https://www.anthropic.com/engineering/building-effective-agents", credibility: 0.85 },
+  { id: "src-mcp-1", title: "Key Changes (Model Context Protocol specification, 2025-03-26)", sourceType: "docs", publisher: "Model Context Protocol", url: "https://modelcontextprotocol.io/specification/2025-03-26/changelog", credibility: 0.9 },
+  { id: "src-rm-1", title: "Small reasoning models on structured benchmarks", sourceType: "article", publisher: "Research newsletter (demo)", publishedAt: hoursAgo(14), credibility: 0.8 },
+  { id: "src-cu-1", title: "An open computer-use toolkit for agents", sourceType: "github", publisher: "Open-source project (demo)", publishedAt: hoursAgo(16), credibility: 0.7 },
 ];
 
 export const developments: Development[] = [

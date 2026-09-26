@@ -3,31 +3,26 @@ import { router } from "expo-router";
 import { api } from "@/api";
 import { T } from "@/components/Text";
 import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
-import { exploreGroups, type Recommendation } from "@/content/demo";
+import { buildGroups, type Pick } from "@/lib/explore";
 import { useApi } from "@/lib/hooks";
 import { font, space } from "@/theme/tokens";
 
-function open(item: Recommendation) {
-  if (item.storylineId) router.push({ pathname: "/storyline/[id]", params: { id: item.storylineId } });
+function open(item: Pick) {
+  if (item.resourceId) router.push({ pathname: "/resource/[id]", params: { id: item.resourceId } });
+  else if (item.storylineId) router.push({ pathname: "/storyline/[id]", params: { id: item.storylineId } });
   else if (item.developmentId) router.push({ pathname: "/development/[id]", params: { id: item.developmentId } });
   else if (item.conceptId) router.push({ pathname: "/mind", params: { concept: item.conceptId } });
 }
 
 export default function Explore() {
-  // Only recommend what exists in the current world and knowledge state, so no row leads to a dead end.
-  const { data } = useApi(async () => {
-    const [today, knowledge] = await Promise.all([api.getTodayBrief(), api.getKnowledge()]);
-    return {
-      developmentIds: new Set(today.developments.map((d) => d.id)),
-      conceptIds: new Set(knowledge.items.map((i) => i.concept.id)),
-    };
-  }, []);
-  const resolves = (item: Recommendation) =>
-    !!item.storylineId ||
-    (item.developmentId ? !!data?.developmentIds.has(item.developmentId) : !!item.conceptId && !!data?.conceptIds.has(item.conceptId));
-  const groups = exploreGroups
-    .map((g) => ({ reason: g.reason, item: g.items.find(resolves) }))
-    .filter((g): g is { reason: string; item: Recommendation } => !!g.item);
+  const { data } = useApi(
+    async () => {
+      const [today, knowledge, resources] = await Promise.all([api.getTodayBrief(), api.getKnowledge(), api.listResources().catch(() => [])]);
+      return buildGroups(today, knowledge, resources);
+    },
+    [],
+    { refetchOnFocus: true },
+  );
 
   return (
     <Screen>
@@ -40,20 +35,22 @@ export default function Explore() {
         </T>
       </Gutter>
 
-      {groups.map(({ reason, item }) => (
-        <View key={reason} style={{ marginTop: space.x3 }}>
+      {(data ?? []).map((group) => (
+        <View key={group.reason} style={{ marginTop: space.x3 }}>
           <Gutter>
-            <SectionLabel>{reason}</SectionLabel>
+            <SectionLabel>{group.reason}</SectionLabel>
           </Gutter>
           <Divider />
-          <Row onPress={() => open(item)}>
-            <T variant="body" style={{ fontFamily: font.sansMedium }}>
-              {item.title}
-            </T>
-            <T variant="support" style={{ marginTop: 2 }}>
-              {item.why}
-            </T>
-          </Row>
+          {group.items.map((item) => (
+            <Row key={item.title} onPress={() => open(item)}>
+              <T variant="body" style={{ fontFamily: font.sansMedium }}>
+                {item.title}
+              </T>
+              <T variant="support" style={{ marginTop: 2 }}>
+                {item.why}
+              </T>
+            </Row>
+          ))}
         </View>
       ))}
     </Screen>

@@ -39,21 +39,19 @@ export function focusConceptId(input: DeltaInput): string | undefined {
   return [...input.development.conceptIds].sort((a, b) => gapScore(b, input) - gapScore(a, input))[0];
 }
 
-const fmt = (x: number) => x.toFixed(2);
-
+// User-facing text: levels in words. The numbers live in the knowledge state and the app's "See the numbers".
 function affectedReason(concept: Concept, state: KnowledgeState, isFocus: boolean): string {
   const level = knowledgeLevel(state);
-  const m = fmt(state.mastery);
-  if (isFocus) return `Your biggest gap here (mastery ${m}, uncertainty ${fmt(state.uncertainty)}). This development changes it directly.`;
+  if (isFocus) return `Your biggest gap here. This development changes it directly.`;
   switch (level) {
     case "strong":
-      return `You're strong here (${m}), so this builds on what you already know.`;
+      return `You're strong here, so this builds on what you already know.`;
     case "intermediate":
-      return `Partially known (${m}). This extends it.`;
+      return `Partially known. This extends it.`;
     case "developing":
-      return `Still developing (${m}). This fills in part of the picture.`;
+      return `Still developing. This fills in part of the picture.`;
     default:
-      return `New ground for you (${m}). This introduces it.`;
+      return `New ground for you. This introduces it.`;
   }
 }
 
@@ -95,7 +93,7 @@ export function computeDelta(input: DeltaInput): DeltaExplanation {
   let whyItMattersToYou = "This development touches topics you follow.";
   if (focus && focusState) {
     const interest = profile.interests.find((i) => i.conceptIds.includes(focus.id));
-    const gap = `${focus.name} is one of your least certain areas (mastery ${fmt(focusState.mastery)}, uncertainty ${fmt(focusState.uncertainty)}).`;
+    const gap = `${focus.name} is one of your least certain areas.`;
     const sentences = [interest ? `You follow ${interest.topic}, and ${gap}` : gap];
     const goal = profile.goals[0];
     if (goal) sentences.push(`It bears directly on your goal: “${goal}”.`);
