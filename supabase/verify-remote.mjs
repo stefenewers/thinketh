@@ -7,7 +7,7 @@ async function call(method, path, body) {
   const started = performance.now();
   const res = await fetch(base + path, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(process.env.THINKETH_APP_KEY ? { "x-thinketh-app-key": process.env.THINKETH_APP_KEY } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(20_000),
   });

@@ -32,6 +32,7 @@ import type {
 import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
 import { BackboardMemory } from "./adapters/memory.ts";
 import { ClaudeModel } from "./adapters/model/claude.ts";
+import { assertsKnowledgeNumber, isManipulation } from "./memoryGuard.ts";
 import { MongoSemanticStore } from "./adapters/semantic.ts";
 import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
@@ -181,9 +182,13 @@ export class ThinkethService {
 
   private async recall(userId: string, query: string): Promise<MemoryItem[]> {
     const { memory, localMemory } = this.adapters;
-    return (
+    const items = (
       await guarded("backboard", "recall", memory ? () => memory.recall(userId, query) : undefined, () => localMemory.recall(userId, query), MEMORY_TIMEOUT_MS)
     ).value;
+    // Knowledge-state numbers come only from the engine; drop any memory that claims one, however it got stored.
+    const kept = items.filter((m) => !assertsKnowledgeNumber(m.content));
+    if (kept.length < items.length) logEvent("memory.filtered", { userId, dropped: items.length - kept.length }, "warn");
+    return kept;
   }
 
   private async remember(userId: string, item: MemoryItem): Promise<void> {
@@ -687,13 +692,18 @@ export class ThinkethService {
       ).value.thinkethInfers;
     }
 
-    await this.remember(userId, {
-      id: newId("mem"),
-      kind: "conversation",
-      content: `Asked: “${input.question.slice(0, 200)}”`,
-      createdAt: this.now().toISOString(),
-    });
-    this.observeInBackground(userId, input.question);
+    // Answer everything, but never let an attempt to steer the system into learner memory.
+    if (isManipulation(input.question)) {
+      logEvent("memory.skipped_manipulation", { userId, question: input.question.slice(0, 120) }, "warn");
+    } else {
+      await this.remember(userId, {
+        id: newId("mem"),
+        kind: "conversation",
+        content: `Asked: “${input.question.slice(0, 200)}”`,
+        createdAt: this.now().toISOString(),
+      });
+      this.observeInBackground(userId, input.question);
+    }
     if (input.developmentId) {
       await this.withUserLock(userId, async () => {
         for (const conceptId of citedConceptIds.slice(0, 2)) {

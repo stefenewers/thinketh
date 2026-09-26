@@ -20,6 +20,14 @@ const GENERATIVE_TIMEOUT_MS = 15000;
 
 export class ApiError extends Error {}
 
+/** Shared app key the demo API requires (x-thinketh-app-key). Ships in the bundle: a gate, not a user credential. */
+const APP_KEY = process.env.EXPO_PUBLIC_THINKETH_APP_KEY;
+const baseHeaders = (): Record<string, string> => ({
+  "Content-Type": "application/json",
+  "x-thinketh-user-id": DEMO_USER_ID,
+  ...(APP_KEY ? { "x-thinketh-app-key": APP_KEY } : {}),
+});
+
 // Talks to the Thinketh API (packages/intelligence). Every response is
 // validated against the canonical contract. With a fallback, failures are
 // logged and served from the seeded mock so the demo never shows an error;
@@ -40,7 +48,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     try {
       const res = await fetch(`${base}${path}`, {
         method,
-        headers: { "Content-Type": "application/json", "x-thinketh-user-id": DEMO_USER_ID },
+        headers: baseHeaders(),
         body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
         signal: controller.signal,
       });
@@ -89,7 +97,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     resetDemo: async () => {
       const res = await fetch(`${base}/demo/reset`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-thinketh-user-id": DEMO_USER_ID },
+        headers: baseHeaders(),
         body: "{}",
       });
       if (!res.ok) throw new ApiError(`POST /demo/reset -> ${res.status}`);
