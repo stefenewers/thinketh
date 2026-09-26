@@ -1,17 +1,50 @@
-# Nadani: action items from Stefen's side (2026-09-25)
+# Nadani: action items from Stefen's side (updated 2026-09-25, late)
 
-This covers the Supabase Edge Function work. It's what you need to do, review, or know so we stay in sync. Stefen's earlier changes are in `docs/STEFEN-CHANGES.md`. Temporary security trade-offs to undo after the event are in `docs/POST-HACKATHON-CLEANUP.md`.
+Stefen's earlier changes are in `docs/STEFEN-CHANGES.md`. Temporary security trade-offs to undo after the event are in `docs/POST-HACKATHON-CLEANUP.md`.
 
-## Do now
+## Update: the demo API now runs on Node, not Supabase Edge
 
-0. **Send Stefen the full `TIGER_DATABASE_URL` with the password**, privately. The deployed one has none (see the FYI at the bottom).
-1. **Open MongoDB Atlas Network Access to `0.0.0.0/0`**, temporarily. Supabase Edge Functions don't use fixed outgoing IPs, so Atlas rejects them now. The error looks like `received fatal alert: InternalError`. Mongo can't go `live` on the deployed API until this is done. It's on the cleanup list for after HackGT.
-2. **Review and merge the branch `stefen-edge-tiger`.** It changes backend files you own. Details are below.
-3. **After you merge, tell Stefen**, so he can redeploy and run `./supabase/deploy-remote.sh`. That script sets the secrets, deploys, and verifies everything.
-4. **ElevenLabs:** the `ELEVENLABS_AGENT_ID` we have is `thinketh`, and ElevenLabs returns 404 for it. It's not a real agent id. Send the real one, or we cut voice. The `voice` feature flag is off in Supabase right now.
-5. **Claude live phrasing** (optional): `ANTHROPIC_API_KEY` isn't set on the Edge Function, so it runs the deterministic fallback. Send the key if we want Claude live.
+**What happened on Supabase Edge:**
+- The circuit breaker fixed the answer timeout: the answer step took 306 ms there.
+- But after the answer, the golden loop failed on Mind and History. The state went back to 0.42.
+- Why: Supabase recycles Edge instances between requests. Eight health calls in a row each showed zero prior calls. Thinketh keeps knowledge state in process memory plus Tiger, and Tiger can't connect from Edge. Deno still rejects Timescale's certificate (`CaUsedAsEndEntity`) even with `TIGER_TLS_INSECURE=true`, so the bypass has no effect there. The result: every request starts from a blank state.
+- We decided not to build a second knowledge-state store in Supabase Postgres.
 
-## Review: branch `stefen-edge-tiger` (commit `b4df0c8`)
+**What we did instead:** we run the unchanged Node/Hono server (`packages/intelligence/src/server/node.ts`) as one persistent process, exposed through a Cloudflare quick tunnel. This involved no code or architecture changes.
+
+**Verified against the public tunnel URL:**
+
+| Check | Result |
+|---|---|
+| Tiger | **live**. The answer's transition was written and read back (row count 0 → 6). |
+| Mongo | **live**. Thanks for opening Atlas. |
+| Backboard | **live** |
+| Supabase | **live** |
+| Claude, ElevenLabs | fallback |
+| Golden loop | **23/23** |
+| Answer latency | about 590 ms |
+| Persistence | 0.42 → 0.51 still shows 0.51 on requests 10 s later, and History shows the answer as newest |
+| Reset | brings it back to 0.42 |
+
+`TIGER_TLS_INSECURE` isn't set on Node; Node accepts Tiger's certificate.
+
+**How to run it** (either of us):
+```bash
+brew install cloudflared   # once
+./scripts/demo-api.sh      # starts the API and the tunnel, prints the public URL, runs the checks
+```
+- It needs the repo-root `.env` with the **full** `TIGER_DATABASE_URL`. Stefen's now has the password.
+- A quick-tunnel URL changes on every restart and dies if the laptop sleeps. For judging, we should move the same server to Railway or Render to get a stable URL (it needs a browser login).
+- The Supabase Edge Function stays deployed but is **not** the demo API. Supabase itself (DB, flags) is still live and used by the Node server.
+
+## Still open for you
+1. **ElevenLabs:** the `ELEVENLABS_AGENT_ID` we had was the placeholder `thinketh`, and ElevenLabs returns 404 for it. Send the real agent id, or we cut voice. The `voice` flag is off in Supabase.
+2. **Claude live phrasing** (optional): send `ANTHROPIC_API_KEY` if we want it. Without it, the server runs the deterministic fallback.
+3. Done, thanks: the Atlas `0.0.0.0/0` access, the full Tiger URL, and the `stefen-edge-tiger` merge.
+
+## History: the Supabase Edge attempt
+
+### Branch `stefen-edge-tiger` (merged in #6)
 
 Typecheck and lint pass, and 80/80 tests pass. The files touched are `adapters/guard.ts`, `adapters/temporal.ts`, `adapters/registry.ts`, `config.ts`, `service.ts` and the tests.
 
@@ -35,7 +68,7 @@ Typecheck and lint pass, and 80/80 tests pass. The files touched are `adapters/g
   - checks that the answer's transition was written to Tiger and read back
   - runs the golden loop
 
-## Current deployment state
+### Edge deployment state at the time
 
 - **Public API:** `https://mbfogczuvxqkrykwlrcp.supabase.co/functions/v1/api`. It's deployed from `main` as of `27c0c86`, with JWT verification off.
 - **Remote secrets** (names only): `BACKBOARD_API_KEY`, `BACKBOARD_ASSISTANT_ID`, `MONGODB_URI`, `TIGER_DATABASE_URL`, `THINKETH_DEMO_USER_ID`, `THINKETH_ALLOW_RESET`. The `SUPABASE_*` values are provided automatically. `TIGER_TLS_INSECURE=true` gets set by the next `deploy-remote.sh` run.
@@ -54,7 +87,7 @@ Typecheck and lint pass, and 80/80 tests pass. The files touched are `adapters/g
   The golden loop passed 8 checks, then timed out on the answer step. The branch fixes that.
 - **Supabase DB:** the migration is in sync, remote and local. `feature_flags` has `voice` off; `ask`, `visualize`, `make_it_stick` and `storylines` are on.
 
-## FYI: Stefen's local creds
+### FYI: Stefen's local creds (resolved)
 
 Stefen's `MONGODB_URI` is the same one you use. It only fails because of the Atlas allowlist, which item 1 fixes.
 

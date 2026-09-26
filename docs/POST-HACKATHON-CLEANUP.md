@@ -15,6 +15,8 @@ These are temporary changes we made so the public demo works during HackGT. Each
 
   Why it exists: Timescale's server certificate is marked `CA:TRUE`. Deno, the runtime behind Supabase Edge Functions, rejects that as `CaUsedAsEndEntity`, while Node accepts it. The long-term fix is to run the Tiger writes from a Node runtime, or to wait until Timescale or Deno changes this behavior.
 - [ ] **Remove MongoDB Atlas Network Access `0.0.0.0/0`.** Replace it with specific IPs, or use private networking.
+- [ ] **Stop the Cloudflare quick tunnel** (`scripts/demo-api.sh`). It exposes the demo API, including `/demo/reset`, with no auth.
+- [ ] Delete or lock down the Supabase Edge Function `api`. It still has `TIGER_TLS_INSECURE=true` in its secrets and isn't used for the demo.
 - [ ] Consider turning JWT verification back on for the `api` function. It was deployed with `--no-verify-jwt` for the demo.
 
 The circuit breaker in `adapters/guard.ts` isn't temporary. It keeps a failing sponsor from stalling requests, so keep it.
