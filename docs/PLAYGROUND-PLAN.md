@@ -1,6 +1,8 @@
 # Thinketh Playground: implementation plan
 
 **Branch:** `stefen-playground-vnext` (the `stefen/…` form isn't possible because a local branch named `stefen` exists).
+
+**Status (end of sprint):** P0–P14 done; Figma frames reviewed directly (public embed). The two-Mind layout became side by side to match Figma 1:94. See `docs/PLAYGROUND.md` and `docs/PLAYGROUND-REPORT.md`.
 **Baseline:** `main @ 0765cfd` (as expected).
 
 | Check | Baseline |
