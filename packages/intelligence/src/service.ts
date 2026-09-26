@@ -29,14 +29,14 @@ import type {
   PersonaProfile,
   VoiceSession,
 } from "./contracts.ts";
-import { guarded, runInBackground, withTimeout } from "./adapters/guard.ts";
+import { guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
 import { BackboardMemory } from "./adapters/memory.ts";
 import { ClaudeModel } from "./adapters/model/claude.ts";
 import { MongoSemanticStore } from "./adapters/semantic.ts";
 import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import { lexicalScore } from "./adapters/model/deterministic.ts";
-import type { AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import type { AdapterName, AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
@@ -57,6 +57,8 @@ const MEMORY_TIMEOUT_MS = 2000;
 const PROBE_TIMEOUT_MS = 6000;
 const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
+/** Backboard "Auto" extraction runs an LLM turn, so it only ever runs in the background. */
+const MEMORY_OBSERVE_TIMEOUT_MS = 45_000;
 
 export class ThinkethService {
   private readonly concepts = new Map<string, Concept>();
@@ -188,6 +190,16 @@ export class ThinkethService {
     const { memory, localMemory } = this.adapters;
     await localMemory.remember(userId, item);
     await guarded("backboard", "remember", memory ? () => memory.remember(userId, item) : undefined, () => undefined, MEMORY_TIMEOUT_MS);
+  }
+
+  /** Hand free text to Backboard (memory "Auto") so it extracts preferences and topics. Never awaited by the UI. */
+  private observeInBackground(userId: string, text: string): void {
+    const { memory } = this.adapters;
+    if (!memory?.observe) return;
+    runInBackground(
+      "backboard.observe",
+      guarded("backboard", "observe", () => memory.observe!(userId, text), () => undefined, MEMORY_OBSERVE_TIMEOUT_MS),
+    );
   }
 
   private async getDevelopment(id: string): Promise<Development> {
@@ -670,6 +682,7 @@ export class ThinkethService {
       content: `Asked: “${input.question.slice(0, 200)}”`,
       createdAt: this.now().toISOString(),
     });
+    this.observeInBackground(userId, input.question);
     if (input.developmentId) {
       await this.withUserLock(userId, async () => {
         for (const conceptId of citedConceptIds.slice(0, 2)) {
@@ -741,9 +754,12 @@ export class ThinkethService {
         const started = Date.now();
         try {
           const detail = await withTimeout(probe(), PROBE_TIMEOUT_MS, `${name} probe`);
+          recordCall(name as AdapterName, true);
           return [name, { status: "live" as const, detail, ms: Date.now() - started }] as const;
         } catch (err) {
-          return [name, { status: "error" as const, detail: (err instanceof Error ? err.message : String(err)).slice(0, 200), ms: Date.now() - started }] as const;
+          const message = (err instanceof Error ? err.message : String(err)).slice(0, 200);
+          recordCall(name as AdapterName, false, message);
+          return [name, { status: "error" as const, detail: message, ms: Date.now() - started }] as const;
         }
       }),
     );

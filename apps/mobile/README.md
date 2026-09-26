@@ -26,6 +26,22 @@ EXPO_PUBLIC_USE_MOCK_API=false EXPO_PUBLIC_API_URL=http://<LAN-IP>:8787 EXPO_PUB
 
 Use your laptop's LAN IP on a phone (`localhost` only works for the web preview). While integrating, keep `EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false` so errors surface; turn it back on for judging so a failed call serves seeded data. Contract: `packages/contracts/src/api.ts`; notes in `docs/MOBILE-API-EXPECTATIONS.md`.
 
+## Demo controls (dev only)
+
+Long-press the Thinketh mark (top left of Today) to open them:
+- **Reset demo:** calls `POST /demo/reset`, then confirms Agent Memory is back at about 0.42 mastery and 0.44 uncertainty.
+- **Data source:** shows mock or real, the API URL, and whether the mock fallback is on.
+- **Sponsor adapters:** reads `/health` and shows each adapter as LIVE, LIVE · untested, DEGRADED (configured, but the last call fell back), or FALLBACK (not configured).
+
+## Physical phone against the real backend
+
+1. Put the phone and the laptop on the same Wi-Fi.
+2. Run `npm run dev:api` from the repo root. The backend binds `0.0.0.0:8787`. Allow `node` through the macOS firewall if it asks.
+3. Run `ipconfig getifaddr en0` to get the laptop's IP.
+4. In `apps/mobile`, run `EXPO_PUBLIC_USE_MOCK_API=false EXPO_PUBLIC_API_URL=http://<IP>:8787 EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false npx expo start --clear`, then scan the QR code with Expo Go.
+5. Long-press the mark and tap **Reset demo** before each run.
+6. For the judged build, set `EXPO_PUBLIC_API_FALLBACK_TO_MOCK=true`.
+
 ## Checks
 
 ```sh

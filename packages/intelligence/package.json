@@ -17,7 +17,8 @@
     "evidence:tiger": "node --env-file-if-exists=../../.env scripts/evidence-tiger.ts",
     "evidence:mongo": "node --env-file-if-exists=../../.env scripts/evidence-mongo.ts",
     "setup:backboard": "node --env-file-if-exists=../../.env scripts/setup-backboard.ts",
-    "evidence:backboard": "node --env-file-if-exists=../../.env scripts/evidence-backboard.ts"
+    "evidence:backboard": "node --env-file-if-exists=../../.env scripts/evidence-backboard.ts",
+    "verify:backboard": "node --env-file-if-exists=../../.env scripts/verify-backboard.ts"
   },
   "dependencies": {
     "@thinketh/contracts": "*",

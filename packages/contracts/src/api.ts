@@ -36,6 +36,8 @@ export const MemoryItemSchema = z.object({
   kind: z.enum(["preference", "misconception", "learning_topic", "conversation"]),
   content: z.string(),
   createdAt: z.string(),
+  /** Where the memory was recalled from: Backboard (live) or the local fallback. */
+  source: z.enum(["backboard", "local"]).optional(),
 });
 export type MemoryItem = z.infer<typeof MemoryItemSchema>;
 

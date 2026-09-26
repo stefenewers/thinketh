@@ -1,10 +1,10 @@
 import type { Development, KnowledgeStateTransition } from "../src/contracts.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { adapterHealth, AdapterTimeoutError, guarded, withTimeout } from "../src/adapters/guard.ts";
-import { BackboardMemory } from "../src/adapters/memory.ts";
+import { adapterHealth, AdapterTimeoutError, guarded, markConfigured, withTimeout } from "../src/adapters/guard.ts";
+import { BackboardMemory, inferMemoryKind } from "../src/adapters/memory.ts";
 import { buildAdapters } from "../src/adapters/registry.ts";
 import { LocalTemporalStore, ResilientTemporalStore, type TigerTemporalStore } from "../src/adapters/temporal.ts";
-import type { IntelligenceModel, SemanticStore } from "../src/adapters/types.ts";
+import type { IntelligenceModel, MemoryProvider, SemanticStore } from "../src/adapters/types.ts";
 import { ElevenLabsVoice } from "../src/adapters/voice.ts";
 import { buildSeed, FLAGSHIP_DEVELOPMENT_ID } from "../src/seed/corpus.ts";
 import { ThinkethService } from "../src/service.ts";
@@ -34,6 +34,18 @@ describe("guarded", () => {
 
   it("goes straight to the fallback when the adapter isn't configured", async () => {
     expect(await guarded("elevenlabs", "t", undefined, () => "local", 10)).toEqual({ value: "local", source: "fallback" });
+  });
+
+  it("reports status: unverified until a call, live after success, degraded after failure", async () => {
+    markConfigured("supabase", true);
+    expect(adapterHealth().supabase?.status).toBe("unverified");
+    await guarded("supabase", "t", async () => 1, () => 2, 100);
+    expect(adapterHealth().supabase?.status).toBe("live");
+    await new Promise((r) => setTimeout(r, 2));
+    await guarded("supabase", "t", boom, () => 2, 100);
+    expect(adapterHealth().supabase?.status).toBe("degraded");
+    markConfigured("supabase", false);
+    expect(adapterHealth().supabase?.status).toBe("fallback");
   });
 });
 
@@ -77,6 +89,7 @@ describe("adapter fallbacks keep the golden loop alive", () => {
     expect(ask.sections?.sourcesSay.length).toBeGreaterThan(0);
     expect(ask.sections?.thinkethInfers.length).toBeGreaterThan(0); // deterministic inference stood in for Claude
     expect(ask.memoryUsed.length).toBeGreaterThan(0); // local memory stood in for Backboard
+    expect(ask.memoryUsed.every((m) => m.source === "local")).toBe(true);
     expect((await service.visualize("demo-user", { conceptId: "mcp" })).nodes.length).toBeGreaterThan(0);
     expect((await service.makeItStick("demo-user", { conceptId: "mcp" })).threeStepModel).toHaveLength(3);
     const voice = await service.voiceSession("demo-user");
@@ -119,14 +132,26 @@ describe("resilient temporal store", () => {
 });
 
 describe("sponsor adapters call the documented endpoints", () => {
-  it("Backboard: searches assistant memories with X-API-Key", async () => {
-    const fetchMock = vi.fn(async () =>
-      Response.json({ memories: [{ id: "m1", content: "Prefers analogies", metadata: { kind: "preference" }, created_at: "2026-09-01T00:00:00Z" }] }),
+  it("Backboard: searches assistant memories with X-API-Key and tags them as Backboard", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      Response.json({
+        memories: url.endsWith("/search")
+          ? [
+              { id: "m2", content: "User previously confused persistent agent memory with a longer context window", created_at: "2026-09-02T00:00:00Z" },
+              { id: "m1", content: "Prefers analogies", metadata: { kind: "preference" }, created_at: "2026-09-01T00:00:00Z" },
+            ]
+          : [],
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
     const items = await memory.recall("u", "memory");
-    expect(items).toEqual([{ id: "m1", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-01T00:00:00Z" }]);
+    // Query + standing preference search (plus the cached metadata list), deduped, preferences first.
+    expect(items).toEqual([
+      { id: "m1", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-01T00:00:00Z", source: "backboard" },
+      { id: "m2", kind: "misconception", content: expect.stringMatching(/context window/), createdAt: "2026-09-02T00:00:00Z", source: "backboard" },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // 2 searches + 1 metadata list (cached for 60s)
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://app.backboard.io/api/assistants/asst-1/memories/search");
     expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("k");
@@ -141,6 +166,28 @@ describe("sponsor adapters call the documented endpoints", () => {
     vi.stubGlobal("fetch", fetchMock);
     const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
     expect(await memory.recall("u", "how to explain")).toMatchObject([{ id: "mem-1", kind: "preference", content: "Prefers systems analogies" }]);
+  });
+
+  it("Backboard: sends thread messages with a memory mode and reads retrieved memories", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ content: "Think of it like a database…", status: "COMPLETED", memory_operation_id: null, retrieved_memories: [{ id: "m1", memory: "Prefers systems analogies", score: 0.9 }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", llmProvider: "anthropic", modelName: "claude-x" });
+    const r = await memory.sendMessage("thr-1", "Explain persistent agent memory", "Readonly");
+    expect(r.retrievedMemories).toEqual([{ id: "m1", memory: "Prefers systems analogies", score: 0.9 }]);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://app.backboard.io/api/threads/thr-1/messages");
+    const form = init.body as URLSearchParams;
+    expect(Object.fromEntries(form)).toEqual({ content: "Explain persistent agent memory", stream: "false", memory: "Readonly", llm_provider: "anthropic", model_name: "claude-x" });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBeUndefined(); // fetch sets the form type
+  });
+
+  it("infers memory kinds from Backboard's extracted text", () => {
+    expect(inferMemoryKind("User prefers systems analogies when learning technical concepts")).toBe("preference");
+    expect(inferMemoryKind("Previously confused persistent agent memory with a longer context window")).toBe("misconception");
+    expect(inferMemoryKind("Is currently learning agentic AI")).toBe("learning_topic");
+    expect(inferMemoryKind("Lives in Atlanta")).toBe("conversation");
   });
 
   it("ElevenLabs: exchanges the server key for a conversation token", async () => {
@@ -159,5 +206,27 @@ describe("sponsor adapters call the documented endpoints", () => {
     const service = serviceWithBrokenSponsors();
     const detail = await service.development("demo-user", FLAGSHIP_DEVELOPMENT_ID);
     expect((detail.development as Development).title).toMatch(/Persistent agent memory/);
+  });
+});
+
+describe("Backboard memory in Ask", () => {
+  it("returns live Backboard memories in memoryUsed and hands the question to Backboard (Auto)", async () => {
+    const seed = buildSeed(NOW);
+    const config = offlineConfig();
+    const adapters = buildAdapters(config, seed);
+    const observed: string[] = [];
+    const live: MemoryProvider = {
+      name: "backboard",
+      recall: async () => [
+        { id: "bb-1", kind: "preference", content: "Prefers systems analogies when learning technical concepts", createdAt: NOW.toISOString(), source: "backboard" },
+      ],
+      remember: async () => {},
+      observe: async (_u, text) => void observed.push(text),
+    };
+    adapters.memory = live;
+    const service = new ThinkethService(config, seed, adapters, () => NOW);
+    const ask = await service.ask("demo-user", { question: "How does agent memory persist across sessions?" });
+    expect(ask.memoryUsed).toEqual([expect.objectContaining({ id: "bb-1", source: "backboard" })]);
+    expect(observed).toEqual(["How does agent memory persist across sessions?"]);
   });
 });

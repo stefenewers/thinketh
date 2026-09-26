@@ -24,11 +24,26 @@ export function markConfigured(name: AdapterName, configured: boolean): void {
   health.set(name, h);
 }
 
-export function adapterHealth(): Record<string, AdapterHealth> {
-  return Object.fromEntries(health);
+/**
+ * live: configured and the most recent call succeeded. degraded: the most
+ * recent call failed (serving fallback). unverified: configured, no calls yet.
+ * fallback: not configured.
+ */
+export type AdapterStatus = "live" | "degraded" | "unverified" | "fallback";
+
+function statusOf(h: AdapterHealth): AdapterStatus {
+  if (!h.configured) return "fallback";
+  if (!h.lastOkAt && !h.lastErrorAt) return "unverified";
+  if (h.lastOkAt && (!h.lastErrorAt || h.lastOkAt >= h.lastErrorAt)) return "live";
+  return "degraded";
 }
 
-function record(name: AdapterName, ok: boolean, error?: string): void {
+export function adapterHealth(): Record<string, AdapterHealth & { status: AdapterStatus }> {
+  return Object.fromEntries([...health].map(([name, h]) => [name, { status: statusOf(h), ...h }]));
+}
+
+/** Record one call outcome for an adapter (used by guarded calls and health probes). */
+export function recordCall(name: AdapterName, ok: boolean, error?: string): void {
   const h = health.get(name) ?? { configured: true, calls: 0, fallbacks: 0 };
   h.calls++;
   const now = new Date().toISOString();
@@ -67,11 +82,11 @@ export async function guarded<T>(
   const started = Date.now();
   try {
     const value = await withTimeout(live(), timeoutMs, `${adapter}.${op}`);
-    record(adapter, true);
+    recordCall(adapter, true);
     return { value, source: "live" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    record(adapter, false, message);
+    recordCall(adapter, false, message);
     logEvent("adapter.fallback", { adapter, op, ms: Date.now() - started, error: message }, "warn");
     return { value: await fallback(), source: "fallback" };
   }

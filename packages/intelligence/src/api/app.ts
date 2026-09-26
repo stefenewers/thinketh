@@ -89,10 +89,13 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     await next();
   });
 
-  // ?probe=true makes one cheap real call per configured sponsor (authoritative live status).
-  app.get("/health", async (c) =>
-    c.json({ ok: true, adapters: adapterHealth(), ...(c.req.query("probe") === "true" ? { probe: await service.probeAdapters() } : {}) }),
-  );
+  // `?probe=1` (or `true`) makes one cheap real call per configured sponsor first, so each
+  // adapter's `status` reflects reality, and returns per-sponsor detail. No secrets either way.
+  app.get("/health", async (c) => {
+    const probe = c.req.query("probe");
+    const details = probe && probe !== "0" && probe !== "false" ? await service.probeAdapters() : undefined;
+    return c.json({ ok: true, adapters: adapterHealth(), ...(details ? { probe: details } : {}) });
+  });
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));
 

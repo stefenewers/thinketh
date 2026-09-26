@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 import type { Concept, KnowledgeStateTransition } from "@thinketh/contracts";
-import { color, motion, radius, space } from "@/theme/tokens";
+import { color, font, motion, radius, space } from "@/theme/tokens";
 import { evidenceLabel, fmt2, masteryLabel, observationLabel } from "@/lib/knowledge";
 import { useReducedMotion } from "@/lib/hooks";
 import { T } from "./Text";
@@ -66,20 +66,20 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
         {evidenceLabel(after.uncertainty).toLowerCase()}
       </T>
 
-      <View style={{ marginTop: space.xl, gap: space.l }}>
-        <Meter
+      {/* The headline numbers count up live; each bar sits under its number. */}
+      <View style={styles.bigRow}>
+        <BigDelta
           label="Mastery"
           from={before.mastery}
           value={lerp(before.mastery, after.mastery)}
-          ghost={before.mastery}
           width={pct(before.mastery, after.mastery)}
           fill={color.coral}
+          emphasize={improved}
         />
-        <Meter
+        <BigDelta
           label="Uncertainty"
           from={before.uncertainty}
           value={lerp(before.uncertainty, after.uncertainty)}
-          ghost={before.uncertainty}
           width={pct(before.uncertainty, after.uncertainty)}
           fill={color.ink}
         />
@@ -126,41 +126,45 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   );
 }
 
-const signed = (n: number) => `${n > 0 ? "+" : "−"}${Math.abs(n).toFixed(2)}`;
-
-function Meter({
+function BigDelta({
   label,
   from,
   value,
-  ghost,
   width,
   fill,
+  emphasize,
 }: {
   label: string;
   from: number;
   value: number;
-  ghost: number;
   width: Animated.AnimatedInterpolation<string>;
   fill: string;
+  emphasize?: boolean;
 }) {
   return (
-    <View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: space.s }}>
-        <T variant="meta">{label}</T>
-        <T variant="meta" style={{ fontVariant: ["tabular-nums"], color: color.ink }}>
-          {fmt2(from)} → {fmt2(value)}
-        </T>
+    <View style={{ flex: 1 }}>
+      <T variant="label">{label}</T>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: space.xs }}>
+        <T style={styles.bigFrom}>{fmt2(from)}</T>
+        <T style={styles.bigArrow}>→</T>
+        <T style={[styles.bigTo, emphasize && { color: color.coral }]}>{fmt2(value)}</T>
       </View>
-      <View style={styles.track}>
+      <View style={[styles.track, { marginTop: space.s }]}>
         {/* Where it was: a quiet marker so the change is legible without color. */}
-        <View style={[styles.ghost, { left: `${ghost * 100}%` }]} />
+        <View style={[styles.ghost, { left: `${from * 100}%` }]} />
         <Animated.View style={[styles.fill, { width, backgroundColor: fill }]} />
       </View>
     </View>
-  );
+  )
 }
 
+const signed = (n: number) => `${n > 0 ? "+" : "−"}${Math.abs(n).toFixed(2)}`;
+
 const styles = StyleSheet.create({
+  bigRow: { flexDirection: "row", gap: space.l, marginTop: space.xl },
+  bigFrom: { fontFamily: font.sansMedium, fontSize: 17, color: color.ink3, fontVariant: ["tabular-nums"] },
+  bigArrow: { fontFamily: font.sans, fontSize: 17, color: color.ink3 },
+  bigTo: { fontFamily: font.serif, fontSize: 34, lineHeight: 40, color: color.ink, fontVariant: ["tabular-nums"] },
   card: {
     backgroundColor: color.panel,
     borderRadius: radius.feature,
