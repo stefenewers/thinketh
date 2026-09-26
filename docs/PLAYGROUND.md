@@ -73,7 +73,7 @@ The challenge is registered as a Playground-only diagnostic, and the room stores
 
 ## Session planner
 
-"Start 7-minute session" runs a real plan. After the delta is computed, `planSession` (`engine/sessionPlan.ts`) chooses the most valuable valid moves that fit the time budget. It's deterministic.
+"Start session" runs a real plan. The time budget (7 minutes by default) is a planning constraint, not a countdown. Thinketh uses it to decide which learning moves are worth doing. The plan is computed immediately, "Start session" begins the first move at once, and people can do one move, several or all of them, or end early. After the delta is computed, `planSession` (`engine/sessionPlan.ts`) chooses the most valuable valid moves that fit the time budget. It's deterministic.
 
 - **Candidates:**
   - the best assessable peer-teaching move in each direction;
@@ -84,7 +84,7 @@ The challenge is registered as a Playground-only diagnostic, and the room stores
 - **Selection:** highest value first while it fits the budget, then run in teachable order (peer teaching, then the shared gap, then the source). Any positive budget works.
 - **Seeded demo plan (7 min):** Nadani → Stefen on Evaluator Architectures (2.5 min), Stefen → Nadani on Agent Tool Use (2.5 min), then Muse → both on Memory Consolidation (2 min).
 
-Muse receives the plan and its next step, and conducts it. It can't replace it with an unplanned or unverifiable move; the validation above rejects that. The deterministic conductor follows the same plan. The overview shows the plan behind the button, with each move's reason in plain language ("Nadani has strong verified evidence here while Stefen is only starting out.").
+Muse receives the plan and its next step, and conducts it. It can't replace it with an unplanned or unverifiable move; the validation above rejects that. The deterministic conductor follows the same plan. Under "Start session", the overview says what was computed ("3 learning moves planned for the next 7 minutes", from the real plan), and "View learning plan" shows only the planned moves. Each move lists its estimate, who teaches whom, the concept and its reason in plain language ("Nadani has strong verified evidence here while Stefen is only starting out.").
 
 ## Supabase Realtime
 
@@ -128,7 +128,7 @@ The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry
 
 1. Reset (Demo controls: long-press the Thinketh mark on Today → Reset demo).
 2. Today → Catch Me Up: captions and the Mind react; interrupt; ask; say "I'm done".
-3. Playground → Invite a collaborator → Bring in Nadani → Compare our Minds. The plan appears under "Start 7-minute session".
+3. Playground → Invite a collaborator → Bring in Nadani → Compare our Minds. "3 learning moves planned for the next 7 minutes" appears; "View learning plan" shows them.
 4. Start: Nadani teaches Evaluator Architectures (the seeded question), and Stefen answers. Knowledge moved, recorded in Tiger.
 5. "Next: the shared gap" → Teach us the delta → Bring in a shared source (the safe default) → two personal deltas → End session.
 
@@ -136,4 +136,4 @@ The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry
 
 1. **"Give us another concept."** After the first knowledge moved, take the plan's next move ("Next: Stefen teaches Nadani agent tool use"). Thinketh generates a grounded transfer challenge for Agent Tool Use and grades Nadani's answer through the same evidence path. A weak answer shows "Not yet" and verifies nothing.
 2. **"Give us another article."** On the shared-gap or shared-source screen, tap "Use another source" and paste any article, PDF, docs page or YouTube link. It's fetched once, and each Mind gets its own useful minutes, new ideas and focus. "Different delta" appears only if they really differ.
-3. **"Why did Muse choose this?"** Open "Planned for the highest-value learning moves" on the overview. Every move comes from Thinketh's deterministic plan over the evidence asymmetry, with its reason; Muse only conducts it, and validation rejects anything outside the plan.
+3. **"Why did Muse choose this?"** Open "View learning plan" on the overview. Every move comes from Thinketh's deterministic plan over the evidence asymmetry, with its reason; Muse only conducts it, and validation rejects anything outside the plan.

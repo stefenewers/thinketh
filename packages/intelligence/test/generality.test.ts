@@ -230,6 +230,29 @@ describe("session planner", () => {
   });
 });
 
+describe("the plan is a budget, not a countdown", () => {
+  it("Start session begins the first planned move in the same request, and ending early is fine", async () => {
+    const t = make();
+    const call = async (method: string, path: string, body?: unknown) =>
+      (await (await t.app.request(path, { method, headers: { "content-type": "application/json", "x-thinketh-user": "demo-user" }, ...(body ? { body: JSON.stringify(body) } : {}) })).json()) as PlaygroundRoom;
+    let room = await call("POST", "/playground/rooms", { displayName: "Stefen" });
+    await call("POST", `/playground/rooms/${room.id}/demo-guest`);
+    room = await call("POST", `/playground/rooms/${room.id}/compare`);
+    const first = room.plan!.items[0]!;
+    room = await call("POST", `/playground/rooms/${room.id}/conduct`, { intent: "next" });
+    expect(room.scene).toBe("peer_teaching");
+    expect(room.teaching).toMatchObject({ conceptId: first.conceptId, teacherId: first.teacherId, learnerId: first.learnerId });
+    // Nothing in the room is time-based.
+    expect(JSON.stringify(room)).not.toMatch(/countdown|endsAt|remaining|deadline/i);
+    room = await call("POST", `/playground/rooms/${room.id}/explain`, { text: "A separate evaluator catches what the generator misses.", asUserId: "nadani" });
+    room = await call("POST", `/playground/rooms/${room.id}/answer`, { answer: "separate independent evaluator, bias, commit test ci checkpoints, retry fix feedback" });
+    expect(room.scene).toBe("knowledge_moved");
+    room = await call("POST", `/playground/rooms/${room.id}/conduct`, { intent: "end" });
+    expect(room.scene).toBe("ended");
+    expect(room.plan!.items.some((i) => !i.done)).toBe(true);
+  });
+});
+
 describe("Muse conducts the plan; it cannot replace it", () => {
   const base: ConductorView = {
     scene: "overview",
@@ -256,6 +279,14 @@ describe("Muse conducts the plan; it cannot replace it", () => {
     const noGap = { ...base, plan: base.plan.filter((i) => i.type !== "shared_gap") };
     expect(validateAction({ tool: "teach_shared_gap", args: { conceptId: "consol" }, by: "muse" }, noGap)).toMatch(/session plan/);
     expect(validateAction({ tool: "teach_shared_gap", args: { conceptId: "consol" }, by: "muse" }, { ...noGap, intent: "shared_gap" })).toBeNull();
+  });
+
+  it("an explicit request from the room wins over the plan", () => {
+    const asked = { ...base, intent: "shared_gap" as const };
+    expect(validateAction({ tool: "assign_peer_teacher", args: { conceptId: "evals", teacherId: "b", learnerId: "a" }, by: "muse" }, asked)).toMatch(/asked for shared_gap/);
+    expect(validateAction({ tool: "teach_shared_gap", args: { conceptId: "consol" }, by: "muse" }, asked)).toBeNull();
+    expect(fallbackNext(asked)).toMatchObject({ tool: "teach_shared_gap" });
+    expect(validateAction({ tool: "introduce_resource", args: {}, by: "muse" }, { ...base, intent: "end" })).toMatch(/end_session/);
   });
 
   it("the deterministic conductor follows the same plan", () => {

@@ -11,6 +11,7 @@ import { T } from "@/components/Text";
 import { StageSteps } from "@/components/StageSteps";
 import { MindVenn } from "@/components/playground/MindVenn";
 import { deltaClaim } from "@/lib/resourceDelta";
+import { formatMinutes, planSummary } from "@/lib/planSummary";
 import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { CardTitle, Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, TwoMinds, type DotTone } from "@/components/playground/pieces";
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
@@ -201,6 +202,7 @@ export default function PlaygroundScreen() {
               busy={busy === "conduct"}
               onNext={() => run("conduct", () => playground.conduct(room.id, "shared_gap", me))}
               onPlanNext={() => run("conduct", () => playground.conduct(room.id, "next", me))}
+              onEnd={() => run("conduct", () => playground.conduct(room.id, "end", me))}
             />
           ) : null}
           {room && scene === "shared_gap" ? (
@@ -470,7 +472,13 @@ function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: strin
             Not assigned yet: {d.conflicts.map((c) => c.conceptName).join(", ")}. The evidence can&apos;t tell who should teach.
           </T>
         ) : null}
-        <Pill label={`Start ${room.plan?.budgetMinutes ?? 7}-minute session`} busy={busy} onPress={onStart} />
+        {/* The budget is a planning constraint, not a countdown: Start begins the first move at once. */}
+        <Pill label="Start session" busy={busy} onPress={onStart} />
+        {planSummary(room.plan) ? (
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink2 }}>
+            {planSummary(room.plan)}
+          </T>
+        ) : null}
         {room.plan?.items.length ? <PlanDisclosure room={room} /> : null}
       </View>
     </View>
@@ -481,41 +489,46 @@ function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: strin
 function PlanDisclosure({ room }: { room: PlaygroundRoom }) {
   const [open, setOpen] = useState(false);
   const plan = room.plan!;
-  const minutes = (m: number) => `${Number.isInteger(m) ? m : m.toFixed(1)} min`;
   const who = (i: (typeof plan.items)[number]) =>
     i.type === "peer_teach" ? `${nameOf(room, i.teacherId)} → ${nameOf(room, i.learnerId)}` : i.type === "shared_gap" ? "Muse → both" : "Shared source";
   return (
-    <View style={{ marginTop: space.m }}>
-      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 }}>
-        <T variant="meta" style={{ color: color.ink2 }}>
-          Planned for the highest-value learning moves · {minutes(plan.estimatedMinutes)}
+    <View>
+      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "flex-start" }}>
+        <T variant="meta" style={{ color: color.ink }}>
+          {open ? "Hide learning plan" : "View learning plan"}
         </T>
         <View style={{ transform: [{ rotate: open ? "90deg" : "0deg" }] }}>
           <Icon name="chevron" size={12} color={color.ink3} />
         </View>
       </Pressable>
       {open ? (
-        <ListCard>
-          {plan.items.map((i, k) => (
-            <View key={i.id} style={[styles.planRow, k < plan.items.length - 1 && styles.planDivided]}>
-              <T style={styles.planMin}>{minutes(i.estimatedMinutes)}</T>
-              <View style={{ flex: 1 }}>
-                <T variant="meta" style={{ color: color.ink2 }}>
-                  {who(i)}
-                </T>
-                <T style={styles.planTitle}>{i.conceptName ? sentence(i.conceptName) : "One source, two deltas"}</T>
-                <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
-                  {i.rationale}
-                </T>
+        <View>
+          <T style={styles.planHead}>{plan.budgetMinutes}-minute learning plan</T>
+          <T variant="meta" style={{ color: color.ink3, marginTop: 2, marginBottom: space.s }}>
+            Thinketh ranked the highest-value moves that fit your available time. Do one, some or all of them.
+          </T>
+          <ListCard>
+            {plan.items.map((i, k) => (
+              <View key={i.id} style={[styles.planRow, k < plan.items.length - 1 && styles.planDivided]}>
+                <T style={styles.planMin}>{formatMinutes(i.estimatedMinutes)}</T>
+                <View style={{ flex: 1 }}>
+                  <T variant="meta" style={{ color: color.ink2 }}>
+                    {who(i)}
+                  </T>
+                  <T style={styles.planTitle}>{i.conceptName ? sentence(i.conceptName) : "One source, two deltas"}</T>
+                  <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
+                    {i.rationale}
+                  </T>
+                </View>
+                {i.done ? <Icon name="check" size={14} color={color.ink} /> : null}
               </View>
-              {i.done ? <Icon name="check" size={14} color={color.ink} /> : null}
-            </View>
-          ))}
-        </ListCard>
+            ))}
+          </ListCard>
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+            Thinketh plans the moves. Muse conducts them. Only evidence changes a Mind.
+          </T>
+        </View>
       ) : null}
-      <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-        Thinketh plans the session. Muse conducts it. Only evidence changes a Mind.
-      </T>
     </View>
   );
 }
@@ -706,7 +719,7 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
 }
 
 /** Storyboard 11 / Figma 1:269: knowledge moved, and exactly why Thinketh believes it. */
-function KnowledgeMoved({ room, me, busy, onNext, onPlanNext }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void; onPlanNext: () => void }) {
+function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void; onPlanNext: () => void; onEnd: () => void }) {
   const nextItem = room.plan?.items.find((i) => !i.done);
   const gapPending = !room.sharedGap && (room.delta?.sharedGaps.length ?? 0) > 0;
   const tr = room.transfer!;
@@ -805,6 +818,8 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext }: { room: Playgrou
         ) : nextItem?.type !== "peer_teach" ? (
           <Button label="Continue" kind="quiet" icon="arrow" loading={busy} onPress={onPlanNext} style={{ alignSelf: "flex-start", marginTop: space.s }} />
         ) : null}
+        {/* The plan is guidance, not a commitment: ending after any move is fine. */}
+        <Button label="End session" kind="quiet" loading={busy} onPress={onEnd} style={{ alignSelf: "flex-start" }} />
         <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
           Source: peer learning session · just now
         </T>
@@ -1001,6 +1016,7 @@ function Offline() {
 const styles = StyleSheet.create({
   planRow: { flexDirection: "row", alignItems: "flex-start", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m },
   planDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
+  planHead: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.ink, marginTop: space.xs },
   planMin: { width: 48, fontFamily: font.sansSemibold, fontSize: 13, lineHeight: 18, color: color.ink, fontVariant: ["tabular-nums"] },
   planTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 20, color: color.ink, marginTop: 1 },
   urlInput: { marginTop: space.s, minHeight: 44, paddingHorizontal: space.m, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.surfaceMuted, fontFamily: font.sans, fontSize: 15, color: color.ink },
