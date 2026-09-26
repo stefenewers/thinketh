@@ -1,28 +1,29 @@
-# Deploy the Thinketh API (Supabase Edge Function)
+# Run the public demo API
 
-**Public API:** `https://mbfogczuvxqkrykwlrcp.supabase.co/functions/v1/api` (project `thinketh`, ref `mbfogczuvxqkrykwlrcp`). It's already deployed. Stefen's `docs/NADANI-ACTION-ITEMS.md` has the current remote status.
+The demo API is the **Node server** (`packages/intelligence/src/server/node.ts`), running as one persistent process and exposed through a Cloudflare quick tunnel. It is **not** the Supabase Edge Function. Stefen's `docs/NADANI-ACTION-ITEMS.md` has the verification (Tiger, Mongo, Backboard, Supabase live; golden loop 23/23; answer ~590 ms).
 
-## Redeploy
-
-```sh
-npm run secrets:remote --workspace @thinketh/intelligence   # writes supabase/.env.remote (gitignored) from the repo-root .env
-./supabase/deploy-remote.sh                                # sets secrets, deploys with --no-verify-jwt, verifies
-```
-
-`secrets:remote` copies only the keys the API needs, plus the judging defaults: `THINKETH_REQUIRE_AUTH=false`, `THINKETH_ALLOW_RESET=true`, `THINKETH_DEMO_USER_ID=demo-user` and `TIGER_TLS_INSECURE=true`. It leaves out `SUPABASE_*`, because the Edge runtime injects those and the CLI rejects secret names with that prefix. It prints key names only.
-
-## Known remote blockers
-
-- **MongoDB Atlas:** Edge Functions have no fixed outgoing IPs, so Atlas → Network Access needs `0.0.0.0/0` for the event. This is on the post-hackathon cleanup list.
-- **Tiger Data:** Timescale's certificate is marked `CA:TRUE`, which the Edge runtime rejects (`CaUsedAsEndEntity`). `TIGER_TLS_INSECURE=true` works around it for Tiger only. It isn't yet proven on Supabase Edge.
-
-## Local check under Deno
-
-The function has also been served locally under Deno 2.9 with the live `.env`:
+## Start it
 
 ```sh
-~/.local/deno/bin/deno run --allow-all --env-file=.env --config supabase/functions/api/deno.json supabase/functions/api/index.ts
-API_URL=http://localhost:8000/api npm run check:golden -w mobile
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:$PATH"   # cloudflared + node (installed in ~/.local on Nadani's Mac)
+lsof -ti:8787 -sTCP:LISTEN | xargs kill                       # free the port if a dev API is running
+./scripts/demo-api.sh                                        # starts the API + tunnel, prints the public URL, runs the checks
 ```
 
-That run passed, with Tiger, Mongo, Backboard and Supabase live. Local Deno accepted Tiger's certificate, so that failure only shows up on Supabase's Edge runtime.
+It needs the repo-root `.env` with the full `TIGER_DATABASE_URL` (password included), plus `MONGODB_URI`, the Backboard keys and the Supabase keys. Point the app at the printed URL (`EXPO_PUBLIC_API_URL`).
+
+- The quick-tunnel URL **changes on every restart** and dies if the laptop sleeps. Keep the laptop awake during judging, or move the same server to Railway or Render for a stable URL (needs a browser login).
+- `TIGER_TLS_INSECURE` isn't needed: Node accepts Tiger's certificate.
+
+## Why not Supabase Edge
+
+Two problems, both confirmed on the deployed function:
+
+- **State doesn't persist.** Edge recycles instances between requests, and Thinketh keeps knowledge state in process memory plus Tiger. After an answer, Mind and History showed the old state again.
+- **Tiger can't connect.** Timescale's server certificate is marked `CA:TRUE`, signed by a private Timescale CA. The Edge runtime's TLS stack refuses it (`CaUsedAsEndEntity`) even with verification off. The Postgres driver's `ssl: "require"` already skips verification, so `TIGER_TLS_INSECURE` changes nothing there. Node's TLS accepts it.
+
+The Edge Function stays deployed (`https://mbfogczuvxqkrykwlrcp.supabase.co/functions/v1/api`) but isn't used for the demo. Supabase itself (database, feature flags) is live and used by the Node server. Redeploying the Edge Function is still possible with `npm run secrets:remote --workspace @thinketh/intelligence` and `./supabase/deploy-remote.sh`.
+
+## Atlas access
+
+The Atlas Network Access rule `0.0.0.0/0` is open for the event, which the tunnel setup doesn't strictly need but doesn't hurt. Remove it after HackGT (see `docs/POST-HACKATHON-CLEANUP.md`).

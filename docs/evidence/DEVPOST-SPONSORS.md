@@ -12,7 +12,7 @@ Developments, sources, claims, concepts and the concept graph live in Atlas. Ask
 One stable Backboard assistant holds the learner's qualitative context: explanation preferences, recurring misconceptions, and current topics. Memory lives at the assistant level, so a brand-new thread recalls it. Thinketh reads it on every Ask and writes back what it learns, such as a misconception revealed by a wrong answer. Backboard never holds the numbers: mastery and uncertainty stay in Thinketh's own transparent model.
 
 ## Supabase: app state and API
-Supabase holds profiles, feature flags and the mapping from users to sponsor ids, with row-level security on user data. The whole Thinketh API is deployed as a Supabase Edge Function, which is the public endpoint the app calls.
+Supabase holds profiles, feature flags and the mapping from users to sponsor ids, with row-level security on user data. The API reads its feature flags from Supabase, so we can hide an unstable feature (like voice) without shipping a new build.
 
 ## Not live at the time of writing
 - ElevenLabs (Catch Me Up voice): the server side is built, but no API key or agent is configured yet. The screen plays its transcript fallback.
