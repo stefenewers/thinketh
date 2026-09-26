@@ -29,7 +29,7 @@ import type {
   PersonaProfile,
   VoiceSession,
 } from "./contracts.ts";
-import { guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
+import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
 import { BackboardMemory } from "./adapters/memory.ts";
 import { ClaudeModel } from "./adapters/model/claude.ts";
 import { MongoSemanticStore } from "./adapters/semantic.ts";
@@ -751,6 +751,11 @@ export class ThinkethService {
     const entries = await Promise.all(
       Object.entries(probes).map(async ([name, probe]) => {
         if (!probe) return [name, { status: "not_configured" as const, detail: "no credentials: using local fallback" }] as const;
+        // A failure retrying cannot fix here (e.g. a TLS certificate the runtime rejects): report it, don't re-dial.
+        if (circuitOpen(name as AdapterName, true)) {
+          const reason = adapterHealth()[name]?.lastError ?? "unavailable in this runtime";
+          return [name, { status: "error" as const, detail: `skipped (serving local fallback): ${reason}`.slice(0, 200) }] as const;
+        }
         const started = Date.now();
         try {
           const detail = await withTimeout(probe(), PROBE_TIMEOUT_MS, `${name} probe`);

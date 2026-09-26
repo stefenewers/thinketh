@@ -1,15 +1,17 @@
 import type { Development, KnowledgeStateTransition } from "../src/contracts.ts";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { adapterHealth, AdapterTimeoutError, guarded, markConfigured, withTimeout } from "../src/adapters/guard.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { adapterHealth, AdapterTimeoutError, circuitOpen, guarded, markConfigured, recordCall, resetCircuits, withTimeout } from "../src/adapters/guard.ts";
 import { BackboardMemory, inferMemoryKind } from "../src/adapters/memory.ts";
 import { buildAdapters } from "../src/adapters/registry.ts";
-import { LocalTemporalStore, ResilientTemporalStore, type TigerTemporalStore } from "../src/adapters/temporal.ts";
+import { LocalTemporalStore, ResilientTemporalStore, TigerTemporalStore } from "../src/adapters/temporal.ts";
+import { loadConfig } from "../src/config.ts";
 import type { IntelligenceModel, MemoryProvider, SemanticStore } from "../src/adapters/types.ts";
 import { ElevenLabsVoice } from "../src/adapters/voice.ts";
 import { buildSeed, FLAGSHIP_DEVELOPMENT_ID } from "../src/seed/corpus.ts";
 import { ThinkethService } from "../src/service.ts";
 import { NOW, offlineConfig } from "./helpers.ts";
 
+beforeEach(() => resetCircuits());
 afterEach(() => vi.unstubAllGlobals());
 
 const boom = () => Promise.reject(new Error("sponsor down"));
@@ -112,6 +114,22 @@ describe("health probes", () => {
   });
 });
 
+describe("Tiger TLS (HACKGT demo bypass)", () => {
+  it("verifies certificates by default and only skips verification for Tiger when TIGER_TLS_INSECURE is set", () => {
+    expect(new TigerTemporalStore("postgres://x").tlsOptions()).toBe("require");
+    expect(new TigerTemporalStore("postgres://x", { tlsInsecure: false }).tlsOptions()).toBe("require");
+    expect(new TigerTemporalStore("postgres://x", { tlsInsecure: true }).tlsOptions()).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("TIGER_TLS_INSECURE defaults to false", () => {
+    vi.stubEnv("TIGER_TLS_INSECURE", "");
+    expect(loadConfig().tiger.tlsInsecure).toBe(false);
+    vi.stubEnv("TIGER_TLS_INSECURE", "true");
+    expect(loadConfig().tiger.tlsInsecure).toBe(true);
+    vi.unstubAllEnvs();
+  });
+});
+
 describe("resilient temporal store", () => {
   const t = (id: string, createdAt: string): KnowledgeStateTransition =>
     ({ id, userId: "u", conceptId: "c", createdAt, after: { conceptId: "c", lastObservedAt: createdAt } }) as unknown as KnowledgeStateTransition;
@@ -126,8 +144,52 @@ describe("resilient temporal store", () => {
     } as unknown as TigerTemporalStore;
     const store = new ResilientTemporalStore(local, remote, 50);
     await store.appendTransition(t("local-1", "2026-09-02T00:00:00Z"));
-    const history = await store.getConceptHistory("u", "c");
-    expect(history.map((x) => x.id)).toEqual(["remote-1", "local-1"]);
+    // The failed write opened Tiger's circuit: the next read skips it instead of waiting again.
+    expect((await store.getConceptHistory("u", "c")).map((x) => x.id)).toEqual(["local-1"]);
+    // Once the circuit closes, reads merge both stores.
+    resetCircuits();
+    expect((await store.getConceptHistory("u", "c")).map((x) => x.id)).toEqual(["remote-1", "local-1"]);
+  });
+});
+
+describe("circuit breaker", () => {
+  it("skips a failed adapter for the cooldown instead of waiting on it again", async () => {
+    markConfigured("mongo", true);
+    const slow = vi.fn(() => new Promise<never>(() => {}));
+    const skippedBefore = adapterHealth().mongo?.skipped ?? 0;
+    const first = Date.now();
+    expect((await guarded("mongo", "a", slow, () => "local", 30)).source).toBe("fallback");
+    expect(Date.now() - first).toBeGreaterThanOrEqual(25);
+    const second = Date.now();
+    expect((await guarded("mongo", "b", slow, () => "local", 5_000)).value).toBe("local");
+    expect(Date.now() - second).toBeLessThan(20);
+    expect(slow).toHaveBeenCalledTimes(1);
+    expect(adapterHealth().mongo).toMatchObject({ status: "degraded", circuit: "open", skipped: skippedBefore + 1 });
+    expect(circuitOpen("mongo", true)).toBe(false);
+  });
+
+  it("keeps the circuit open for the instance on a TLS certificate failure, and a success closes it", async () => {
+    markConfigured("tiger", true);
+    await guarded("tiger", "q", () => Promise.reject(new Error("invalid peer certificate: Other(OtherError(CaUsedAsEndEntity))")), () => [], 50);
+    expect(circuitOpen("tiger", true)).toBe(true);
+    expect(adapterHealth().tiger).toMatchObject({ status: "degraded", circuit: "open_permanent" });
+    recordCall("tiger", true);
+    expect(adapterHealth().tiger).toMatchObject({ status: "live", circuit: "closed" });
+  });
+
+  it("probe reports a permanently failed adapter without re-dialing it", async () => {
+    const seed = buildSeed(NOW);
+    const config = offlineConfig();
+    const adapters = buildAdapters(config, seed);
+    const tigerProbe = vi.fn(async () => "ok");
+    const tiger = { probe: tigerProbe } as unknown as TigerTemporalStore;
+    (adapters as { temporal: ResilientTemporalStore }).temporal = new ResilientTemporalStore(new LocalTemporalStore(), tiger, 50);
+    const service = new ThinkethService(config, seed, adapters, () => NOW);
+    recordCall("tiger", false, "invalid peer certificate: Other(OtherError(CaUsedAsEndEntity))");
+    const result = await service.probeAdapters();
+    expect(tigerProbe).not.toHaveBeenCalled();
+    expect(result.tiger).toMatchObject({ status: "error" });
+    expect(result.tiger?.detail).toMatch(/skipped .*CaUsedAsEndEntity/);
   });
 });
 

@@ -14,7 +14,7 @@ export function offlineConfig(): ThinkethConfig {
     backboard: { ...c.backboard, apiKey: undefined },
     mongo: { ...c.mongo, uri: undefined },
     voyage: { ...c.voyage, apiKey: undefined },
-    tiger: { url: undefined },
+    tiger: { url: undefined, tlsInsecure: false },
     supabase: { url: undefined, anonKey: undefined, serviceRoleKey: undefined },
     elevenlabs: { apiKey: undefined, agentId: undefined },
   };
