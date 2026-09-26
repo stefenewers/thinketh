@@ -50,6 +50,27 @@ Branch: `stefen-demo-readiness`, merged into `main`. This lists what changed on 
 - `npm run typecheck`: clean for intelligence and mobile.
 - `npm test --workspace @thinketh/intelligence`: 72/72 passing. `test/adapters.test.ts` adds coverage for the Backboard recall, observe and health status changes.
 
+## Did / didn't do (honest status, 2026-09-25)
+
+**Done and verified**
+- Backboard adapter code: recall, remember, observe, probe, and the helpers. Unit tests cover all of it.
+- `/health` status per adapter, plus `?probe=1`.
+- `verify:backboard` script written.
+- Supabase project created and linked, and the init migration is applied. All 3 tables respond on the REST API.
+- Typecheck is clean and 72/72 intelligence tests pass.
+- Real keys moved out of `.env.example` into the gitignored `.env`. They were never committed.
+- Merged to `main` (merge commit `6b176ff`) through a local git merge, because the GitHub CLI isn't logged in, so there's no PR on GitHub for this one.
+
+**Not done / not verified**
+- `verify:backboard` has **not been run against live Backboard** yet. Cross-thread recall is proven only by the mocked tests.
+- `BACKBOARD_ASSISTANT_ID` is still empty (not pinned).
+- Supabase edge function not deployed and its secrets not set, as far as I know.
+- MongoDB Atlas and Tiger Data were not checked from my side. They use Nadani's credentials.
+- ElevenLabs agent id is a placeholder (`thinketh`), not a real agent id.
+- Golden check (`check:golden`) not run against the live backend.
+- No physical-phone test of the golden path.
+- `thinketh-stefen-next-action-pack*` folders and zips are left untracked on purpose. They're local planning notes.
+
 ## Open items to reconcile with Nadani
 - [ ] Pin `BACKBOARD_ASSISTANT_ID` (run `verify:backboard` once and copy the printed id), then confirm the run passes.
 - [ ] Deploy the Supabase edge function (`supabase functions deploy api`) and set its secrets.
