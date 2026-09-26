@@ -6,6 +6,7 @@
  */
 import type { KnowledgeObservation, KnowledgeState, KnowledgeStateTransition } from "../contracts.ts";
 import { KnowledgeStateTransitionSchema } from "../contracts.ts";
+import { logEvent } from "../log.ts";
 import { guarded } from "./guard.ts";
 import type { TemporalStore } from "./types.ts";
 
@@ -54,14 +55,27 @@ export class TigerTemporalStore implements TemporalStore {
   readonly name = "tiger" as const;
   private sqlPromise: Promise<Sql> | undefined;
   private readonly url: string;
+  private readonly tlsInsecure: boolean;
 
-  constructor(url: string) {
+  constructor(url: string, opts: { tlsInsecure?: boolean } = {}) {
     this.url = url;
+    this.tlsInsecure = opts.tlsInsecure ?? false;
+    if (this.tlsInsecure) logEvent("tiger.tls_insecure", { note: "HACKGT DEMO ONLY: Tiger certificate verification is off" }, "warn");
+  }
+
+  /**
+   * TLS options for this connection only. Encryption is always required.
+   * HACKGT DEMO ONLY: Deno rejects Tiger managed certificate chain; remove this bypass after the event.
+   * (Timescale's server certificate is marked CA:TRUE, which Deno's TLS stack refuses as CaUsedAsEndEntity.)
+   * With TIGER_TLS_INSECURE=true the certificate is not verified; nothing else in the process is affected.
+   */
+  tlsOptions(): "require" | { rejectUnauthorized: false } {
+    return this.tlsInsecure ? { rejectUnauthorized: false } : "require";
   }
 
   sql(): Promise<Sql> {
     this.sqlPromise ??= import("postgres").then(({ default: postgres }) =>
-      postgres(this.url, { max: 3, idle_timeout: 20, connect_timeout: 5, prepare: false, ssl: "require" }),
+      postgres(this.url, { max: 3, idle_timeout: 20, connect_timeout: 5, prepare: false, ssl: this.tlsOptions() }),
     );
     return this.sqlPromise;
   }
