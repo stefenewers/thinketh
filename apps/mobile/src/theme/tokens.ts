@@ -28,13 +28,24 @@ export const color = {
   hairline: "rgba(22,22,22,0.08)",
 } as const;
 
-// Tile tints (Today "Continue" tiles). Near-neutral; coral stays out.
+// Today's warm light: the hero wash, the orb and the lead story's paper. Peach, never neon.
+export const warm = {
+  wash: "#F6B79C",
+  paper: "#FBF3EE",
+  orbLight: "#FFE6DA",
+  orbMid: "#F7A583",
+  orbDeep: "#E8704B",
+  orbit: "#E79A7C",
+} as const;
+
+// Tile tints (Today "Continue" tiles): one soft family each, like app icons at rest.
 export const glow = {
-  tileNeutral: "#F4F4F2",
-  tileCool: "#EEF2F5",
-  tileCoolInk: "#3E5B70",
-  tileWarm: "#F6F3F0",
-  tileWarmInk: "#6B5A4E",
+  tileNeutral: "#FDEEE7",
+  tileNeutralInk: "#D8643F",
+  tileCool: "#EAF1F8",
+  tileCoolInk: "#3F6E99",
+  tileWarm: "#FBF1E3",
+  tileWarmInk: "#B7742E",
 } as const;
 
 // 4-point scale from the design spec; the upper steps are compact for mobile
@@ -75,6 +86,7 @@ export const font = {
   sans: "Inter_400Regular",
   sansMedium: "Inter_500Medium",
   sansSemibold: "Inter_600SemiBold",
+  sansBold: "Inter_700Bold",
 } as const;
 
 export const motion = {

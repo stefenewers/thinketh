@@ -171,15 +171,15 @@ export function ActionTile({ icon, tint, ink, title, subtitle, accent, onPress }
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}.`} style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
       <View style={[styles.tileIcon, { backgroundColor: tint }]}>
-        <Icon name={icon} size={20} color={ink} />
+        <Icon name={icon} size={22} color={ink} />
       </View>
-      <T style={styles.tileTitle} numberOfLines={1}>
+      <T style={styles.tileTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
         {title}
       </T>
       <T style={[styles.tileSub, accent && { color: color.coral }]} numberOfLines={2}>
         {subtitle}
       </T>
-      <View style={{ alignSelf: "flex-end", marginTop: space.xs }}>
+      <View style={styles.tileFoot}>
         <Icon name="arrow" size={15} color={color.ink2} />
       </View>
     </Pressable>
@@ -373,10 +373,11 @@ const styles = StyleSheet.create({
   metricDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
   metricLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 0.9, textTransform: "uppercase", color: color.ink2, marginTop: space.xs },
   metricSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink3 },
-  tile: { flex: 1, padding: space.m, paddingBottom: space.s, borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
-  tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  tileTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.2, color: color.ink, marginTop: space.m },
-  tileSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink2, marginTop: 2, minHeight: 32 },
+  tile: { flex: 1, padding: 12, paddingBottom: 10, borderRadius: 22, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.06)", ...shadow.raised },
+  tileIcon: { width: 48, height: 48, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  tileTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.4, color: color.ink, marginTop: space.l },
+  tileFoot: { alignSelf: "flex-end", marginTop: 2 },
+  tileSub: { fontFamily: font.sans, fontSize: 12.5, lineHeight: 17, color: color.ink2, marginTop: 3, minHeight: 34 },
   listCard: { borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, overflow: "hidden", ...shadow.soft },
   row: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },
   rowBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: space.m, paddingRight: space.m, marginLeft: space.m },
