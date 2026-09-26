@@ -77,7 +77,7 @@ describe("golden peer teaching and transfer wording", () => {
     expect(ideas).toHaveLength(4);
     expect(ideas[0]).toMatch(/separate, independent evaluator/);
     expect(ideas[1]).toMatch(/checkpoints/);
-    expect(ideas[2]).toMatch(/Self-grading is biased/);
+    expect(ideas[2]).toMatch(/Self-grading is risky: .*approve its own output/);
     expect(ideas[3]).toMatch(/feeds back/);
     const original = [
       ["separate", "independent", "different model", "another model", "not the same", "second model", "external"],

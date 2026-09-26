@@ -88,7 +88,7 @@ export const PLAYGROUND_DIAGNOSTICS: DiagnosticItem[] = [
         keywords: ["test", "commit", "merge", "step", "checkpoint", "before", "ci", "each", "gate", "pull request"],
       },
       {
-        idea: "Self-grading is biased: a model tends to approve its own output",
+        idea: "Self-grading is risky: a model tends to approve its own output or miss its own mistakes",
         keywords: ["bias", "own work", "own output", "self", "approve", "blind spot", "same mistakes", "own mistake", "own decision", "grade itself", "grading itself", "check itself", "checking itself", "judge itself", "same agent"],
       },
       {
