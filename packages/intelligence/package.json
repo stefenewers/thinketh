@@ -1,0 +1,34 @@
+{
+  "name": "@thinketh/intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./app": "./src/api/app.ts"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env src/server/node.ts",
+    "start": "node --env-file-if-exists=../../.env src/server/node.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "seed:mongo": "node --env-file-if-exists=../../.env scripts/seed-mongo.ts",
+    "seed:tiger": "node --env-file-if-exists=../../.env scripts/seed-tiger.ts"
+  },
+  "dependencies": {
+    "@thinketh/contracts": "*",
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.9",
+    "zod": "^4.1.0"
+  },
+  "optionalDependencies": {
+    "mongodb": "^7.6.0",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

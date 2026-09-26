@@ -1,0 +1,16 @@
+{
+  "name": "@thinketh/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Thinketh domain contracts (Zod schemas + inferred types). Shared file: coordinate changes.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.1.0"
+  }
+}
