@@ -15,8 +15,9 @@ import { color } from "@/theme/tokens";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // react-native-svg's web build forwards responder props to the DOM; harmless, web-only.
-// LiveKit logs the server's normal close (WS 1001) after a voice session ends as an error.
-LogBox.ignoreLogs(["Unknown event handler property", "error reading from signal stream"]);
+// LiveKit logs the server's normal close (WS 1001) after a voice session ends as an error, and
+// warns when a late renegotiation hits the already-closed peer connection (agent ended the call).
+LogBox.ignoreLogs(["Unknown event handler property", "error reading from signal stream", "could not createOffer with closed peer connection"]);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
