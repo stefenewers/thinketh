@@ -1,0 +1,864 @@
+{
+  "runId": "2026-09-26T20-06-00",
+  "auditUser": "audit-2026-09-26t20-06-00",
+  "web": "http://localhost:8091",
+  "api": "http://localhost:8797",
+  "finishedAt": "2026-09-26T20:06:16.200Z",
+  "counts": {
+    "pass": 6,
+    "fail": 5,
+    "blocked": 18
+  },
+  "guardBlocked": [],
+  "bundleApiOrigins": [
+    "https://grace-sitting-vegas-tulsa.trycloudflare.com (redirected to http://localhost:8797)"
+  ],
+  "logBox": [
+    ":host {\n      all: initial;\n      direction: ltr;\n      position: absolute;\n    }\n  .lAubBq_container {\n  bottom: calc(6px + env(safe-area-inset-bottom, 0px));\n"
+  ],
+  "steps": [
+    {
+      "n": 1,
+      "id": "reset-audit-user",
+      "env": "backend",
+      "title": "Reset the isolated audit persona",
+      "expected": "POST /demo/reset for the audit user returns 200; Agent Memory back to baseline",
+      "startedAt": "2026-09-26T20:03:31.126Z",
+      "status": "pass",
+      "observed": "user=audit-2026-09-26t20-06-00; Agent Memory mastery 0.419, uncertainty 0.438",
+      "screenshot": "screens/01-reset-audit-user.jpg",
+      "ms": 564,
+      "sponsors": {
+        "tiger": {
+          "calls": 4,
+          "fallbacks": 0,
+          "status": "live"
+        }
+      },
+      "api": [],
+      "console": []
+    },
+    {
+      "n": 2,
+      "id": "onboarding",
+      "env": "browser",
+      "title": "First launch: onboarding",
+      "expected": "Onboarding explains Thinketh and can be skipped or completed",
+      "startedAt": "2026-09-26T20:03:31.692Z",
+      "status": "pass",
+      "observed": "Onboarding shown; skipped via 'Skip'",
+      "screenshot": "screens/02-onboarding.jpg",
+      "ms": 3461,
+      "sponsors": {
+        "backboard": {
+          "calls": 1,
+          "fallbacks": 0,
+          "status": "live"
+        },
+        "tiger": {
+          "calls": 5,
+          "fallbacks": 0,
+          "status": "live"
+        }
+      },
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 200,
+          "ms": 451
+        },
+        {
+          "method": "GET",
+          "url": "API/brief/today",
+          "status": 200,
+          "ms": 689
+        }
+      ],
+      "console": []
+    },
+    {
+      "n": 3,
+      "id": "today",
+      "env": "browser",
+      "title": "Today: personalized brief",
+      "expected": "Brief loads from the live API (GET /brief/today 200) with the developments that changed for this persona",
+      "startedAt": "2026-09-26T20:03:35.159Z",
+      "status": "fail",
+      "observed": "No /brief/today response from the live API",
+      "screenshot": "screens/03-today.jpg",
+      "ms": 30042,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/brief/today",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+        }
+      ]
+    },
+    {
+      "n": 4,
+      "id": "today-scroll",
+      "env": "browser",
+      "title": "Today: full page",
+      "expected": "Everything below the fold (other developments, Mind, Ask, Playground tiles) is reachable",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on today"
+    },
+    {
+      "n": 5,
+      "id": "development",
+      "env": "browser",
+      "title": "Open the lead development",
+      "expected": "Tapping the lead story opens Development with what you already knew, what changed, why it matters, and real sources",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on today"
+    },
+    {
+      "n": 6,
+      "id": "diagnostic-open",
+      "env": "browser",
+      "title": "Check my understanding",
+      "expected": "A question chosen for this person's weakest relevant concept, with the reason it was chosen",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on development"
+    },
+    {
+      "n": 7,
+      "id": "diagnostic-answer",
+      "env": "browser",
+      "title": "Answer correctly",
+      "expected": "The answer is graded by the live API and the screen shows the knowledge-state transition with its reason",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on diagnostic-open"
+    },
+    {
+      "n": 8,
+      "id": "mind",
+      "env": "browser",
+      "title": "See what changed in my Mind",
+      "expected": "Mind opens with the answered concept marked as changed",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on diagnostic-answer"
+    },
+    {
+      "n": 9,
+      "id": "mind-history",
+      "env": "browser",
+      "title": "Why did my Mind change?",
+      "expected": "Mind opens on the answered concept and shows the change and the engine's written reason; the Changes tab lists it",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on mind"
+    },
+    {
+      "n": 10,
+      "id": "persistence",
+      "env": "backend",
+      "title": "Persistence: Mind and history really changed",
+      "expected": "API /knowledge and /history for the audit user reflect the answer, and Tiger holds the transition row",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "blocked",
+      "observed": "Not run: depends on diagnostic-answer"
+    },
+    {
+      "n": 11,
+      "id": "learn",
+      "env": "browser",
+      "title": "Learn tab",
+      "expected": "Learn shows saved sources, suggestions and a clear way to add a source",
+      "startedAt": "2026-09-26T20:04:05.203Z",
+      "status": "pass",
+      "observed": "On screen: Saved by you, Suggested for you, Explore related ideas, Add a source, Nothing saved yet.",
+      "screenshot": "screens/11-learn.jpg",
+      "ms": 5367,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/brief/today",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/resources",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.listResources (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot="
+        }
+      ]
+    },
+    {
+      "n": 12,
+      "id": "resource-add",
+      "env": "browser",
+      "title": "Save a source and get the personal delta",
+      "expected": "Adding https://www.anthropic.com/engineering/building-effective-agents reads it live (POST /resources) and reaches 'ready' with useful minutes and new-vs-known ideas",
+      "startedAt": "2026-09-26T20:04:10.572Z",
+      "status": "fail",
+      "observed": "page.waitForResponse: Timeout 30000ms exceeded while waiting for event \"response\"",
+      "screenshot": "screens/12-resource-add.jpg",
+      "ms": 31366,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "POST",
+          "url": "API/resources",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] POST /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.addResource (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        }
+      ]
+    },
+    {
+      "n": 13,
+      "id": "resource-teach",
+      "env": "browser",
+      "title": "Teach me the delta",
+      "expected": "Thinketh teaches only what's new to this person (POST /resources/:id/teach)",
+      "startedAt": "2026-09-26T20:04:41.940Z",
+      "status": "blocked",
+      "observed": "Not run: depends on resource-add"
+    },
+    {
+      "n": 14,
+      "id": "resource-saved",
+      "env": "backend",
+      "title": "Saved resource persisted",
+      "expected": "GET /resources lists the saved source for the audit user",
+      "startedAt": "2026-09-26T20:04:41.940Z",
+      "status": "blocked",
+      "observed": "Not run: depends on resource-add"
+    },
+    {
+      "n": 15,
+      "id": "ask",
+      "env": "browser",
+      "title": "Ask",
+      "expected": "A question gets a grounded answer from the live API, with 'Why this answer?' available",
+      "startedAt": "2026-09-26T20:04:41.940Z",
+      "status": "fail",
+      "observed": "page.waitForResponse: Timeout 40000ms exceeded while waiting for event \"response\"",
+      "screenshot": "screens/15-ask.jpg",
+      "ms": 42814,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "POST",
+          "url": "API/ask",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] POST /ask failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.ask (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true"
+        }
+      ]
+    },
+    {
+      "n": 16,
+      "id": "ask-why",
+      "env": "browser",
+      "title": "Why this answer?",
+      "expected": "The reasoning view separates sources, what you understand, and inference",
+      "startedAt": "2026-09-26T20:05:24.757Z",
+      "status": "blocked",
+      "observed": "Not run: depends on ask"
+    },
+    {
+      "n": 17,
+      "id": "voice",
+      "env": "browser",
+      "title": "Catch Me Up (browser)",
+      "expected": "POST /voice/session succeeds. The web build has no native voice, so it should say so and offer the briefing as text. NOT proof of native mic/speaker",
+      "startedAt": "2026-09-26T20:05:24.757Z",
+      "status": "fail",
+      "observed": "POST /voice/session not called mode=?, 0 transcript lines. Web shows text mode: no. Catch me up | This didn't load. | Your progress is saved. Try again in a moment.",
+      "notes": "Browser only. ElevenLabs conversation, mic capture, speaker output, interruption and 'I'm done' need the iPhone dev build.",
+      "screenshot": "screens/17-voice.jpg",
+      "ms": 23042,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/brief/today",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        }
+      ]
+    },
+    {
+      "n": 18,
+      "id": "voice-text",
+      "env": "browser",
+      "title": "Catch Me Up as text: read to the end",
+      "expected": "Continue walks the briefing to a clear end with a next action",
+      "startedAt": "2026-09-26T20:05:47.800Z",
+      "status": "blocked",
+      "observed": "Not run: depends on voice"
+    },
+    {
+      "n": 19,
+      "id": "playground-open",
+      "env": "browser",
+      "title": "Playground",
+      "expected": "Documented reset (audit user only), then Playground explains the idea and offers 'Invite a collaborator'",
+      "startedAt": "2026-09-26T20:05:47.800Z",
+      "status": "pass",
+      "observed": "Invite visible",
+      "screenshot": "screens/19-playground-open.jpg",
+      "ms": 2766,
+      "sponsors": {},
+      "api": [],
+      "console": []
+    },
+    {
+      "n": 20,
+      "id": "playground-invite",
+      "env": "browser",
+      "title": "Invite and bring in Nadani",
+      "expected": "A room is created and Nadani joins (one-device demo guest)",
+      "startedAt": "2026-09-26T20:05:50.568Z",
+      "status": "fail",
+      "observed": "page.waitForResponse: Timeout 20000ms exceeded while waiting for event \"response\"",
+      "screenshot": "screens/20-playground-invite.jpg",
+      "ms": 20051,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "POST",
+          "url": "API/playground/rooms",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        }
+      ]
+    },
+    {
+      "n": 21,
+      "id": "playground-compare",
+      "env": "browser",
+      "title": "Compare our Minds",
+      "expected": "Muse (or the deterministic conductor, labelled) compares the two Minds and shows who can teach whom",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on playground-invite"
+    },
+    {
+      "n": 22,
+      "id": "playground-teach",
+      "env": "browser",
+      "title": "Start session: Nadani explains",
+      "expected": "Session starts; Muse asks Nadani to teach; her typed explanation is accepted",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on playground-compare"
+    },
+    {
+      "n": 23,
+      "id": "playground-transfer",
+      "env": "browser",
+      "title": "Transfer check",
+      "expected": "The learner applies it somewhere new; Thinketh grades it and records the knowledge change",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on playground-teach"
+    },
+    {
+      "n": 24,
+      "id": "playground-persistence",
+      "env": "backend",
+      "title": "Playground change persisted",
+      "expected": "The learner's transfer transition is in API history and in Tiger for the audit user",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on playground-transfer"
+    },
+    {
+      "n": 25,
+      "id": "playground-shared",
+      "env": "browser",
+      "title": "Shared gap and shared source",
+      "expected": "'Next: the shared gap' → 'Teach us the delta' → shared source gives each Mind its own delta",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on playground-transfer"
+    },
+    {
+      "n": 26,
+      "id": "visualize",
+      "env": "browser",
+      "title": "Visualize",
+      "expected": "Visualize renders a deterministic, structured view for the lead development",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on today"
+    },
+    {
+      "n": 27,
+      "id": "make-it-stick",
+      "env": "browser",
+      "title": "Make it stick",
+      "expected": "Make it stick renders a deterministic, structured view for the lead development",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "blocked",
+      "observed": "Not run: depends on today"
+    },
+    {
+      "n": 28,
+      "id": "explore",
+      "env": "browser",
+      "title": "Explore",
+      "expected": "Explore renders related ideas",
+      "startedAt": "2026-09-26T20:06:10.621Z",
+      "status": "pass",
+      "observed": "Explore related ideas | Adjacent ideas that would strengthen what you already understand. Each one says why it's here.",
+      "screenshot": "screens/28-explore.jpg",
+      "ms": 2762,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/knowledge",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/brief/today",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "method": "GET",
+          "url": "API/resources",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        },
+        {
+          "type": "warning",
+          "text": "[thinketh-api] GET /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.listResources (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot="
+        }
+      ]
+    },
+    {
+      "n": 29,
+      "id": "demo-controls",
+      "env": "browser",
+      "title": "Demo controls (read-only)",
+      "expected": "Dev demo screen reports real data source, API URL and fallback OFF; reset NOT pressed (it would target demo-user)",
+      "startedAt": "2026-09-26T20:06:13.385Z",
+      "status": "pass",
+      "observed": "Real API",
+      "screenshot": "screens/29-demo-controls.jpg",
+      "ms": 2746,
+      "sponsors": {},
+      "api": [
+        {
+          "method": "GET",
+          "url": "API/health",
+          "status": 0,
+          "error": "net::ERR_CONNECTION_FAILED"
+        }
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+        }
+      ]
+    }
+  ],
+  "allConsole": [
+    {
+      "at": "2026-09-26T20:03:35.763Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:03:35.763Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:03:35.763Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:03:35.764Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+    },
+    {
+      "at": "2026-09-26T20:04:05.786Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:05.786Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:04:05.786Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:05.786Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+    },
+    {
+      "at": "2026-09-26T20:04:08.275Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:08.276Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.listResources (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot="
+    },
+    {
+      "at": "2026-09-26T20:04:12.256Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:12.256Z",
+      "type": "warning",
+      "text": "[thinketh-api] POST /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.addResource (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:04:42.524Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:42.526Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:04:45.060Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:04:45.061Z",
+      "type": "warning",
+      "text": "[thinketh-api] POST /ask failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.ask (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true"
+    },
+    {
+      "at": "2026-09-26T20:05:25.333Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:05:25.335Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+    },
+    {
+      "at": "2026-09-26T20:05:25.335Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:05:25.335Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:05:50.959Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:06:11.213Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:06:11.213Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /knowledge failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getKnowledge (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=f"
+    },
+    {
+      "at": "2026-09-26T20:06:11.213Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:06:11.214Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /brief/today failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.getTodayBrief (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&ho"
+    },
+    {
+      "at": "2026-09-26T20:06:11.215Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "at": "2026-09-26T20:06:11.215Z",
+      "type": "warning",
+      "text": "[thinketh-api] GET /resources failed TypeError: Failed to fetch\n    at call (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=src%2Fapp&unstable_transformProfile=hermes-stable:102384:27)\n    at Object.listResources (http://localhost:8091/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot="
+    },
+    {
+      "at": "2026-09-26T20:06:13.963Z",
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_CONNECTION_FAILED"
+    }
+  ],
+  "apiErrors": [
+    {
+      "t": 1790453015763,
+      "method": "GET",
+      "url": "API/knowledge",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453015763,
+      "method": "GET",
+      "url": "API/brief/today",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453045786,
+      "method": "GET",
+      "url": "API/knowledge",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453045786,
+      "method": "GET",
+      "url": "API/brief/today",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453048275,
+      "method": "GET",
+      "url": "API/resources",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453052256,
+      "method": "POST",
+      "url": "API/resources",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453082524,
+      "method": "GET",
+      "url": "API/knowledge",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453085060,
+      "method": "POST",
+      "url": "API/ask",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453125333,
+      "method": "GET",
+      "url": "API/brief/today",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453125335,
+      "method": "GET",
+      "url": "API/knowledge",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453150959,
+      "method": "POST",
+      "url": "API/playground/rooms",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453171213,
+      "method": "GET",
+      "url": "API/knowledge",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453171213,
+      "method": "GET",
+      "url": "API/brief/today",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453171215,
+      "method": "GET",
+      "url": "API/resources",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    },
+    {
+      "t": 1790453173963,
+      "method": "GET",
+      "url": "API/health",
+      "status": 0,
+      "error": "net::ERR_CONNECTION_FAILED"
+    }
+  ]
+}
