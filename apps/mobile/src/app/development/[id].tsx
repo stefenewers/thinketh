@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { Development, DevelopmentDetailResponse, FeedbackKind } from "@thinketh/contracts";
+import type { Development, DevelopmentDetailResponse, FeedbackKind, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { shortDate, significanceLabel } from "@/lib/knowledge";
+import { openExternal } from "@/lib/links";
 import { color, font, space } from "@/theme/tokens";
 
 export default function DevelopmentScreen() {
@@ -218,14 +219,16 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
         {sources.map((s) => (
           <Row
             key={s.id}
-            onPress={s.url ? () => Linking.openURL(s.url!).catch(() => {}) : undefined}
-            accessibilityLabel={`${s.sourceType}, ${s.publisher ?? ""}: ${s.title}`}
+            onPress={s.url ? () => openExternal(s.url) : undefined}
+            accessibilityLabel={`${sourceClass(s)}, ${s.publisher ?? ""}: ${s.title}${s.url ? ", opens in browser" : ""}`}
           >
-            <T variant="meta" style={{ textTransform: "capitalize" }}>
-              {s.sourceType} · {s.publisher ?? "Unknown"}
-            </T>
+            <T variant="label">{sourceClass(s)}</T>
             <T variant="body" style={{ marginTop: 2 }}>
               {s.title}
+              {s.url ? " ↗" : ""}
+            </T>
+            <T variant="meta" style={{ marginTop: 2 }}>
+              {[s.publisher, s.publishedAt && !s.publisher?.includes("(demo)") ? shortDate(s.publishedAt) : undefined].filter(Boolean).join(" · ")}
             </T>
           </Row>
         ))}
@@ -295,3 +298,21 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.ink3, marginTop: 10 },
   feedbackNote: { flexDirection: "row", gap: space.s, marginTop: space.l, alignItems: "flex-start" },
 });
+
+/** Source class from what the source is, never a claim about peer review or quality. */
+function sourceClass(s: Source): string {
+  switch (s.sourceType) {
+    case "announcement":
+      return "Primary source";
+    case "docs":
+      return "Documentation";
+    case "paper":
+      return /arxiv|preprint/i.test(`${s.publisher ?? ""} ${s.url ?? ""}`) ? "Preprint" : "Research";
+    case "github":
+      return "Repository";
+    case "video":
+      return "Video";
+    default:
+      return "Article";
+  }
+}
