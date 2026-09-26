@@ -107,11 +107,17 @@ Hard rules:
 export class ClaudeModel implements IntelligenceModel {
   readonly name = "claude" as const;
   private readonly client: Anthropic;
-  private readonly opts: { apiKey: string; model: string; effort: "low" | "medium" | "high"; timeoutMs: number };
+  private readonly opts: { apiKey: string; model: string; effort: "low" | "medium" | "high"; timeoutMs: number; workspaceId?: string };
 
-  constructor(opts: { apiKey: string; model: string; effort: "low" | "medium" | "high"; timeoutMs: number }) {
+  constructor(opts: { apiKey: string; model: string; effort: "low" | "medium" | "high"; timeoutMs: number; workspaceId?: string }) {
     this.opts = opts;
-    this.client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 0, timeout: opts.timeoutMs });
+    this.client = new Anthropic({
+      apiKey: opts.apiKey,
+      maxRetries: 0,
+      timeout: opts.timeoutMs,
+      // Keys not scoped to a workspace must name one on every request.
+      ...(opts.workspaceId ? { defaultHeaders: { "anthropic-workspace-id": opts.workspaceId } } : {}),
+    });
   }
 
   /** Cheap liveness check for /health?probe=true: verifies the key and model without generating tokens. */

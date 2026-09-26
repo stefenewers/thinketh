@@ -216,7 +216,18 @@ export class ThinkethService {
     return this.adapters.model;
   }
 
+  /** For Claude calls a request waits on: the fallback must arrive before the client gives up. */
   private claudeTimeout(): number {
+    return Math.min(this.config.anthropic.timeoutMs, this.config.anthropic.requestTimeoutMs);
+  }
+
+  /** Diagnostic select/answer sit under the client's normal 8s timeout. */
+  private diagnosticClaudeTimeout(): number {
+    return Math.min(this.claudeTimeout(), 6000);
+  }
+
+  /** For background work nobody waits on (delta phrasing warm-up). */
+  private backgroundClaudeTimeout(): number {
     return this.config.anthropic.timeoutMs;
   }
 
@@ -306,7 +317,7 @@ export class ThinkethService {
       "explainDelta",
       () => model.explainDelta({ delta, development, profile: this.profileFor(userId), memories }),
       () => delta,
-      this.claudeTimeout(),
+      this.backgroundClaudeTimeout(),
     );
     if (result.source === "live") this.phrasedDeltas.set(key, result.value);
     return result.value;
@@ -411,7 +422,7 @@ export class ThinkethService {
       "generateDiagnostic",
       model ? () => model.generateDiagnostic(ctx) : undefined,
       () => this.adapters.fallbackModel.generateDiagnostic(ctx),
-      this.claudeTimeout(),
+      this.diagnosticClaudeTimeout(),
     );
     this.diagnostics.set(value.id, value);
     return value;
@@ -468,7 +479,7 @@ export class ThinkethService {
           }
         : undefined,
       () => evaluateShortAnswerKeywords(item, answer),
-      this.claudeTimeout(),
+      this.diagnosticClaudeTimeout(),
     );
     return value;
   }

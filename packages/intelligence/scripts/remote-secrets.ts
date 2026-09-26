@@ -12,7 +12,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const REQUIRED = ["BACKBOARD_API_KEY", "BACKBOARD_ASSISTANT_ID", "MONGODB_URI", "TIGER_DATABASE_URL"];
-const OPTIONAL = ["MONGODB_DB", "VOYAGE_API_KEY", "ANTHROPIC_API_KEY", "THINKETH_CLAUDE_MODEL", "ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID", "THINKETH_ADMIN_TOKEN"];
+const OPTIONAL = ["MONGODB_DB", "VOYAGE_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_WORKSPACE_ID", "THINKETH_CLAUDE_MODEL", "ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID", "THINKETH_ADMIN_TOKEN"];
 /**
  * Judging defaults: demo persona, reset allowed, no strict auth. TIGER_TLS_INSECURE
  * works around Timescale's CA:TRUE certificate being rejected by the Edge runtime
