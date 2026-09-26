@@ -1,0 +1,284 @@
+import { useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import type { Concept, DiagnosticQuestion } from "@thinketh/contracts";
+import { api, type DiagnosticAnswerResponse } from "@/api";
+import { Icon } from "@/components/Icon";
+import { KnowledgeStateTransitionView } from "@/components/KnowledgeStateTransitionView";
+import { T } from "@/components/Text";
+import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
+import { useApi } from "@/lib/hooks";
+import { fmt2 } from "@/lib/knowledge";
+import { color, font, radius, space } from "@/theme/tokens";
+
+export default function DiagnosticScreen() {
+  const { developmentId, conceptId } = useLocalSearchParams<{ developmentId?: string; conceptId?: string }>();
+  const insets = useSafeAreaInsets();
+  const { data, error, loading, reload } = useApi(
+    async () => {
+      const [question, knowledge] = await Promise.all([
+        api.selectDiagnostic({ developmentId, conceptId }),
+        api.getKnowledge(),
+      ]);
+      return { question, concepts: knowledge.concepts };
+    },
+    [developmentId, conceptId],
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: color.ground, paddingTop: insets.top }}>
+      <View style={styles.header}>
+        <T variant="meta">Check my understanding</T>
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8} style={styles.close}>
+          <Icon name="close" size={20} color={color.ink} />
+        </Pressable>
+      </View>
+      {loading && !data ? (
+        <LoadingState message="Choosing the question that will tell Thinketh the most…" />
+      ) : error || !data ? (
+        <ErrorState onRetry={reload} />
+      ) : (
+        <Diagnostic question={data.question} concepts={data.concepts} />
+      )}
+    </View>
+  );
+}
+
+function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; concepts: Concept[] }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<DiagnosticAnswerResponse | null>(null);
+  const [submitError, setSubmitError] = useState(false);
+  const [settled, setSettled] = useState(false);
+  const concept = concepts.find((c) => c.id === question.conceptId);
+  const answer = question.type === "multiple_choice" ? selected : text.trim() || null;
+
+  const submit = async () => {
+    if (!answer) return;
+    setSubmitting(true);
+    setSubmitError(false);
+    try {
+      const res = await api.answerDiagnostic(question.id, { answer });
+      Haptics.notificationAsync(
+        res.answer.correctness >= 0.99 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
+      ).catch(() => {});
+      setResult(res);
+    } catch {
+      setSubmitError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const verdict = result
+    ? result.answer.correctness >= 0.99
+      ? "Right."
+      : result.answer.correctness > 0
+        ? "Partly there."
+        : "One connection needs clarification."
+    : null;
+
+  return (
+    <Screen topInset={false}>
+      <Gutter>
+        <T variant="label">{concept?.name ?? "Your understanding"}</T>
+        <T variant="section" style={{ marginTop: space.m, fontSize: 22, lineHeight: 31 }} accessibilityRole="header">
+          {question.prompt}
+        </T>
+
+        {!result ? (
+          <Pressable
+            onPress={() => setWhyOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: whyOpen }}
+            style={styles.why}
+          >
+            <Icon name="info" size={15} color={color.ink2} />
+            <T variant="meta" style={{ flex: 1 }}>
+              Why this question?
+            </T>
+          </Pressable>
+        ) : null}
+        {whyOpen && !result ? <WhyThisQuestion question={question} /> : null}
+
+        <View style={{ marginTop: space.xl, gap: space.m }}>
+          {question.type === "multiple_choice" ? (
+            (question.choices ?? []).map((choice) => {
+              const isSel = selected === choice;
+              const locked = !!result;
+              return (
+                <Pressable
+                  key={choice}
+                  disabled={locked}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setSelected(choice);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSel, disabled: locked }}
+                  style={[
+                    styles.choice,
+                    isSel && styles.choiceSelected,
+                    locked && !isSel && { opacity: 0.45 },
+                  ]}
+                >
+                  <View style={[styles.radio, isSel && styles.radioOn]}>{isSel ? <View style={styles.radioDot} /> : null}</View>
+                  <T variant="body" style={{ flex: 1 }}>
+                    {choice}
+                  </T>
+                </Pressable>
+              );
+            })
+          ) : (
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              editable={!result}
+              multiline
+              placeholder="Explain it in your own words"
+              placeholderTextColor={color.ink3}
+              style={styles.input}
+            />
+          )}
+        </View>
+
+        {!result ? (
+          <View style={{ marginTop: space.xxl }}>
+            <Button label="Submit" onPress={submit} disabled={!answer} loading={submitting} />
+            {submitError ? (
+              <T variant="support" style={{ marginTop: space.m, textAlign: "center" }}>
+                Couldn&apos;t submit. Your answer is kept; try again.
+              </T>
+            ) : null}
+          </View>
+        ) : null}
+      </Gutter>
+
+      {result ? (
+        <>
+          <Gutter style={{ marginTop: space.xxl }}>
+            <View style={styles.feedback} accessibilityLiveRegion="polite">
+              <T variant="section">{verdict}</T>
+              <T variant="body" style={{ marginTop: space.s, color: color.ink2 }}>
+                {result.answer.feedback}
+              </T>
+            </View>
+          </Gutter>
+          <Gutter style={{ marginTop: space.xl }}>
+            <KnowledgeStateTransitionView transition={result.transition} concepts={concepts} onDone={() => setSettled(true)} />
+          </Gutter>
+          <Gutter style={{ marginTop: space.xxl, gap: space.m, opacity: settled ? 1 : 0.6 }}>
+            <Button
+              label="See it in your Mind"
+              icon="arrow"
+              onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })}
+            />
+            <Button
+              kind="quiet"
+              label="Back to today"
+              style={{ alignSelf: "center" }}
+              onPress={() => (router.canDismiss() ? router.dismissAll() : router.replace("/"))}
+            />
+          </Gutter>
+        </>
+      ) : null}
+    </Screen>
+  );
+}
+
+function WhyThisQuestion({ question }: { question: DiagnosticQuestion }) {
+  const d = question.selectionDebug;
+  const rows: [string, number][] = d
+    ? [
+        ["Uncertainty", d.uncertainty],
+        ["Importance", d.importance],
+        ["Your interest", d.interest],
+        ["Freshness", d.freshness],
+        ["Prerequisite centrality", d.prerequisiteCentrality],
+      ]
+    : [];
+  return (
+    <View style={styles.whyPanel}>
+      <T variant="support" style={{ color: color.ink }}>
+        {question.rationale}
+      </T>
+      {d ? (
+        <View style={{ marginTop: space.m, gap: 6 }}>
+          {rows.map(([label, v]) => (
+            <View key={label} style={styles.debugRow}>
+              <T variant="meta" style={{ flex: 1 }}>
+                {label}
+              </T>
+              <View style={styles.debugTrack}>
+                <View style={[styles.debugFill, { width: `${v * 100}%` }]} />
+              </View>
+              <T variant="meta" style={styles.debugNum}>
+                {fmt2(v)}
+              </T>
+            </View>
+          ))}
+          <View style={[styles.debugRow, { marginTop: space.xs }]}>
+            <T variant="meta" style={{ flex: 1, color: color.ink, fontFamily: font.sansSemibold }}>
+              Selection priority
+            </T>
+            <T variant="meta" style={[styles.debugNum, { color: color.ink, fontFamily: font.sansSemibold }]}>
+              {fmt2(d.priority)}
+            </T>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: space.xl,
+    paddingRight: space.s,
+    minHeight: 52,
+  },
+  close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  why: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.m, alignSelf: "flex-start" },
+  whyPanel: { backgroundColor: color.fog, borderRadius: radius.surface, padding: space.l },
+  debugRow: { flexDirection: "row", alignItems: "center", gap: space.m },
+  debugTrack: { width: 72, height: 4, borderRadius: 2, backgroundColor: color.edge, overflow: "hidden" },
+  debugFill: { height: 4, backgroundColor: color.ink2 },
+  debugNum: { width: 36, textAlign: "right", fontVariant: ["tabular-nums"] },
+  choice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.m,
+    minHeight: 56,
+    paddingHorizontal: space.l,
+    paddingVertical: space.m,
+    borderRadius: radius.surface,
+    borderWidth: 1,
+    borderColor: color.edge,
+    backgroundColor: color.panel,
+  },
+  choiceSelected: { borderColor: color.ink, borderWidth: 1.5 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: color.ink3, alignItems: "center", justifyContent: "center" },
+  radioOn: { borderColor: color.ink },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.ink },
+  input: {
+    minHeight: 120,
+    borderRadius: radius.surface,
+    borderWidth: 1,
+    borderColor: color.edge,
+    backgroundColor: color.panel,
+    padding: space.l,
+    fontFamily: font.sans,
+    fontSize: 16,
+    lineHeight: 24,
+    color: color.ink,
+    textAlignVertical: "top",
+  },
+  feedback: { paddingLeft: space.l, borderLeftWidth: 2, borderLeftColor: color.ink },
+});
