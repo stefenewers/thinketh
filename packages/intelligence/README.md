@@ -68,8 +68,8 @@ No stack traces are ever returned.
   "brief": {
     "date": "2026-09-25",
     "meaningfulCount": 6, "majorCount": 3, "estimatedMinutes": 11,
-    "skippedCount": 39,
-    "skippedBreakdown": { "duplicate": 21, "low_signal": 17, "already_understood": 1 },
+    "skippedCount": 143,
+    "skippedBreakdown": { "duplicate": 68, "low_signal": 31, "already_understood": 22, "minor_update": 15, "low_confidence": 7 },
     "heroDevelopmentId": "dev-persistent-agent-memory",
     "developmentIds": ["dev-persistent-agent-memory", "dev-evaluator-layer", "dev-mcp-elicitation", "…"]
   },

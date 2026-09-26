@@ -634,9 +634,12 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
     ],
     diagrams: DIAGRAMS,
     memoryAids: MEMORY_AIDS,
+    // Upstream ingestion run (before developments reach the brief). Matches the
+    // mobile fallback fixtures and the runbook: 143 filtered in total, of which the
+    // brief computes one already_understood itself (the function-calling explainer).
     ingestion: {
-      processedItems: 53,
-      skipped: { duplicate: 21, low_signal: 17 },
+      processedItems: 149,
+      skipped: { duplicate: 68, low_signal: 31, already_understood: 21, minor_update: 15, low_confidence: 7 },
     },
   };
 }

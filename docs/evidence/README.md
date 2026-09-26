@@ -8,7 +8,7 @@ curl "http://localhost:8787/health?probe=true"
 
 `probe=true` makes one cheap real call to each configured service. `live` means the call succeeded, `error` means credentials exist but the call failed, and `not_configured` means the backend is using its local fallback.
 
-## Status (2026-09-25, latest main; also verified under Deno, the Edge Function runtime)
+## Status (2026-09-25, latest main; public demo API = the Node server via Cloudflare tunnel)
 
 | Service | Status | Proof |
 |---|---|---|
@@ -17,7 +17,7 @@ curl "http://localhost:8787/health?probe=true"
 | Backboard | **live** | Probe: `assistant ab52d134…, 6 memories (242ms)`. `/ask` recalls from Backboard: 21 calls, 0 fallbacks during the golden loop. |
 | Claude | not configured | Needs `ANTHROPIC_API_KEY` |
 | ElevenLabs | not configured | Needs `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` |
-| Supabase | **live** | Probe: `5 feature flags readable (163ms)`. `/config` serves flags from the `feature_flags` table. Migration tables (profiles, feature_flags, integration_ids) exist. Edge Function not deployed yet. |
+| Supabase | **live** | Probe: `5 feature flags readable (163ms)`. `/config` serves flags from the `feature_flags` table. Migration tables (profiles, feature_flags, integration_ids) exist. (The Edge Function is deployed but isn't the demo API; see `docs/DEPLOY.md`.) |
 
 The mobile golden check passes against the real backend with Tiger, Mongo, Backboard and Supabase live:
 `API_URL=http://localhost:8787 npm run check:golden -w mobile` → all checks passed.
@@ -49,7 +49,7 @@ Continuous aggregate daily_concept_mastery for demo-user
 
 What this shows:
 - **Every answer is an append-only fact.** One diagnostic answer wrote 6 transitions: the answered concept plus 5 propagated updates. Each one stores before, after and a reason.
-- **History survives restarts.** A freshly started server with empty memory returned Agent Memory's current mastery (0.508) and today's transition, read from Tiger. This is what makes the stateless Edge Function deploy work.
+- **History survives restarts.** A freshly started server with empty memory returned Agent Memory's current mastery (0.508) and today's transition, read from Tiger, so restarting the demo server doesn't lose the learner's history.
 - **Time-series rollups.** The `daily_concept_mastery` continuous aggregate gives the "how my understanding changed" curve per concept per day.
 - **Failure-safe.** Writes always go to the local store first. If Tiger is slow or down, the demo continues and `/health` shows the error.
 
@@ -116,6 +116,6 @@ Screenshots to capture: Backboard dashboard → the assistant's Memories, plus t
 
 ## To do
 
-- Remote deploy: the public API is deployed (see `docs/DEPLOY.md` and `docs/NADANI-ACTION-ITEMS.md`). Remote Mongo needs the Atlas IP allowlist, and remote Tiger needs the TLS flag verified.
+- Public API: the Node server via `./scripts/demo-api.sh` (see `docs/DEPLOY.md`). All four sponsors are live there; a stable Railway/Render URL for judging is still open.
 - ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
 - Claude: `x-thinketh-delta-source: claude` on `/developments/:id`

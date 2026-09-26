@@ -70,10 +70,13 @@ describe("daily brief", () => {
     now: NOW,
   });
 
-  it("matches the demo headline: 6 things, 3 major, 11 minutes", () => {
+  it("matches the demo headline: 6 things, 3 major, 11 minutes, 143 filtered", () => {
     expect(brief.meaningfulCount).toBe(6);
     expect(brief.majorCount).toBe(3);
     expect(brief.estimatedMinutes).toBe(11);
+    expect(brief.skippedCount).toBe(143);
+    // Same breakdown as the mobile fallback fixtures, so a fallback never changes the numbers.
+    expect(brief.skippedBreakdown).toEqual({ duplicate: 68, low_signal: 31, already_understood: 22, minor_update: 15, low_confidence: 7 });
   });
 
   it("leads with the flagship development", () => {
@@ -83,7 +86,8 @@ describe("daily brief", () => {
 
   it("no new information = no card", () => {
     expect(brief.developmentIds).not.toContain("dev-function-calling-explainer");
-    expect(brief.skippedBreakdown?.already_understood).toBe(1);
+    // 21 filtered upstream + the 1 this brief filtered itself.
+    expect(brief.skippedBreakdown?.already_understood).toBe(22);
     const explainer = seed.developments.find((d) => d.id === "dev-function-calling-explainer")!;
     expect(isAlreadyUnderstood(explainer, seed.developmentMeta[explainer.id], states)).toBe(true);
   });

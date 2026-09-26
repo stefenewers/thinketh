@@ -65,6 +65,6 @@ It runs Today → Development → Diagnostic → Transition → Mind → History
 
 - **Optional:** send `sources` in `GET /brief/today`.
 - **Optional:** send `sections` in `POST /ask`.
-- **Decide on the filtered count:** the brief filters 39 items, while the runbook says "143". Change either the seed or the talk track.
+- **Resolved: 143 filtered.** The backend seed now uses the same breakdown as the mobile fixtures (68 duplicate, 31 low signal, 22 already understood, 15 minor, 7 low confidence), so a fallback never changes the number.
 
 Full endpoint-by-endpoint notes are in `docs/MOBILE-API-EXPECTATIONS.md`.
