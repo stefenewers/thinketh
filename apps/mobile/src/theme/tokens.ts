@@ -19,29 +19,8 @@ export const color = {
   surfaceMuted: "#F3F0EB",
   lineSoft: "#EDE9E3",
   overlay: "rgba(26,25,24,0.22)",
-  // White-first home (Today): white canvas, warm wash as atmosphere only.
+  // White-first home (Today).
   canvas: "#FFFFFF",
-  wash: "#FCF3EE",
-} as const;
-
-// Atmosphere and illustration stops (Today orb, lead card, tiles). Warm, never neon.
-export const glow = {
-  haze: "#F7D9CB",
-  orbLight: "#FFE7DC",
-  orbMid: "#F2A284",
-  orbDeep: "#C9583B",
-  duskTop: "#D6B2A1",
-  duskMid: "#9A7465",
-  duskLow: "#35302E",
-  ridgeFar: "#B8917F",
-  ridgeMid: "#7C6158",
-  ridgeNear: "#2C2725",
-  sun: "#EC7453",
-  tileCoral: "#FCE9E2",
-  tileCool: "#E9EFF4",
-  tileCoolInk: "#3E6784",
-  tilePeach: "#FBEEE2",
-  tilePeachInk: "#A8653A",
 } as const;
 
 // 4-point scale from the design spec; the upper steps are compact for mobile
