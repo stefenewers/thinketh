@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { BookGlyph } from "@/components/mind/world/Book";
 import { Pressable, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, G, Path } from "react-native-svg";
@@ -271,11 +272,18 @@ export function SourceCard({ title, meta, thumb, onPress }: { title: string; met
   );
 }
 
-/** A concept as a quiet pill; active = coral dot (the concept in play). */
-export function ConceptChip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+/** A concept as a quiet pill; active = coral dot (the concept in play); book = it opens as a book in your Mind. */
+export function ConceptChip({ label, active, book, onPress }: { label: string; active?: boolean; book?: boolean; onPress?: () => void }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? "button" : undefined} style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={book ? `${label}. Open it in your Mind` : undefined}
+      style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
+    >
       {active ? <View style={styles.dot} /> : null}
+      {book ? <BookGlyph size={12} /> : null}
       <T style={styles.chipText}>{label}</T>
     </Pressable>
   );

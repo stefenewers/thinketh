@@ -155,7 +155,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             // What changed today is the reason to open it.
             subtitle={latest ? `${conceptById.get(latest.conceptId)?.name ?? "A concept"} changed today` : "Explore your thinking"}
             accent={!!latest}
-            onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
+            onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId, from: "today" } } : "/mind")}
           />
           <ActionTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
           <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together" onPress={() => router.push("/playground")} />

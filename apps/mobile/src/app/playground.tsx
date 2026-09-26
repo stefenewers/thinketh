@@ -855,11 +855,12 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
             <Button label={busy ? "Muse is setting it up…" : "Start this move"} icon="arrow" loading={busy} onPress={onPlanNext} style={{ marginTop: space.m }} />
           </View>
         ) : null}
+        {/* Only the learner's Mind is graded here; teaching doesn't change the teacher's Mind. */}
         {tr.learnerId === me ? (
           <Button
             kind="secondary"
-            label="See your Mind"
-            onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId } })}
+            label={tr.verified ? "See the change in your Mind" : "See this concept in your Mind"}
+            onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId, from: "playground" } })}
             style={{ alignSelf: "flex-start", marginTop: space.m }}
           />
         ) : null}

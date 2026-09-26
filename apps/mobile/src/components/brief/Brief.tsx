@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { BookGlyph } from "@/components/mind/world/Book";
 import { Pressable, StyleSheet, View, useWindowDimensions, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -78,7 +79,10 @@ export function BriefRow({
   last,
   accessibilityLabel,
   accessibilityRole,
+  book,
 }: {
+  /** The row opens a concept as a book in your Mind: the book motif instead of an icon. */
+  book?: boolean;
   icon?: IconName;
   kicker?: string;
   title: string;
@@ -97,12 +101,16 @@ export function BriefRow({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.surfaceMuted }]}
     >
-      {icon ? (
+      {book ? (
+        <View style={styles.rowIcon}>
+          <BookGlyph size={16} />
+        </View>
+      ) : icon ? (
         <View style={styles.rowIcon}>
           <Icon name={icon} size={17} color={color.ink} />
         </View>
       ) : null}
-      <View style={[styles.rowBody, !icon && { marginLeft: 0 }, !last && styles.rowDivided]}>
+      <View style={[styles.rowBody, !icon && !book && { marginLeft: 0 }, !last && styles.rowDivided]}>
         <View style={{ flex: 1 }}>
           {kicker ? <T style={styles.rowKicker}>{kicker}</T> : null}
           <T style={styles.rowTitle}>{title}</T>

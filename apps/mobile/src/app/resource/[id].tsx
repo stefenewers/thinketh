@@ -283,14 +283,18 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
             {checkButton ? <View style={{ marginTop: space.xl }}>{checkButton}</View> : null}
             {r.relevantConnections.length ? (
               <BriefSection title="Connects to your Mind">
+                <T variant="meta" style={{ color: color.ink3, marginBottom: space.s }}>
+                  Reading adds information. A book in your Mind changes only when you show understanding in a check.
+                </T>
                 <ListCard>
                   {r.relevantConnections.map((c, i) => (
                     <BriefRow
+                      book
                       key={c.conceptId}
                       title={name(c.conceptId) ?? c.conceptId}
                       subtitle={c.why}
                       last={i === r.relevantConnections.length - 1}
-                      onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
+                      onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId, from: "source" } })}
                     />
                   ))}
                 </ListCard>
