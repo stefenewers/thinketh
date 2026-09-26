@@ -8,7 +8,7 @@ import {
   AppConfigResponseSchema,
   AskRequestSchema,
   AskResponseSchema,
-  TodayResponseSchema,
+  BriefResponseSchema,
   ConceptHistoryResponseSchema,
   DevelopmentDetailResponseSchema,
   DiagnosticAnswerRequestSchema,
@@ -93,7 +93,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));
 
-  app.get("/brief/today", async (c) => c.json(TodayResponseSchema.parse(await service.brief(c.get("userId")))));
+  app.get("/brief/today", async (c) => c.json(BriefResponseSchema.parse(await service.brief(c.get("userId")))));
 
   app.get("/developments/:id", async (c) => {
     const { deltaSource, ...detail } = await service.development(c.get("userId"), c.req.param("id"));

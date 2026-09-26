@@ -9,11 +9,11 @@ import { useApi } from "@/lib/hooks";
 import { color, space } from "@/theme/tokens";
 
 // Catch Me Up. Real-time voice (ElevenLabs) needs a dev build and a server-minted
-// token; until POST /voice/session returns one, this is the text fallback.
+// token; while POST /voice/session returns mode "transcript_fallback", this is the text fallback.
 export default function VoiceScreen() {
   const { data, error, loading, reload } = useApi(async () => {
     const today = await api.getTodayBrief();
-    const session = await api.createVoiceSession({ briefDate: today.brief.date });
+    const session = await api.createVoiceSession();
     return { session, heroId: today.brief.heroDevelopmentId };
   }, []);
   const session = data?.session;
@@ -32,12 +32,12 @@ export default function VoiceScreen() {
             <View style={{ alignItems: "flex-start", marginBottom: space.xl }}>
               <Mark size={28} />
             </View>
-            {!session.conversationToken ? (
+            {session.mode === "transcript_fallback" ? (
               <T variant="meta" style={{ marginBottom: space.xl }}>
                 Voice isn&apos;t connected yet, so here is your catch-up as text.
               </T>
             ) : null}
-            {session.fallbackScript.slice(0, shown).map((line, i) => (
+            {session.fallbackTranscript.slice(0, shown).map((line, i) => (
               <T
                 key={line}
                 variant={i === 0 ? "title" : "body"}
@@ -47,7 +47,7 @@ export default function VoiceScreen() {
               </T>
             ))}
             <View style={{ marginTop: space.xxl, gap: space.m }}>
-              {shown < session.fallbackScript.length ? (
+              {shown < session.fallbackTranscript.length ? (
                 <Button label="Continue" icon="arrow" onPress={() => setShown((n) => n + 1)} />
               ) : (
                 <>

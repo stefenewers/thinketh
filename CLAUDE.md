@@ -195,3 +195,7 @@ Thinketh is done enough to demo when the following works on a phone:
 Today -> Development -> Knowledge Delta -> Diagnostic -> Knowledge State Update -> Mind view
 
 Voice and additional sponsor integrations are valuable only after that loop is stable.
+
+## Integration notes (read before touching contracts)
+
+API envelopes are canonical in `packages/contracts/src/api.ts`; `packages/intelligence/src/contracts.ts` only re-exports them plus backend-only types. Why this changed, which backend behaviours the mobile app depends on, and how to verify a backend change against the app: `docs/INTEGRATION-NOTES.md`.

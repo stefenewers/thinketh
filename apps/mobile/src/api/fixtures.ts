@@ -248,12 +248,13 @@ export const claims: Claim[] = [
   { id: "cl-am-2", text: "Cross-session memory improves completion rates on multi-day tasks.", confidence: 0.7, sourceIds: ["src-am-3"], conceptIds: ["long-running-agents"], stance: "supports" },
 ];
 
+// Keys match the backend's snake_case categories; the app maps them to labels.
 export const skippedBreakdown: Record<string, number> = {
-  "Duplicate reports": 68,
-  "Low-signal opinions": 31,
-  "Already understood": 22,
-  "Minor updates": 15,
-  "Low-confidence claims": 7,
+  duplicate: 68,
+  low_signal: 31,
+  already_understood: 22,
+  minor_update: 15,
+  low_confidence: 7,
 };
 
 type DeltaSeed = Omit<DeltaExplanation, "developmentId" | "userId">;
@@ -373,9 +374,9 @@ export const diagnostics: DiagnosticSeed[] = [
       selectionDebug: { uncertainty: 0.44, importance: 0.9, interest: 0.85, freshness: 1, prerequisiteCentrality: 0.72, priority: 0.81 },
     },
     correctFeedback:
-      "Right. The agent was shut down, so nothing survived in its context window. The case survived because it was written to memory and read back in a new session.",
+      "The agent was shut down, so nothing survived in its context window. The case survived because it was written to memory and read back in a new session.",
     incorrectFeedback:
-      "Not quite. A context window only lasts while the session is running. Once the agent shut down, only memory that persists across sessions could carry the case forward.",
+      "A context window only lasts while the session is running. Once the agent shut down, only memory that persists across sessions could carry the case forward.",
     correctReason: "Updated because you correctly answered a transfer question about what state persists across sessions.",
     propagated: [
       { conceptId: "long-running-agents", deltaMastery: 0.03, deltaUncertainty: -0.05, reason: "Persistent memory is a prerequisite for multi-day agents." },
@@ -396,8 +397,8 @@ export const diagnostics: DiagnosticSeed[] = [
       rationale: "Chosen because Multimodal Reasoning is uncertain and connects to computer use, which you follow.",
       selectionDebug: { uncertainty: 0.4, importance: 0.6, interest: 0.7, freshness: 1, prerequisiteCentrality: 0.55, priority: 0.64 },
     },
-    correctFeedback: "Right. The model does not translate the image into words first; it reasons over both at once.",
-    incorrectFeedback: "Not quite. The key change is joint reasoning: no separate captioning step that loses detail.",
+    correctFeedback: "The model does not translate the image into words first; it reasons over both at once.",
+    incorrectFeedback: "The key change is joint reasoning: no separate captioning step that loses detail.",
     correctReason: "Updated because you identified the mechanism behind native multimodality.",
     propagated: [{ conceptId: "computer-use", deltaMastery: 0.02, deltaUncertainty: -0.03, reason: "Screen understanding underpins computer use." }],
   },
@@ -420,8 +421,8 @@ export const diagnostics: DiagnosticSeed[] = [
       rationale: "Chosen because Evaluator Architectures is your weakest area and has a flagged misconception.",
       selectionDebug: { uncertainty: 0.52, importance: 0.7, interest: 0.8, freshness: 1, prerequisiteCentrality: 0.5, priority: 0.77 },
     },
-    correctFeedback: "Right. Evaluators run at inference time and gate output; reward models shape training.",
-    incorrectFeedback: "Not quite. A reward model shapes training. An evaluator checks output while the system is running.",
+    correctFeedback: "Evaluators run at inference time and gate output; reward models shape training.",
+    incorrectFeedback: "A reward model shapes training. An evaluator checks output while the system is running.",
     correctReason: "Updated because you distinguished run-time evaluation from training-time reward — the misconception Thinketh had flagged.",
     propagated: [{ conceptId: "long-running-agents", deltaMastery: 0.02, deltaUncertainty: -0.02, reason: "Verification reduces compounding errors in long tasks." }],
   },
@@ -439,8 +440,8 @@ export const diagnostics: DiagnosticSeed[] = [
       rationale: "Chosen because MCP is intermediate and today's change is directly about it.",
       selectionDebug: { uncertainty: 0.31, importance: 0.8, interest: 0.75, freshness: 1, prerequisiteCentrality: 0.6, priority: 0.62 },
     },
-    correctFeedback: "Right. Streaming lets the agent see progress and react before the tool finishes.",
-    incorrectFeedback: "Not quite. Streaming does not speed up the tool; it lets the agent see partial results while it waits.",
+    correctFeedback: "Streaming lets the agent see progress and react before the tool finishes.",
+    incorrectFeedback: "Streaming does not speed up the tool; it lets the agent see partial results while it waits.",
     correctReason: "Updated because you applied streaming tool results to a new scenario.",
     propagated: [{ conceptId: "agent-tool-use", deltaMastery: 0.01, deltaUncertainty: -0.02, reason: "Tool-calling patterns reinforced." }],
   },
@@ -458,8 +459,8 @@ export const diagnostics: DiagnosticSeed[] = [
       rationale: "Chosen because Reasoning Models is moderately uncertain and today's change refines it.",
       selectionDebug: { uncertainty: 0.27, importance: 0.7, interest: 0.6, freshness: 1, prerequisiteCentrality: 0.45, priority: 0.52 },
     },
-    correctFeedback: "Right. Extra thinking time at inference substitutes for parameters on structured problems.",
-    incorrectFeedback: "Not quite. The gain comes from thinking longer at inference, not from size or retrieval.",
+    correctFeedback: "Extra thinking time at inference substitutes for parameters on structured problems.",
+    incorrectFeedback: "The gain comes from thinking longer at inference, not from size or retrieval.",
     correctReason: "Updated because you explained why thinking time can substitute for model size.",
     propagated: [],
   },
@@ -477,8 +478,8 @@ export const diagnostics: DiagnosticSeed[] = [
       rationale: "Chosen because Computer Use has the highest uncertainty in your model.",
       selectionDebug: { uncertainty: 0.55, importance: 0.55, interest: 0.6, freshness: 1, prerequisiteCentrality: 0.4, priority: 0.58 },
     },
-    correctFeedback: "Right. Without an API, the agent has to operate the interface itself.",
-    incorrectFeedback: "Not quite. When an API exists, ordinary tool calling is enough. Computer use is for software with no API.",
+    correctFeedback: "Without an API, the agent has to operate the interface itself.",
+    incorrectFeedback: "When an API exists, ordinary tool calling is enough. Computer use is for software with no API.",
     correctReason: "Updated because you distinguished computer use from API tool calling.",
     propagated: [],
   },

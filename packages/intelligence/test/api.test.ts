@@ -14,7 +14,7 @@ import {
   FeedbackResponseSchema,
   KnowledgeResponseSchema,
   MemoryAidSchema,
-  TodayResponseSchema,
+  BriefResponseSchema,
   VoiceSessionSchema,
 } from "@thinketh/contracts";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -47,14 +47,11 @@ async function post<S extends z.ZodTypeAny>(schema: S, path: string, body: objec
 
 describe("contract: six core endpoints", () => {
   it("GET /brief/today", async () => {
-    const today = await get(TodayResponseSchema, "/brief/today");
+    const today = await get(BriefResponseSchema, "/brief/today");
     expect(today.brief.meaningfulCount).toBe(6);
     expect(today.developments.map((d) => d.id)).toEqual(today.brief.developmentIds);
-    const sourceIds = new Set(today.sources.map((s) => s.id));
+    const sourceIds = new Set((today.sources ?? []).map((s) => s.id));
     for (const d of today.developments) for (const id of d.sourceIds) expect(sourceIds.has(id)).toBe(true);
-    expect(today.concepts.length).toBeGreaterThan(0);
-    expect(today.understoodDevelopmentIds).toEqual([]);
-    expect(today.recentTransitions).toEqual([]);
   });
 
   it("GET /developments/:id", async () => {
@@ -83,7 +80,6 @@ describe("contract: six core endpoints", () => {
     const mind = await get(KnowledgeResponseSchema, "/knowledge");
     expect(mind.userId).toBe(USER);
     expect(mind.items.length).toBe(9);
-    expect(mind.recentTransitions).toEqual([]);
   });
 
   it("GET /knowledge/:conceptId/history", async () => {
@@ -99,21 +95,23 @@ describe("contract: remaining endpoints", () => {
     expect(transitions[0]!.reason).toMatch(/Got it/);
   });
 
-  it("POST /ask returns trust layers", async () => {
+  it("POST /ask returns an answer plus trust-layer sections", async () => {
     const ask = await post(AskResponseSchema, "/ask", { question: "How does agent memory persist across sessions?" });
-    expect(ask.question).toBe("How does agent memory persist across sessions?");
-    expect(ask.sourcesSay.length).toBeGreaterThan(0);
-    expect(ask.thinkethInfers.length).toBeGreaterThan(0);
-    expect(ask.youAlreadyUnderstand.join(" ")).toMatch(/strong|intermediate/);
-    expect(ask.citedDevelopmentIds).toContain(FLAGSHIP_DEVELOPMENT_ID);
-    expect(ask.citedConceptIds).toContain("agent-memory");
+    expect(ask.answer).toMatch(/^From your sources: /);
+    expect(ask.citations.length).toBeGreaterThan(0);
+    expect(ask.relatedConceptIds).toContain("agent-memory");
+    expect(ask.memoryUsed.length).toBeGreaterThan(0);
+    const s = ask.sections!;
+    expect(s.sourcesSay.length).toBeGreaterThan(0);
+    expect(s.thinkethInfers.length).toBeGreaterThan(0);
+    expect(s.youAlreadyUnderstand.join(" ")).toMatch(/strong|intermediate/);
   });
 
-  it("POST /ask with nothing relevant hides the answer sections", async () => {
+  it("POST /ask with nothing relevant says so plainly", async () => {
     const ask = await post(AskResponseSchema, "/ask", { question: "zebra xylophone quantum" });
-    expect(ask.sourcesSay).toEqual([]);
-    expect(ask.thinkethInfers).toEqual([]);
-    expect(ask.stillUncertain).toHaveLength(1);
+    expect(ask.sections?.sourcesSay).toEqual([]);
+    expect(ask.sections?.thinkethInfers).toEqual([]);
+    expect(ask.answer).toMatch(/doesn't have enough evidence/);
   });
 
   it("POST /visualize and /make-it-stick", async () => {
@@ -124,8 +122,8 @@ describe("contract: remaining endpoints", () => {
   it("POST /voice/session always includes a fallback script", async () => {
     const voice = await post(VoiceSessionSchema, "/voice/session", { briefDate: "2026-09-26" });
     expect(voice.mode).toBe("transcript_fallback");
-    expect(voice.conversationToken).toBeNull();
-    expect(voice.fallbackScript.length).toBeGreaterThan(2);
+    expect(voice.conversationToken).toBeUndefined();
+    expect(voice.fallbackTranscript.length).toBeGreaterThan(2);
   });
 
   it("GET /config", async () => {
@@ -135,7 +133,7 @@ describe("contract: remaining endpoints", () => {
 
 describe("golden loop over HTTP", () => {
   it("Today -> Development -> Diagnostic -> Knowledge update -> Mind -> History -> Today", async () => {
-    const today = await get(TodayResponseSchema, "/brief/today");
+    const today = await get(BriefResponseSchema, "/brief/today");
     const heroId = today.brief.heroDevelopmentId;
     await get(DevelopmentDetailResponseSchema, `/developments/${heroId}`);
 
@@ -153,8 +151,10 @@ describe("golden loop over HTTP", () => {
     expect(level("agent-tool-use")).toBe("strong");
     expect(level("mcp")).toBe("intermediate");
     expect(level("evaluator-architectures")).toBe("weak");
-    expect(mind.recentTransitions[0]!.id).toBe(t.id); // "Just improved"
-    expect(mind.recentTransitions.every((x) => !x.observation.sourceRef?.startsWith("propagated:"))).toBe(true);
+    expect(mind.items.find((i) => i.concept.id === "agent-memory")!.lastTransition?.id).toBe(t.id);
+    // The app relies on propagated side effects keeping the "propagated:" sourceRef prefix.
+    const ctx = mind.items.find((i) => i.concept.id === "context-windows")!.lastTransition!;
+    expect(ctx.observation.sourceRef).toBe(`propagated:${t.id}`);
 
     const history = await get(ConceptHistoryResponseSchema, "/knowledge/agent-memory/history");
     expect(history.transitions.at(-1)!.id).toBe(t.id);
@@ -162,9 +162,6 @@ describe("golden loop over HTTP", () => {
       expect(history.transitions[i]!.createdAt >= history.transitions[i - 1]!.createdAt).toBe(true);
     }
 
-    const after = await get(TodayResponseSchema, "/brief/today");
-    expect(after.understoodDevelopmentIds).toEqual([heroId]); // "1 of 6 understood"
-    expect(after.recentTransitions[0]!.id).toBe(t.id);
   });
 
   it("isolates users and resets the demo", async () => {

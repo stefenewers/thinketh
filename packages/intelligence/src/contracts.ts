@@ -1,11 +1,24 @@
 /**
- * Backend view of the contracts: re-exports the shared contracts (domain types
- * and canonical API envelopes) plus a few backend-only aliases.
+ * Backend view of the contracts.
+ *
+ * Re-exports the shared contracts (`@thinketh/contracts`: the domain types from
+ * 05-data-contracts.md plus the canonical HTTP envelopes, which moved there from
+ * this file) and adds backend-only types.
  */
-import type { Interest, KnowledgeObservationKind, KnowledgeStateTransition, UserProfile } from "@thinketh/contracts";
-import { KnowledgeObservationKindSchema } from "@thinketh/contracts";
+import {
+  KnowledgeObservationKindSchema,
+  type Interest,
+  type KnowledgeObservationKind,
+  type KnowledgeStateTransition,
+  type UserProfile,
+} from "@thinketh/contracts";
 
+// Envelopes moved to packages/contracts/src/api.ts; see docs/INTEGRATION-NOTES.md.
 export * from "@thinketh/contracts";
+
+// ---------------------------------------------------------------------------
+// Aliases and derived types
+// ---------------------------------------------------------------------------
 
 export const ObservationKindSchema = KnowledgeObservationKindSchema;
 export type ObservationKind = KnowledgeObservationKind;
