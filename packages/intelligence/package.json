@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "seed:mongo": "node --env-file-if-exists=../../.env scripts/seed-mongo.ts",
     "seed:tiger": "node --env-file-if-exists=../../.env scripts/seed-tiger.ts",
-    "evidence:tiger": "node --env-file-if-exists=../../.env scripts/evidence-tiger.ts"
+    "evidence:tiger": "node --env-file-if-exists=../../.env scripts/evidence-tiger.ts",
+    "evidence:mongo": "node --env-file-if-exists=../../.env scripts/evidence-mongo.ts"
   },
   "dependencies": {
     "@thinketh/contracts": "*",

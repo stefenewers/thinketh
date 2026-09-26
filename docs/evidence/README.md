@@ -13,13 +13,13 @@ curl "http://localhost:8787/health?probe=true"
 | Service | Status | Proof |
 |---|---|---|
 | Tiger Data | **live** | Probe: `6 transitions stored (348ms)`. Golden loop writes and reads Tiger (below). |
-| MongoDB Atlas | not configured | Needs `MONGODB_URI` (+ optional `VOYAGE_API_KEY`) |
+| MongoDB Atlas | **live** | Probe: `7 developments stored (493ms)`. `/ask` retrieves through Atlas Search: 26 calls, 0 fallbacks during the golden loop. |
 | Backboard | not configured | Needs `BACKBOARD_API_KEY` |
 | Claude | not configured | Needs `ANTHROPIC_API_KEY` |
 | ElevenLabs | not configured | Needs `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` |
 | Supabase | not configured | Needs a project (`SUPABASE_URL`, keys) for remote deploy |
 
-The mobile golden check passes against the real backend with Tiger live:
+The mobile golden check passes against the real backend with Tiger and Mongo live:
 `API_URL=http://localhost:8787 npm run check:golden -w mobile` → all checks passed.
 
 ## Tiger Data: version control for human understanding
@@ -55,9 +55,36 @@ What this shows:
 
 Screenshots to capture for Devpost: the Tiger Cloud console showing the four hypertables, and the output of the evidence script above.
 
+## MongoDB Atlas: the semantic corpus
+
+Reproduce with `npm run evidence:mongo --workspace @thinketh/intelligence`.
+
+```text
+MongoDB 8.0.32, database "thinketh"
+Collections
+  developments   7    sources 13    claims 13    concepts 9    concept_edges 10    storylines 1
+  corpus_chunks  42   (retrieval collection: one chunk per development, claim, concept and source)
+Search indexes on corpus_chunks
+  corpus_text (search): READY, queryable
+
+$search: "How is persistent agent memory different from retrieval?"
+  2.90  development  dev-persistent-agent-memory   Persistent agent memory changes how long-running agents operate…
+  1.98  development  dev-memory-benchmarks         Retrieval benchmarks stop predicting memory performance…
+  1.92  source       src-memory-vs-rag-benchmark   Retrieval scores no longer predict memory performance…
+  1.81  source       src-memory-critique           When agents remember the wrong thing: error entrenchment…
+  1.75  claim        clm-memory-scoped-recall      Recall is scoped: the agent retrieves only memories relevant…
+```
+
+What this shows:
+- **Atlas holds the world-state corpus**: developments, sources, claims, concepts and their graph edges. Tiger holds how the user's understanding changes over time, so each store has a distinct job.
+- **Ask retrieves through Atlas Search.** `POST /ask` runs this `$search` and expands hits into claims. Those claims become the verbatim "sources say" layer of the answer.
+- **Development detail reads from Atlas**, falling back to the seeded corpus if Atlas is unreachable.
+- **Vector search is ready to switch on.** With `VOYAGE_API_KEY` set, the seed script stores embeddings and creates the `developments_vector` index, and `/ask` then uses `$vectorSearch`. It's optional; text search is live now.
+
+Screenshots to capture: Atlas → Collections (the `thinketh` database) and Atlas Search → `corpus_text`, plus the output above.
+
 ## To do
 
-- MongoDB Atlas: `npm run seed:mongo`, then `/ask` retrieval through Atlas Search
 - Backboard: stable assistant, a stored preference and misconception, recall from a second thread
 - Remote deploy: Supabase project + CLI, then the golden loop over the public URL
 - ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
