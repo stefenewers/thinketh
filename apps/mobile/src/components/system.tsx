@@ -347,7 +347,7 @@ export function MindprintPreview({ nodes, activeId, size = 128 }: { nodes: Mindp
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.s, minHeight: 44, backgroundColor: color.canvas },
+  topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.s, minHeight: 44, backgroundColor: color.ground },
   topSide: { width: 88, flexDirection: "row", alignItems: "center" },
   topTitle: { flex: 1, textAlign: "center", fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
   iconPlain: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },

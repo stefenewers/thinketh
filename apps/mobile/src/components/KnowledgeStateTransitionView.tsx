@@ -66,7 +66,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   const summary = [
     `${name(transition.conceptId)}: ${levelBefore}${levelBefore !== levelAfter ? ` to ${levelAfter}` : ""}.`,
     evidenceBefore !== evidenceAfter ? `${evidenceBefore} to ${evidenceAfter}.` : "",
-    resolved.length ? `Misconception resolved: ${resolved.map(misconceptionLabel).join("; ")}.` : "",
+    resolved.length ? `No longer flagged: ${resolved.map(misconceptionLabel).join("; ")}.` : "",
     why,
   ].join(" ");
 
@@ -75,7 +75,8 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   return (
     <View accessible accessibilityLabel={summary} accessibilityLiveRegion="polite">
       <T variant="label" tone={improved ? "coral" : "ink3"}>
-        {improved ? "Your understanding changed." : "Thinketh adjusted its model."}
+        {/* Proportional to the evidence: one answer strengthens the estimate, it doesn't prove mastery. */}
+        {improved ? "Your Mind has stronger evidence." : "Thinketh adjusted its model."}
       </T>
 
       {/* The concept, with a single coral knowledge trace. */}
@@ -108,7 +109,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
           <T variant="section">
             {levelAfter}
             <T variant="section" style={{ color: color.ink3 }}>
-              {improved ? ", on firmer ground" : ""}
+              {improved ? ", with more evidence" : ""}
             </T>
           </T>
         )}
@@ -116,18 +117,18 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
 
       <Animated.View style={[{ marginTop: space.xl, gap: space.l }, rise(details)]}>
         {resolved.length ? (
-          <Fact label="Misconception resolved" accent>
+          <Fact label="No longer flagged" accent>
             {resolved.map((f) => `“${capitalize(misconceptionLabel(f))}”`).join("\n")}
           </Fact>
         ) : null}
         {flagged.length ? <Fact label="Confusion noted">{flagged.map((f) => capitalize(misconceptionLabel(f))).join("\n")}</Fact> : null}
         {evidenceBefore !== evidenceAfter ? (
-          <Fact label="Uncertainty reduced">
+          <Fact label="Evidence">
             {evidenceBefore} → {evidenceAfter}
           </Fact>
         ) : null}
         {strengthened.length ? (
-          <Fact label={strengthened.length === 1 ? "Connected concept strengthened" : "Connected concepts strengthened"}>
+          <Fact label={strengthened.length === 1 ? "Connected concept nudged up" : "Connected concepts nudged up"}>
             {strengthened.map((c) => name(c.conceptId)).join(" · ")}
           </Fact>
         ) : null}

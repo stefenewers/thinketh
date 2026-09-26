@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { router } from "expo-router";
 import { api } from "@/api";
 import { T } from "@/components/Text";
-import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
+import { BackBar, Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
 import { buildGroups, type Pick } from "@/lib/explore";
 import { useApi } from "@/lib/hooks";
 import { font, layout, space } from "@/theme/tokens";
@@ -26,9 +26,11 @@ export default function Explore() {
 
   return (
     <Screen>
+      {/* Explore is reached from Learn (and older links to /explore); it has a way back. */}
+      <BackBar onBack={() => (router.canGoBack() ? router.back() : router.replace("/library"))} />
       <Gutter>
         <T variant="display" accessibilityRole="header">
-          Explore
+          Explore related ideas
         </T>
         <T variant="support" style={{ marginTop: space.s }}>
           Adjacent ideas that would strengthen what you already understand. Each one says why it&apos;s here.

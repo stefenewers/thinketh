@@ -28,9 +28,9 @@ export function TextureHeader({ source, onBack, hero }: { source: ImageSourcePro
         <Svg width={width} height={h}>
           <Defs>
             <LinearGradient id="briefFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color.canvas} stopOpacity={hero ? 0 : 0.1} />
-              <Stop offset={hero ? "0.72" : "0.6"} stopColor={color.canvas} stopOpacity={hero ? 0 : 0.35} />
-              <Stop offset="1" stopColor={color.canvas} stopOpacity={1} />
+              <Stop offset="0" stopColor={color.ground} stopOpacity={hero ? 0 : 0.1} />
+              <Stop offset={hero ? "0.72" : "0.6"} stopColor={color.ground} stopOpacity={hero ? 0 : 0.35} />
+              <Stop offset="1" stopColor={color.ground} stopOpacity={1} />
             </LinearGradient>
           </Defs>
           <Rect x={0} y={0} width={width} height={h} fill="url(#briefFade)" />

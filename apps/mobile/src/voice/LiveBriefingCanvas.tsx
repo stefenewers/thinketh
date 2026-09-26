@@ -4,7 +4,7 @@ import type { ConceptEdge, KnowledgeItem } from "@thinketh/contracts";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Button } from "@/components/ui";
-import { color, font, gutter, space } from "@/theme/tokens";
+import { color, depth, font, gutter, space, warm } from "@/theme/tokens";
 import { LiveCaption } from "./LiveCaption";
 import { VisualBoundary, VoiceMindprint } from "./VoiceMindprint";
 import type { VoicePhase } from "./voiceVisualState";
@@ -60,7 +60,7 @@ export function LiveBriefingCanvas({
     <View>
       <View style={styles.header}>
         <T style={styles.title}>Catch Me Up</T>
-        <View style={styles.live} accessibilityLabel={speaking ? "Live. Thinketh is speaking." : "Live. Your turn."}>
+        <View style={[styles.live, speaking && styles.liveSpeaking]} accessibilityLabel={speaking ? "Live. Thinketh is speaking." : "Live. Your turn."}>
           <T style={styles.liveText}>LIVE</T>
           <View style={[styles.liveDot, { backgroundColor: speaking ? color.coral : color.ink3 }]} />
         </View>
@@ -78,7 +78,17 @@ export function LiveBriefingCanvas({
       <View style={{ marginTop: space.m, marginHorizontal: -space.xs }}>
         {mind ? (
           <VisualBoundary>
-            <VoiceMindprint items={mind.items} edges={mind.edges} changedIds={mind.changedIds} focusId={focusId} width={canvasW} height={canvasH} level={level} reduceMotion={reduceMotion} />
+            <VoiceMindprint
+              items={mind.items}
+              edges={mind.edges}
+              changedIds={mind.changedIds}
+              focusId={focusId}
+              width={canvasW}
+              height={canvasH}
+              level={level}
+              reduceMotion={reduceMotion}
+              warmth={speaking && !ending ? "speaking" : "quiet"}
+            />
           </VisualBoundary>
         ) : (
           <View style={{ height: canvasH }} />
@@ -144,14 +154,16 @@ export function LiveBriefingCanvas({
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, color: color.ink },
-  live: { flexDirection: "row", alignItems: "center", gap: 6 },
+  // The LIVE pill takes the warm paper while Thinketh speaks, and settles to white when it listens.
+  live: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
+  liveSpeaking: { backgroundColor: warm.paper, borderColor: "rgba(232,112,75,0.25)" },
   liveText: { fontFamily: font.sansSemibold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, color: color.ink2 },
   liveDot: { width: 7, height: 7, borderRadius: 3.5 },
   topic: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 28, letterSpacing: -0.4, color: color.ink, marginTop: 2 },
   stateBlock: { marginTop: space.l, gap: 2, minHeight: 44 },
   turn: { fontFamily: font.sansSemibold, fontSize: 16, lineHeight: 21, color: color.ink },
   controls: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.xl },
-  mic: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
+  mic: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },
   micOff: { backgroundColor: color.surfaceMuted },
   micSlash: { position: "absolute", width: 26, height: 1.5, backgroundColor: color.ink3, transform: [{ rotate: "-45deg" }] },
 });

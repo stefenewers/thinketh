@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Mark } from "@/components/Logo";
 import { Redirect, router } from "expo-router";
 import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -17,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
 import { color, depth, font, glow, gutter, radius, space, warm } from "@/theme/tokens";
 
-const BRAND_MARK = require("../../../assets/brand/mark.png");
 
 const SKIP_DEFINITIONS: Record<string, string> = {
   duplicate: "Several sources covering the same event. You see the strongest version once.",
@@ -88,7 +88,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
 
   if (!hero) {
     return (
-      <Screen background={color.canvas}>
+      <Screen background={color.ground}>
         <Gutter style={{ paddingTop: space.xl }}>
           <T variant="display">Nothing changed enough to interrupt you.</T>
           <T variant="support" style={{ marginTop: space.l }}>
@@ -217,7 +217,7 @@ function HomeTopBar() {
     <Gutter style={[styles.topBar, { paddingTop: top }]}>
       {/* Long-press opens dev-only demo controls (reset, adapter health). */}
       <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false} style={styles.brand}>
-        <Image source={BRAND_MARK} style={styles.brandMark} resizeMode="contain" accessibilityIgnoresInvertColors />
+        <Mark size={23} />
         <T style={styles.brandName}>Thinketh</T>
       </Pressable>
       <View style={{ flexDirection: "row", gap: space.s }}>
@@ -256,7 +256,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: space.s },
   brand: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44 },
-  brandMark: { width: 27, height: 23 },
   brandName: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 27, letterSpacing: -0.6, color: color.ink },
   roundButton: {
     width: 44,

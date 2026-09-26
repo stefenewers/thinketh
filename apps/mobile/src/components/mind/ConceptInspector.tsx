@@ -51,11 +51,13 @@ export function ConceptInspector({
   const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
   const history = data?.transitions;
   const askQ = `Explain ${concept.name} based on what I already know.`;
+  // Developing or weak: show a way to add evidence, not just a way to read about it.
+  const thin = level === "developing" || level === "weak";
 
   return (
     <View>
       <View style={styles.headRow}>
-        {justImproved ? <SignalPill label="Just improved" /> : <Kicker>{concept.domain}</Kicker>}
+        {justImproved ? <SignalPill label="Stronger evidence" /> : <Kicker>{concept.domain}</Kicker>}
         <IconButton icon="close" accessibilityLabel="Close concept" onPress={onClose} />
       </View>
       <T variant="display" accessibilityRole="header" style={{ marginTop: space.xs }}>
@@ -67,7 +69,7 @@ export function ConceptInspector({
       <View style={styles.levelLine}>
         {transition ? <View style={styles.dot} /> : null}
         <T variant="meta" tone={transition ? "coral" : undefined}>
-          {levelLabel[level]} · {transition ? "evidence strengthened today" : evidenceLabel(state.uncertainty).toLowerCase()}
+          {levelLabel[level]} · {transition ? (justImproved ? "more evidence today" : "updated today") : evidenceLabel(state.uncertainty).toLowerCase()}
         </T>
       </View>
 
@@ -138,16 +140,37 @@ export function ConceptInspector({
           </View>
 
           <View style={{ marginTop: space.l }}>
+            {thin ? (
+              // Thin evidence: the next step is to add some. A check always exists for a concept; a
+              // development in today's brief is offered first when one touches it (listed above).
+              <View style={styles.strengthen}>
+                <T style={styles.h}>Strengthen it</T>
+                <T variant="support" style={{ marginTop: space.xs }}>
+                  {developments.length
+                    ? `Read the development above, then answer one question. Thinketh has ${state.evidenceCount} ${state.evidenceCount === 1 ? "signal" : "signals"} for this so far.`
+                    : `Nothing in today's brief covers this, so Thinketh has only ${state.evidenceCount} ${state.evidenceCount === 1 ? "signal" : "signals"} from your reading and checks. One question adds evidence; Ask can explain it first.`}
+                </T>
+                <Pressable
+                  onPress={() => router.push({ pathname: "/diagnostic", params: { conceptId: concept.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Check my understanding of ${concept.name}`}
+                  style={({ pressed }) => [styles.primary, { marginTop: space.m }, pressed && { opacity: 0.85 }]}
+                >
+                  <T style={styles.primaryLabel}>Check my understanding</T>
+                  <Icon name="arrow" size={15} color={color.onInk} />
+                </Pressable>
+              </View>
+            ) : null}
             <Pressable
               onPress={() => router.push({ pathname: "/ask", params: { q: askQ } })}
               accessibilityRole="button"
               accessibilityLabel="Ask Thinketh"
-              style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [thin ? styles.secondary : styles.primary, pressed && { opacity: 0.85 }]}
             >
-              <T style={styles.primaryLabel}>Ask Thinketh</T>
-              <Icon name="arrow" size={15} color={color.onInk} />
+              <T style={thin ? styles.secondaryLabel : styles.primaryLabel}>{thin ? "Ask Thinketh to explain it" : "Ask Thinketh"}</T>
+              <Icon name="arrow" size={15} color={thin ? color.ink : color.onInk} />
             </Pressable>
-            <LinkRow label="Evidence · history · how it changed" onPress={() => setTab("evidence")} />
+            <LinkRow label="Why we think you know this · history" onPress={() => setTab("evidence")} />
             <StorylineLink conceptId={concept.id} />
           </View>
         </View>
@@ -174,6 +197,11 @@ export function ConceptInspector({
       {tab === "sources" ? (
         <View style={{ marginTop: space.l }}>
           <T style={[styles.h, { marginBottom: space.s }]}>Where the evidence comes from</T>
+          {sources.length ? (
+            <T variant="meta" style={{ color: color.ink3, marginBottom: space.s }}>
+              {sources.length} {sources.length === 1 ? "source" : "sources"} from the {developments.length} {developments.length === 1 ? "development" : "developments"} in your brief that touch this concept.
+            </T>
+          ) : null}
           {sources.length ? (
             sources.map((src) => (
               <SourceCard
@@ -363,6 +391,22 @@ const styles = StyleSheet.create({
     marginBottom: space.xs,
   },
   primaryLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.onInk },
+  secondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.s,
+    minHeight: 48,
+    paddingHorizontal: space.l,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.hairline,
+    backgroundColor: color.canvas,
+    marginTop: space.s,
+    marginBottom: space.xs,
+  },
+  secondaryLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.ink },
+  strengthen: { marginBottom: space.xs },
   link: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   stats: { flexDirection: "row", marginTop: space.l },
   statDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline, paddingLeft: space.m },

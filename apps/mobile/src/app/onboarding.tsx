@@ -52,8 +52,8 @@ export default function Onboarding() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
-      <Screen background={color.canvas} contentStyle={{ flexGrow: 1, paddingBottom: space.x4 }}>
+    <View style={{ flex: 1, backgroundColor: color.ground }}>
+      <Screen background={color.ground} contentStyle={{ flexGrow: 1, paddingBottom: space.x4 }}>
         <Gutter style={{ flexGrow: 1 }}>
           {intro ? (
             <View style={styles.top}>

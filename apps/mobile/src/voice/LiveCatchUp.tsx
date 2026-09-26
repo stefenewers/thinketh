@@ -21,6 +21,9 @@ import { isEndIntent } from "./endIntent";
 import { LiveBriefingCanvas, type BriefingMind } from "./LiveBriefingCanvas";
 import { USER_HOLD_MS, USER_VAD_THRESHOLD, voicePhase } from "./voiceVisualState";
 
+/** How long Thinketh must stay quiet before its turn counts as over (ms). */
+const TURN_SETTLE_MS = 700;
+
 export type LiveCatchUpProps = {
   /** Voice failed at any point: the screen switches to the transcript. */
   onFallback: (reason: string) => void;
@@ -179,9 +182,13 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Thinketh stopped speaking: the turn settles.
+  // Thinketh stopped speaking: the turn settles, but only after a real pause. isSpeaking can
+  // flicker off between audio chunks, and closing the turn then splits a sentence (and a word)
+  // across two turns. Interruptions still close it at once (onInterruption).
   useEffect(() => {
-    if (!isSpeaking) dispatch({ type: "turn_end", now: Date.now() });
+    if (isSpeaking) return;
+    const id = setTimeout(() => dispatch({ type: "turn_end", now: Date.now() }), TURN_SETTLE_MS);
+    return () => clearTimeout(id);
   }, [isSpeaking]);
 
   // Reveal aligned words on ElevenLabs' own timings; tick only while there is text left to show,
