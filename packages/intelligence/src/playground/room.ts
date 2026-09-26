@@ -28,8 +28,14 @@ export class ForbiddenError extends Error {}
 const MAX_ROOMS = 200;
 const MAX_EVENTS = 200;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-/** The shared source Figma 1:376 shows. */
-export const DEFAULT_ROOM_RESOURCE = "https://www.anthropic.com/engineering/building-effective-agents";
+/**
+ * The known-safe shared source. Chosen by scripts/resource-asymmetry.mjs, which reads every
+ * safe seeded source through the live pipeline against both demo Minds: this page gives the
+ * clearest REAL difference (measured twice, 2026-09-26: Stefen ~3 min, focus agent memory;
+ * Nadani ~5 min, focus agent tool use). The previous default ("Building effective agents")
+ * gave both ~5-6 min and 5 ideas. Values are always computed, never set.
+ */
+export const DEFAULT_ROOM_RESOURCE = "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview";
 
 export const SHORT_LABELS: Record<string, string> = {
   "agent-memory": "Agent Memory",
