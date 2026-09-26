@@ -1,6 +1,9 @@
 .DS_Store
 node_modules/
 .env*
+# Downloaded credential files (e.g. tiger-cloud-*-credentials.env)
+*.env
+*credentials*
 !.env.example
 thinketh-stefen-claude-code-pack.zip
 thinketh-nadani-claude-code-pack.zip

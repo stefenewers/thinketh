@@ -135,6 +135,14 @@ export class BackboardMemory implements MemoryProvider {
     });
   }
 
+  /** Cheap liveness check for /health?probe=true. */
+  async probe(userId: string): Promise<string> {
+    const assistantId = await this.assistantFor(userId);
+    const res = await this.call(`/assistants/${assistantId}/memories?page_size=1`);
+    const body = (await res.json()) as { total_count?: number };
+    return `assistant ${assistantId.slice(0, 8)}…, ${body.total_count ?? 0} memories`;
+  }
+
   async reset(userId: string): Promise<void> {
     const assistantId = await this.assistantFor(userId);
     await this.call(`/assistants/${assistantId}/memories`, { method: "DELETE" });

@@ -66,6 +66,13 @@ export class TigerTemporalStore implements TemporalStore {
     return this.sqlPromise;
   }
 
+  /** Cheap liveness check for /health?probe=true. */
+  async probe(): Promise<string> {
+    const sql = await this.sql();
+    const [row] = await sql`select (select count(*) from knowledge_state_transitions)::int as transitions`;
+    return `${row?.transitions ?? 0} transitions stored`;
+  }
+
   async appendObservation(o: KnowledgeObservation): Promise<void> {
     const sql = await this.sql();
     await sql`
@@ -161,6 +168,11 @@ export class ResilientTemporalStore implements TemporalStore {
   private async read<T>(op: string, remoteFn: (r: TigerTemporalStore) => Promise<T>, empty: T): Promise<T> {
     const remote = this.remote;
     return (await guarded("tiger", op, remote ? () => remoteFn(remote) : undefined, () => empty, this.timeoutMs)).value;
+  }
+
+  /** The Tiger store behind this one, if configured (for health probes). */
+  get tiger(): TigerTemporalStore | undefined {
+    return this.remote;
   }
 
   appendObservation(input: KnowledgeObservation): Promise<void> {

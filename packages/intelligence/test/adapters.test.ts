@@ -86,6 +86,19 @@ describe("adapter fallbacks keep the golden loop alive", () => {
   });
 });
 
+describe("health probes", () => {
+  it("reports error (not live) when a configured sponsor fails", async () => {
+    const seed = buildSeed(NOW);
+    const config = offlineConfig();
+    const adapters = buildAdapters(config, seed);
+    const tiger = { probe: boom } as unknown as TigerTemporalStore;
+    (adapters as { temporal: ResilientTemporalStore }).temporal = new ResilientTemporalStore(new LocalTemporalStore(), tiger, 50);
+    const probe = await new ThinkethService(config, seed, adapters, () => NOW).probeAdapters();
+    expect(probe.tiger).toMatchObject({ status: "error", detail: "sponsor down" });
+    expect(probe.mongo?.status).toBe("not_configured");
+  });
+});
+
 describe("resilient temporal store", () => {
   const t = (id: string, createdAt: string): KnowledgeStateTransition =>
     ({ id, userId: "u", conceptId: "c", createdAt, after: { conceptId: "c", lastObservedAt: createdAt } }) as unknown as KnowledgeStateTransition;

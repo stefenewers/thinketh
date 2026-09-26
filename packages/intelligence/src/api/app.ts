@@ -89,7 +89,10 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     await next();
   });
 
-  app.get("/health", (c) => c.json({ ok: true, adapters: adapterHealth() }));
+  // ?probe=true makes one cheap real call per configured sponsor (authoritative live status).
+  app.get("/health", async (c) =>
+    c.json({ ok: true, adapters: adapterHealth(), ...(c.req.query("probe") === "true" ? { probe: await service.probeAdapters() } : {}) }),
+  );
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));
 

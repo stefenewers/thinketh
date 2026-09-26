@@ -29,7 +29,11 @@ import type {
   PersonaProfile,
   VoiceSession,
 } from "./contracts.ts";
-import { guarded, runInBackground } from "./adapters/guard.ts";
+import { guarded, runInBackground, withTimeout } from "./adapters/guard.ts";
+import { BackboardMemory } from "./adapters/memory.ts";
+import { ClaudeModel } from "./adapters/model/claude.ts";
+import { MongoSemanticStore } from "./adapters/semantic.ts";
+import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import { lexicalScore } from "./adapters/model/deterministic.ts";
 import type { AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
@@ -50,6 +54,7 @@ export class BadRequestError extends Error {}
 export { InvalidAnswerError };
 
 const MEMORY_TIMEOUT_MS = 2000;
+const PROBE_TIMEOUT_MS = 6000;
 const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
 
@@ -714,6 +719,36 @@ export class ThinkethService {
   // -------------------------------------------------------------------------
   // Admin
   // -------------------------------------------------------------------------
+
+  /**
+   * Make one cheap real call to every configured sponsor service. This is the
+   * authoritative "is it live?" answer; the plain /health only knows whether a
+   * key is configured.
+   */
+  async probeAdapters(): Promise<Record<string, { status: "live" | "error" | "not_configured"; detail: string; ms?: number }>> {
+    const a = this.adapters;
+    const probes: Record<string, (() => Promise<string>) | undefined> = {
+      tiger: a.temporal.tiger ? () => a.temporal.tiger!.probe() : undefined,
+      mongo: a.semantic instanceof MongoSemanticStore ? () => (a.semantic as MongoSemanticStore).probe() : undefined,
+      backboard: a.memory instanceof BackboardMemory ? () => (a.memory as BackboardMemory).probe(this.config.demoUserId) : undefined,
+      claude: a.model instanceof ClaudeModel ? () => (a.model as ClaudeModel).probe() : undefined,
+      elevenlabs: a.voice instanceof ElevenLabsVoice ? () => (a.voice as ElevenLabsVoice).probe() : undefined,
+      supabase: a.supabase ? () => a.supabase!.probe() : undefined,
+    };
+    const entries = await Promise.all(
+      Object.entries(probes).map(async ([name, probe]) => {
+        if (!probe) return [name, { status: "not_configured" as const, detail: "no credentials: using local fallback" }] as const;
+        const started = Date.now();
+        try {
+          const detail = await withTimeout(probe(), PROBE_TIMEOUT_MS, `${name} probe`);
+          return [name, { status: "live" as const, detail, ms: Date.now() - started }] as const;
+        } catch (err) {
+          return [name, { status: "error" as const, detail: (err instanceof Error ? err.message : String(err)).slice(0, 200), ms: Date.now() - started }] as const;
+        }
+      }),
+    );
+    return Object.fromEntries(entries);
+  }
 
   /** Defaults reflect what is actually configured; Supabase feature_flags rows override them. */
   async featureFlags(): Promise<Record<string, boolean>> {

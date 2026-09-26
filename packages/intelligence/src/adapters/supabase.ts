@@ -40,6 +40,12 @@ export class SupabaseBackend {
     return user.id;
   }
 
+  /** Cheap liveness check for /health?probe=true. */
+  async probe(): Promise<string> {
+    this.flagsCache = undefined;
+    return `${Object.keys(await this.featureFlags()).length} feature flags readable`;
+  }
+
   async featureFlags(): Promise<FeatureFlags> {
     if (this.flagsCache && Date.now() - this.flagsCache.at < FLAG_TTL_MS) return this.flagsCache.flags;
     const res = await ensureOk(await this.rest("/feature_flags?select=key,enabled"), "supabase feature_flags");

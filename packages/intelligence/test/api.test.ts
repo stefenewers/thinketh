@@ -130,6 +130,13 @@ describe("contract: remaining endpoints", () => {
     expect(voice.fallbackTranscript.length).toBeGreaterThan(2);
   });
 
+  it("GET /health?probe=true reports every adapter, not_configured when offline", async () => {
+    const res = await app.request("/health?probe=true");
+    const body = (await res.json()) as { probe: Record<string, { status: string }> };
+    expect(Object.keys(body.probe).sort()).toEqual(["backboard", "claude", "elevenlabs", "mongo", "supabase", "tiger"]);
+    for (const p of Object.values(body.probe)) expect(p.status).toBe("not_configured");
+  });
+
   it("GET /config", async () => {
     expect((await get(AppConfigResponseSchema, "/config")).flags.voice).toBe(false);
   });
