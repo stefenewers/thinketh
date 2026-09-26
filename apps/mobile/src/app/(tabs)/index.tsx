@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
   listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
   lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
-  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: color.canvas },
+  leadBand: { height: LEAD_BAND_H, overflow: "hidden", padding: space.l, backgroundColor: color.canvas },
   leadBody: { padding: space.xl, paddingTop: space.l },
   leadPill: {
     flexDirection: "row",

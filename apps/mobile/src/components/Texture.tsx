@@ -19,5 +19,6 @@ try {
 /** A decorative photographic texture: cover-fit, soft fade-in, hidden from screen readers. */
 export function Texture({ source, style }: { source: ImageSourcePropType; style?: StyleProp<ImageStyle> }) {
   if (ExpoImage) return <ExpoImage source={source} style={style} contentFit="cover" transition={200} accessible={false} />;
-  return <RNImage source={source} style={style} resizeMode="cover" accessible={false} />;
+  // iOS draws a cover-fit RN Image past its own bounds unless it clips, so always clip.
+  return <RNImage source={source} style={[style, { overflow: "hidden" }]} resizeMode="cover" accessible={false} />;
 }
