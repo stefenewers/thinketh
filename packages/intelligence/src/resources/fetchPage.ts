@@ -257,9 +257,6 @@ async function readPdf(url: URL, bytes: Uint8Array, fetchImpl: typeof fetch, opt
 // ---------------------------------------------------------------------------
 // YouTube: the transcript (captions), or the title and description when there are none.
 
-/** The YouTube web client's public API key (it ships in every youtube.com page). */
-const YOUTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
-
 export function youtubeId(url: URL): string | undefined {
   const host = url.hostname.toLowerCase().replace(/^(www|m|music)\./, "");
   let id: string | null | undefined;
@@ -282,7 +279,8 @@ async function readYouTube(id: string, fetchImpl: typeof fetch): Promise<Page> {
   let player: PlayerResponse;
   try {
     // The Android client's player response carries caption links that can be fetched directly.
-    const r = await fetchImpl(`https://www.youtube.com/youtubei/v1/player?key=${YOUTUBE_KEY}&prettyPrint=false`, {
+    // No API key needed: the player endpoint answers anonymous requests.
+    const r = await fetchImpl("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
       method: "POST",
       signal,
       headers: { "content-type": "application/json" },
