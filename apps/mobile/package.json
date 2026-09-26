@@ -41,7 +41,8 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "tsx": "^4.23.15",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
   },
   "scripts": {
     "start": "expo start",
@@ -53,7 +54,8 @@
     "check:golden": "tsx scripts/golden-loop.check.ts",
     "start:dev-client": "expo start --dev-client",
     "ios:device": "expo run:ios --device",
-    "build:dev:ios": "npx eas-cli@latest build --profile development --platform ios"
+    "build:dev:ios": "npx eas-cli@latest build --profile development --platform ios",
+    "test": "vitest run src/voice"
   },
   "private": true
 }

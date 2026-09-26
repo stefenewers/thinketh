@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { api } from "@/api";
@@ -6,6 +6,8 @@ import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
+import { improvedTodayIds } from "@/lib/knowledge";
+import { SHORT } from "@/mindprint/model";
 import { color, space } from "@/theme/tokens";
 import { loadLiveCatchUp } from "@/voice/availability";
 
@@ -21,8 +23,20 @@ export default function VoiceScreen() {
   const { data, error, loading, reload } = useApi(async () => {
     const today = await api.getTodayBrief();
     const session = await api.createVoiceSession();
-    return { session, heroId: today.brief.heroDevelopmentId };
+    const hero = today.developments.find((d) => d.id === today.brief.heroDevelopmentId);
+    return { session, heroId: today.brief.heroDevelopmentId, hero };
   }, []);
+  // The Mind for the Live Briefing Canvas. Optional: voice never waits on it.
+  const knowledge = useApi(() => api.getKnowledge(), []);
+  const mind = useMemo(
+    () => (knowledge.data ? { items: knowledge.data.items, edges: knowledge.data.edges, changedIds: improvedTodayIds(knowledge.data.items) } : null),
+    [knowledge.data],
+  );
+  const concepts = useMemo(
+    () => (knowledge.data?.items ?? []).map((i) => ({ id: i.concept.id, name: i.concept.name, short: SHORT[i.concept.id] })),
+    [knowledge.data],
+  );
+  const seedConcept = data?.hero?.conceptIds.find((id) => concepts.some((c) => c.id === id));
   const session = data?.session;
   const voiceReady = !!LiveCatchUp && session?.mode === "elevenlabs";
   const [phase, setPhase] = useState<Phase>("ready");
@@ -56,6 +70,9 @@ export default function VoiceScreen() {
         onFallback={() => showTranscript("Voice couldn't connect, so here is your catch-up as text.")}
         onEnded={() => setPhase("ended")}
         onShowTranscript={() => showTranscript(null)}
+        mind={mind}
+        concepts={concepts}
+        seed={{ conceptId: seedConcept, label: data?.hero?.title }}
       />
     );
   } else if (phase === "ended") {
