@@ -12,5 +12,8 @@ describe("Development short-explanation helpers", () => {
   it("keeps the first sentence", () => {
     expect(firstSentence("You follow AI agents. It bears on your goal.")).toBe("You follow AI agents.");
     expect(firstSentence("No full stop")).toBe("No full stop");
+    expect(firstSentence("Explain memory vs. context in your own words. Mastery rose.")).toBe("Explain memory vs. context in your own words.");
+    expect(firstSentence("Strong on tools, e.g. MCP servers. Weak elsewhere.")).toBe("Strong on tools, e.g. MCP servers.");
+    expect(firstSentence("Version 2.1 shipped. Then more.")).toBe("Version 2.1 shipped.");
   });
 });

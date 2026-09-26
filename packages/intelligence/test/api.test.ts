@@ -83,7 +83,11 @@ describe("contract: six core endpoints", () => {
     const mind = await get(KnowledgeResponseSchema, "/knowledge");
     expect(mind.userId).toBe(USER);
     expect(mind.items.length).toBe(9);
-    expect(mind.recentTransitions).toEqual([]);
+    // A fresh store still shows the seeded history, newest first, with no propagated side effects.
+    expect(mind.recentTransitions?.length).toBeGreaterThan(0);
+    expect(mind.recentTransitions?.every((x) => !x.observation.sourceRef?.startsWith("propagated:"))).toBe(true);
+    const times = mind.recentTransitions!.map((x) => x.createdAt);
+    expect(times).toEqual([...times].sort().reverse());
   });
 
   it("GET /knowledge/:conceptId/history", async () => {
@@ -97,6 +101,22 @@ describe("contract: remaining endpoints", () => {
   it("POST /developments/:id/feedback", async () => {
     const { transitions } = await post(FeedbackResponseSchema, `/developments/${FLAGSHIP_DEVELOPMENT_ID}/feedback`, { kind: "got_it" });
     expect(transitions[0]!.reason).toMatch(/Got it/);
+    // A self-report moves only the development's main concept, and counts once.
+    expect(transitions.length).toBe(1);
+    const again = await post(FeedbackResponseSchema, `/developments/${FLAGSHIP_DEVELOPMENT_ID}/feedback`, { kind: "got_it" });
+    expect(again.transitions).toEqual([]);
+  });
+
+  it("POST /ask answers the suggested questions on topic, without Claude", async () => {
+    // "What am I weakest on?" is about the knowledge state, so it's answered from it, not from sources.
+    const weak = await post(AskResponseSchema, "/ask", { question: "What am I weakest on?" });
+    const mind = await get(KnowledgeResponseSchema, "/knowledge");
+    const lowest = [...mind.items].sort((a, b) => a.state.mastery - b.state.mastery)[0]!.concept.id;
+    expect(weak.relatedConceptIds[0]).toBe(lowest);
+    expect(weak.answer).toMatch(/weakest areas/);
+    // An acronym finds its concept: "MCP" is Model Context Protocol.
+    const mcp = await post(AskResponseSchema, "/ask", { question: "Explain MCP based on what I already know." });
+    expect(mcp.relatedConceptIds[0]).toBe("mcp");
   });
 
   it("POST /ask returns an answer plus trust-layer sections", async () => {
@@ -178,6 +198,17 @@ describe("golden loop over HTTP", () => {
     const after = await get(BriefResponseSchema, "/brief/today");
     expect(after.understoodDevelopmentIds).toEqual([heroId]); // "1 of 6 understood"
     expect(after.recentTransitions?.[0]?.id).toBe(t.id);
+
+    // Answering the same question again is not new evidence: the estimate holds, and says why.
+    const { transition: again } = await post(DiagnosticAnswerResponseSchema, `/diagnostics/${encodeURIComponent(question.id)}/answer`, {
+      answer: question.choices![1]!,
+    });
+    expect(again.after.mastery).toBe(t.after.mastery);
+    expect(again.after.uncertainty).toBe(t.after.uncertainty);
+    expect(again.reason).toMatch(/already answered, so it isn't new evidence/);
+    // The next check is a different question, not the one just answered.
+    const next = await post(DiagnosticSelectResponseSchema, "/diagnostics/select", { developmentId: heroId });
+    expect(next.question.id).not.toBe(question.id);
 
   });
 

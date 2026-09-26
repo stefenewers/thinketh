@@ -4,6 +4,7 @@ import { Mark } from "@/components/Logo";
 import { Redirect, router } from "expo-router";
 import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
+import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { ActionTile, Avatar, ListCard, SectionHeader } from "@/components/system";
 import { HeroOrb } from "@/components/today/HeroOrb";
@@ -16,7 +17,7 @@ import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
-import { color, depth, font, glow, gutter, radius, space, warm } from "@/theme/tokens";
+import { color, depth, DEPTH_INK, font, glow, gutter, lift, radius, space, warm } from "@/theme/tokens";
 
 
 const SKIP_DEFINITIONS: Record<string, string> = {
@@ -158,7 +159,10 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
           />
           <ActionTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together" onPress={() => router.push("/playground")} />
+          {/* The Playground needs the Thinketh server: offline it isn't offered at all. */}
+          {PLAYGROUND_AVAILABLE ? (
+            <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together" onPress={() => router.push("/playground")} />
+          ) : null}
         </View>
 
         {rest.length ? (
@@ -235,7 +239,7 @@ function HomeTopBar() {
 function IntelligenceHero({ count, connected, lit }: { count: number; connected: number; lit: boolean }) {
   return (
     <View style={styles.hero}>
-      <View style={styles.heroOrb} pointerEvents="none">
+      <View style={[styles.heroOrb, { pointerEvents: "none" }]}>
         <HeroOrb satellites={connected} lit={lit} />
       </View>
       <T style={styles.kicker}>Your intelligence today</T>
@@ -278,7 +282,7 @@ const styles = StyleSheet.create({
   // A curated panel: gently lifted off the warm ground.
   panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: space.xl + space.xs },
-  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, height: 56, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: color.ink, ...depth.control, shadowOpacity: 0.16, shadowRadius: 18 },
+  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, height: 56, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: color.ink, ...lift(DEPTH_INK, 0.16, 18, 5, 5) },
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 16.5, lineHeight: 21, letterSpacing: -0.2, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.55, fontVariant: ["tabular-nums"] },
   listen: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },

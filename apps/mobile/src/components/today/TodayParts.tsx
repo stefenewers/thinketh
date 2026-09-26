@@ -8,13 +8,13 @@ import { T } from "@/components/Text";
 import { Texture } from "@/components/Texture";
 import { storyImageFor } from "@/content/imagery";
 import { significanceLabel } from "@/lib/knowledge";
-import { color, depth, font, gutter, space, warm } from "@/theme/tokens";
+import { color, depth, DEPTH_INK, font, gutter, lift, space, warm } from "@/theme/tokens";
 
 /** The warm light behind the top of Today: one soft peach bloom, upper right, fading to white. */
 export function TodayWash({ height = 620 }: { height?: number }) {
   const { width } = useWindowDimensions();
   return (
-    <View style={[StyleSheet.absoluteFill, { height }]} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { height, pointerEvents: "none" }]}>
       <Svg width={width} height={height}>
         <Defs>
           <RadialGradient id="todayWash" cx="82%" cy="20%" rx="78%" ry="52%">
@@ -50,11 +50,11 @@ export function TodayMetrics({ metrics, style }: { metrics: TodayMetric[]; style
           </View>
         );
         return m.onPress ? (
-          <Pressable key={m.label} onPress={m.onPress} accessibilityRole="button" accessibilityLabel={m.accessibilityLabel ?? `${m.value} ${m.label}`} style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}>
+          <Pressable key={m.label} onPress={m.onPress} accessibilityRole="button" accessibilityLabel={m.accessibilityLabel ?? `${m.value} ${m.label}`} style={({ pressed }) => [styles.metricCell, pressed && { opacity: 0.6 }]}>
             {cell}
           </Pressable>
         ) : (
-          <View key={m.label} style={{ flex: 1 }} accessible accessibilityLabel={m.accessibilityLabel ?? `${m.value} ${m.label} ${m.sub}`}>
+          <View key={m.label} style={styles.metricCell} accessible accessibilityLabel={m.accessibilityLabel ?? `${m.value} ${m.label} ${m.sub}`}>
             {cell}
           </View>
         );
@@ -99,7 +99,7 @@ export function LeadStory({ development, concepts, people, onPress }: { developm
       >
         {/* Exact pixel size: the iOS image fallback mis-sizes an image stretched by top/bottom edges. */}
         {h > 0 ? <Texture source={storyImageFor(development.conceptIds)} style={[styles.leadImage, { width: imageW, height: h }]} /> : null}
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
           <Svg width={w} height={Math.max(h, 1)}>
             <Defs>
               <LinearGradient id="leadPaper" x1="0" y1="0" x2="1" y2="0">
@@ -188,6 +188,8 @@ export function InsightItem({ development, category, meta, understood, last, onP
 
 const styles = StyleSheet.create({
   metrics: { flexDirection: "row" },
+  // Sized by content, not equal quarters, so a long label ("Connected") is never cut at phone width.
+  metricCell: { flexGrow: 1, flexShrink: 1, flexBasis: "auto" },
   metric: { paddingRight: 4, paddingVertical: 2 },
   metricDivided: { paddingLeft: 7, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(22,22,22,0.07)" },
   metricValue: { fontFamily: font.sansSemibold, fontSize: 28, lineHeight: 32, letterSpacing: -0.8, color: color.ink, fontVariant: ["tabular-nums"] },
@@ -208,7 +210,7 @@ const styles = StyleSheet.create({
   connected: { flexDirection: "row", alignItems: "center", gap: space.s, flexShrink: 1 },
   person: { backgroundColor: color.canvas, alignItems: "center", justifyContent: "center" },
   connectedText: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 17, color: color.ink, flexShrink: 1 },
-  leadArrow: { width: 48, height: 48, borderRadius: 24, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", ...depth.control, shadowOpacity: 0.24 },
+  leadArrow: { width: 48, height: 48, borderRadius: 24, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", ...lift(DEPTH_INK, 0.24, 14, 5, 5) },
 
   insight: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },
   insightThumb: { width: 76, height: 68, borderRadius: 14, alignSelf: "center", backgroundColor: color.surfaceMuted },

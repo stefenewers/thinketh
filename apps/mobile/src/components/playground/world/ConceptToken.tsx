@@ -45,7 +45,7 @@ export function ConceptToken({ concept, to, tone, learnerTone, paused, reduced, 
 
   return (
     <>
-      <Animated.View pointerEvents="none" style={[styles.floorShadow, shadow]} />
+      <Animated.View style={[styles.floorShadow, { pointerEvents: "none" }, shadow]} />
       <Animated.View style={[styles.wrap, place]}>
         <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`The idea: ${concept.label}. ${caption}. Show the reason and evidence`} style={[styles.token, { borderColor: border, backgroundColor: bg, borderStyle: s === "offered" || s === "shared" ? "dashed" : "solid" }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -78,7 +78,7 @@ export function CheckpointGate({ at, state, paused, reduced }: { at: XY; state: 
   const ink = state === "not_yet" ? color.ink3 : color.ink;
   const word = state === "grading" ? "GRADING" : state === "verified" ? "PASSED" : state === "not_yet" ? "NOT YET" : "CHECK";
   return (
-    <View pointerEvents="none" style={{ position: "absolute", left: at.x - 14, top: at.y - 40, width: 28, height: 44, alignItems: "center" }}>
+    <View style={{ position: "absolute", pointerEvents: "none", left: at.x - 14, top: at.y - 40, width: 28, height: 44, alignItems: "center" }}>
       <Animated.View style={[{ flexDirection: "row", justifyContent: "space-between", width: 28, height: 40 }, fade]}>
         <View style={[styles.post, { backgroundColor: ink }]} />
         <View style={[styles.bar, { backgroundColor: ink }]} />
@@ -94,7 +94,7 @@ export function CheckpointGate({ at, state, paused, reduced }: { at: XY; state: 
 
 /** The learner's Mind on the floor: dashed while unproven, solid once verified. */
 export function MindRing({ at, tone, solid }: { at: XY; tone: string; solid: boolean }) {
-  return <View pointerEvents="none" style={[styles.ring, { left: at.x - 38, top: at.y - 9, borderColor: tone, borderStyle: solid ? "solid" : "dashed", backgroundColor: solid ? `${tone}14` : "transparent" }]} />;
+  return <View style={[styles.ring, { pointerEvents: "none", left: at.x - 38, top: at.y - 9, borderColor: tone, borderStyle: solid ? "solid" : "dashed", backgroundColor: solid ? `${tone}14` : "transparent" }]} />;
 }
 
 const styles = StyleSheet.create({

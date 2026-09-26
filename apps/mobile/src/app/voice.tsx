@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { api } from "@/api";
 import { Mark } from "@/components/Logo";
 import { TodayWash } from "@/components/today/TodayParts";
@@ -122,7 +123,7 @@ export default function VoiceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Catch me up" onClose={() => router.back()} topInset />
+      <ModalHeader title="Catch me up" onClose={() => goBack()} topInset />
       {!session || error ? (
         body
       ) : (
@@ -161,7 +162,7 @@ function Transcript({ lines, heroId, notice }: { lines: string[]; heroId: string
         ) : (
           <>
             <CheckUnderstanding heroId={heroId} />
-            <Button kind="quiet" label="Back to today" style={{ alignSelf: "center" }} onPress={() => router.back()} />
+            <Button kind="quiet" label="Back to today" style={{ alignSelf: "center" }} onPress={() => goBack()} />
           </>
         )}
       </View>

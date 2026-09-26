@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "re
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Development, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
 import { api } from "@/api";
+import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
@@ -97,7 +98,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
         onBack={selected ? () => select(null) : undefined}
         right={
           <>
-            <IconButton icon="people" accessibilityLabel="Learn together in the Playground" onPress={() => router.push("/playground")} />
+            {PLAYGROUND_AVAILABLE ? <IconButton icon="people" accessibilityLabel="Learn together in the Playground" onPress={() => router.push("/playground")} /> : null}
             <IconButton icon="search" accessibilityLabel="Ask about your Mind" onPress={() => router.push("/ask")} />
           </>
         }

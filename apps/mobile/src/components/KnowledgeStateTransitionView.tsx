@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import type { Concept, KnowledgeStateTransition } from "@thinketh/contracts";
 import { color, font, motion, space } from "@/theme/tokens";
 import { evidenceLabel, fmt2, masteryLabel, misconceptionLabel, observationLabel } from "@/lib/knowledge";
+import { firstSentence } from "@/lib/briefText";
 import { useReducedMotion } from "@/lib/hooks";
 import { T } from "./Text";
 
@@ -28,6 +29,8 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   const { before, after } = transition;
   const name = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
   const improved = after.mastery > before.mastery;
+  // A repeated question is recorded but isn't new evidence: nothing moved.
+  const unchanged = after.mastery === before.mastery && after.uncertainty === before.uncertainty;
 
   const levelBefore = masteryLabel(before.mastery);
   const levelAfter = masteryLabel(after.mastery);
@@ -36,7 +39,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   const resolved = before.misconceptionFlags.filter((f) => !after.misconceptionFlags.includes(f));
   const flagged = after.misconceptionFlags.filter((f) => !before.misconceptionFlags.includes(f));
   const strengthened = transition.propagatedChanges.filter((c) => c.deltaMastery > 0);
-  const why = transition.reason.split(/(?<=\.)\s/)[0] ?? transition.reason;
+  const why = firstSentence(transition.reason);
 
   useEffect(() => {
     if (reduced) {
@@ -76,7 +79,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
     <View accessible accessibilityLabel={summary} accessibilityLiveRegion="polite">
       <T variant="label" tone={improved ? "coral" : "ink3"}>
         {/* Proportional to the evidence: one answer strengthens the estimate, it doesn't prove mastery. */}
-        {improved ? "Your Mind has stronger evidence." : "Thinketh adjusted its model."}
+        {improved ? "Your Mind has stronger evidence." : unchanged ? "Thinketh kept its estimate." : "Thinketh adjusted its model."}
       </T>
 
       {/* The concept, with a single coral knowledge trace. */}
@@ -103,7 +106,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
       <Animated.View style={[{ marginTop: space.m }, rise(level)]}>
         {levelBefore !== levelAfter ? (
           <T variant="section">
-            {levelBefore} <T variant="section" style={{ color: color.ink3 }}>→</T> <T variant="section" tone="coral">{levelAfter}</T>
+            {levelBefore} <T variant="section" style={{ color: color.ink3 }}>→</T> <T variant="section" tone={improved ? "coral" : undefined}>{levelAfter}</T>
           </T>
         ) : (
           <T variant="section">
@@ -137,7 +140,7 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
             {strengthened.map((c) => name(c.conceptId)).join(" · ")}
           </Fact>
         ) : null}
-        <Fact label="Evidence added">
+        <Fact label={unchanged ? "Not new evidence" : "Evidence added"}>
           {observationLabel[transition.observation.kind]}. {why.replace(/^Updated because you /i, "You ")}
         </Fact>
 

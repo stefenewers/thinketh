@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { api } from "@/api";
+import { rejectedInputReason } from "@/api/http";
 import { T } from "@/components/Text";
 import { Button, Gutter, ModalHeader } from "@/components/ui";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -24,17 +26,16 @@ export default function AddResource() {
       const r = await api.addResource(withScheme);
       router.replace({ pathname: "/resource/[id]", params: { id: r.id } });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "";
       // The API's own message is written for people (e.g. "Only http and https links can be read.").
-      const reason = /->\s*400:\s*(?:url: )?(.+)$/.exec(message)?.[1];
-      setError(reason ?? "Thinketh couldn't save that link. Check it and try again.");
+      const reason = rejectedInputReason(e);
+      setError(reason ? capitalize(reason) : "Thinketh couldn't save that link. Check it and try again.");
       setSaving(false);
     }
   };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ModalHeader title="Add a resource" onClose={() => router.back()} />
+      <ModalHeader title="Add a resource" onClose={() => goBack("/library")} />
       <Gutter style={{ paddingTop: space.xl }}>
         <T style={styles.kicker}>Save to learn</T>
         <T variant="display" accessibilityRole="header" style={{ fontSize: 26, lineHeight: 32, letterSpacing: -0.7, marginTop: space.s }}>
@@ -55,6 +56,7 @@ export default function AddResource() {
           autoCorrect={false}
           autoFocus
           keyboardType="url"
+          maxLength={2000}
           textContentType="URL"
           returnKeyType="go"
           onSubmitEditing={save}
@@ -93,3 +95,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

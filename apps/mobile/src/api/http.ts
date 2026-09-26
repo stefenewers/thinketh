@@ -21,7 +21,23 @@ const TIMEOUT_MS = 8000;
 /** Ask, Visualize and Make it stick may be written by Claude; the server falls back well before this. */
 const GENERATIVE_TIMEOUT_MS = 15000;
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+/** The server rejected the input itself (too long, not a link…): the live answer, not an outage. */
+const REJECTED_INPUT = new Set([400, 413, 422]);
+
+/** The server's own, human-written reason for rejecting input, if that's what happened. */
+export function rejectedInputReason(err: unknown): string | undefined {
+  if (!(err instanceof ApiError) || !err.status || !REJECTED_INPUT.has(err.status)) return undefined;
+  return /->\s*\d+:\s*(?:\w+: )?(.+)$/.exec(err.message)?.[1];
+}
 
 /** Shared app key the demo API requires (x-thinketh-app-key). Ships in the bundle: a gate, not a user credential. */
 const APP_KEY = process.env.EXPO_PUBLIC_THINKETH_APP_KEY;
@@ -58,7 +74,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         const message = (json as { error?: { message?: string } } | null)?.error?.message;
-        throw new ApiError(`${method} ${path} -> ${res.status}${message ? `: ${message}` : ""}`);
+        throw new ApiError(`${method} ${path} -> ${res.status}${message ? `: ${message}` : ""}`, res.status);
       }
       const parsed = schema.safeParse(json);
       if (!parsed.success) {
@@ -67,7 +83,9 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
       return parsed.data;
     } catch (err) {
       console.warn(`[thinketh-api] ${method} ${path} failed`, err);
-      if (fallback) return fallbackCall(fallback);
+      // Seeded data stands in for an unreachable server, never for the server saying "no".
+      const rejected = err instanceof ApiError && !!err.status && REJECTED_INPUT.has(err.status);
+      if (fallback && !rejected) return fallbackCall(fallback);
       throw err;
     } finally {
       clearTimeout(timer);

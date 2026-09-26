@@ -45,7 +45,7 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
   const shown = SATELLITES.slice(0, Math.max(4, Math.min(6, satellites)));
 
   return (
-    <View style={styles.box} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants">
+    <View style={[styles.box, { pointerEvents: "none" }]} accessible={false} importantForAccessibility="no-hide-descendants">
       <Svg width={S} height={S} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="orbGlow" cx="50%" cy="50%" r="50%">
@@ -83,7 +83,7 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
             </RadialGradient>
           </Defs>
           {ORBITS.map((o, i) => (
-            <Ellipse key={i} cx={C.x} cy={C.y} rx={o.rx} ry={o.ry} rotation={o.tilt} origin={`${C.x}, ${C.y}`} fill="none" stroke={warm.orbit} strokeOpacity={o.opacity} strokeWidth={0.9} />
+            <Ellipse key={i} cx={C.x} cy={C.y} rx={o.rx} ry={o.ry} transform={`rotate(${o.tilt} ${C.x} ${C.y})`} fill="none" stroke={warm.orbit} strokeOpacity={o.opacity} strokeWidth={0.9} />
           ))}
           {shown.map((s, i) => {
             const p = { x: C.x + s.dx, y: C.y + s.dy };

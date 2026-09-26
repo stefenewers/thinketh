@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { closeAll, goBack } from "@/lib/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import type { Concept, DiagnosticAnswerResponse, DiagnosticQuestion, DiagnosticSelectResponse } from "@thinketh/contracts";
 import { api } from "@/api";
+import { UnknownQuestionError } from "@/api/client";
+import { rejectedInputReason } from "@/api/http";
 import { Icon } from "@/components/Icon";
 import { KnowledgeStateTransitionView } from "@/components/KnowledgeStateTransitionView";
 import { T } from "@/components/Text";
@@ -32,7 +35,7 @@ export default function DiagnosticScreen() {
     <View style={{ flex: 1, backgroundColor: color.ground, paddingTop: insets.top }}>
       <View style={styles.header}>
         <T variant="meta">Check my understanding</T>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8} style={styles.close}>
+        <Pressable onPress={() => goBack(developmentId ? { pathname: "/development/[id]", params: { id: developmentId } } : "/")} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8} style={styles.close}>
           <Icon name="close" size={20} color={color.ink} />
         </Pressable>
       </View>
@@ -41,7 +44,7 @@ export default function DiagnosticScreen() {
       ) : error || !data ? (
         <ErrorState onRetry={reload} />
       ) : (
-        <Diagnostic question={data.picked.question} selection={data.picked.selection} concepts={data.concepts} developmentId={developmentId} />
+        <Diagnostic key={data.picked.question.id} question={data.picked.question} selection={data.picked.selection} concepts={data.concepts} developmentId={developmentId} onStale={reload} />
       )}
     </View>
   );
@@ -52,8 +55,11 @@ function Diagnostic({
   selection,
   concepts,
   developmentId,
+  onStale,
 }: {
   developmentId?: string;
+  /** The question can no longer be graded (the live API dropped mid-check): choose one that can. */
+  onStale: () => void;
   question: DiagnosticQuestion;
   selection: DiagnosticSelectResponse["selection"];
   concepts: Concept[];
@@ -63,7 +69,7 @@ function Diagnostic({
   const [whyOpen, setWhyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<DiagnosticAnswerResponse | null>(null);
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<string | false>(false);
   const [settled, setSettled] = useState(false);
   const concept = concepts.find((c) => c.id === question.conceptId);
   const answer = question.type === "multiple_choice" ? selected : text.trim() || null;
@@ -80,8 +86,9 @@ function Diagnostic({
       setResult(res);
       // So the development page can point at the change when you come back.
       if (developmentId) recordCheck(developmentId, question.conceptId, res);
-    } catch {
-      setSubmitError(true);
+    } catch (e) {
+      if (e instanceof UnknownQuestionError) onStale();
+      else setSubmitError(rejectedInputReason(e) ?? "Couldn't submit. Your answer is kept; try again.");
     } finally {
       setSubmitting(false);
     }
@@ -147,6 +154,7 @@ function Diagnostic({
               editable={!result}
               multiline
               placeholder="Explain it in your own words"
+              maxLength={2000}
               placeholderTextColor={color.ink3}
               style={styles.input}
             />
@@ -158,7 +166,7 @@ function Diagnostic({
             <Button label="Submit" onPress={submit} disabled={!answer} loading={submitting} />
             {submitError ? (
               <T variant="support" style={{ marginTop: space.m, textAlign: "center" }}>
-                Couldn&apos;t submit. Your answer is kept; try again.
+                {submitError}
               </T>
             ) : null}
           </View>
@@ -207,7 +215,7 @@ function Diagnostic({
               kind="quiet"
               label="Back to today"
               style={{ alignSelf: "center" }}
-              onPress={() => (router.canDismiss() ? router.dismissAll() : router.replace("/"))}
+              onPress={closeAll}
             />
           </Gutter>
         </>

@@ -15,6 +15,8 @@ export const DEMO_PARTNER_NAME = "Nadani";
 
 export const agentMemoryStoryline = {
   id: "agent-memory",
+  // The same storyline as the mock fixtures and the API seed name it.
+  aliases: ["story-agent-memory", "story-context-to-persistent-agents"],
   title: "Persistent Agent Memory",
   subtitle: "How the idea has changed over time",
   conceptId: "agent-memory",
@@ -43,6 +45,14 @@ export const agentMemoryStoryline = {
     },
   ],
 };
+
+export type StorylineContent = typeof agentMemoryStoryline;
+
+/** The storyline for a route or development id, or undefined when Thinketh has none by that id. */
+export function storylineFor(id: string | undefined): StorylineContent | undefined {
+  const story = agentMemoryStoryline;
+  return id && (id === story.id || story.aliases.includes(id)) ? story : undefined;
+}
 
 export type Recommendation = { title: string; why: string; conceptId?: string; developmentId?: string; storylineId?: string };
 

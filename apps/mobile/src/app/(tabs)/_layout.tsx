@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { T } from "@/components/Text";
-import { color, depth, font, space } from "@/theme/tokens";
+import { color, DEPTH_INK, font, lift, space } from "@/theme/tokens";
 
 // Four jobs. Today: what matters to me now. Learn: what to read, save or explore next (the
 // `library` route, kept so existing links work). Mind: what I understand and why Thinketh thinks
@@ -61,9 +61,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(22,22,22,0.06)",
     // A faint upward lift so the bar sits on the page like the cards do.
-    ...depth.card,
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: -4 },
+    ...lift(DEPTH_INK, 0.05, 24, -4, 2),
   },
   tab: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingTop: space.s, minHeight: 52 },
   label: { fontSize: 11, lineHeight: 14, marginTop: 4, letterSpacing: 0.1 },
