@@ -18,6 +18,7 @@ export function offlineConfig(): ThinkethConfig {
     readerFallback: null,
     supabase: { url: undefined, anonKey: undefined, serviceRoleKey: undefined },
     elevenlabs: { apiKey: undefined, agentId: undefined },
+    muse: { ...c.muse, apiKey: undefined },
   };
 }
 

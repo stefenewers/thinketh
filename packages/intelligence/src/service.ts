@@ -10,6 +10,7 @@ import type {
   BriefResponse,
   Claim,
   Concept,
+  ConceptEdge,
   ConceptHistoryResponse,
   DeltaExplanation,
   Development,
@@ -118,13 +119,19 @@ export class ThinkethService {
   }
 
   profileFor(userId: string): PersonaProfile {
-    return { ...this.seed.profile, id: userId };
+    const persona = this.seed.personas[userId];
+    return { ...this.seed.profile, id: userId, ...(persona ? { displayName: persona.displayName } : {}) };
+  }
+
+  /** Seeded Playground personas start from their own baseline; everyone else from the demo persona's. */
+  private baselineFor(userId: string): KnowledgeState[] {
+    return this.seed.personas[userId]?.baselineStates ?? this.seed.baselineStates;
   }
 
   /** Baseline persona state (new users start from the demo persona) overlaid with temporal history. */
   async statesFor(userId: string): Promise<Map<string, KnowledgeState>> {
     const states = new Map<string, KnowledgeState>();
-    for (const s of this.seed.baselineStates) states.set(s.conceptId, { ...s, userId });
+    for (const s of this.baselineFor(userId)) states.set(s.conceptId, { ...s, userId });
     for (const c of this.concepts.values()) {
       if (!states.has(c.id)) {
         states.set(c.id, {
@@ -424,7 +431,7 @@ export class ThinkethService {
     const { conceptId, conceptName: _n, ...debug } = top;
 
     const answered = await this.answeredQuestionIds(userId);
-    let item = pickItem(conceptId, [...this.diagnostics.values()], states.get(conceptId), answered);
+    let item = pickItem(conceptId, [...this.diagnostics.values()].filter((q) => !q.playgroundOnly), states.get(conceptId), answered);
     if (!item) item = await this.generateDiagnostic(userId, conceptId, states, contextDevelopment);
 
     const explanation = explainSelection(top, states.get(conceptId));
@@ -514,7 +521,7 @@ export class ThinkethService {
   /** The persona's seeded prior history, re-addressed to this user. */
   private seedHistory(userId: string, conceptId?: string): KnowledgeStateTransition[] {
     const readdress = (s: KnowledgeState) => ({ ...s, userId });
-    return this.seed.history
+    return (this.seed.personas[userId]?.history ?? this.seed.history)
       .filter((t) => !conceptId || t.conceptId === conceptId)
       .map((t) => ({ ...t, userId, before: readdress(t.before), after: readdress(t.after), observation: { ...t.observation, userId } }));
   }
@@ -1025,6 +1032,49 @@ export class ThinkethService {
       const conceptId = out.conceptId ?? r.newToYou.find((i) => i.conceptId)?.conceptId;
       return { resourceId: id, sections: out.sections, skipped: out.skipped, ...(conceptId ? { conceptId } : {}), generatedBy: "deterministic" };
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Playground support (read-only views; state changes only via answerDiagnostic)
+  // -------------------------------------------------------------------------
+
+  conceptList(): Concept[] {
+    return [...this.concepts.values()];
+  }
+
+  conceptEdges(): ConceptEdge[] {
+    return this.seed.edges;
+  }
+
+  isPersona(userId: string): boolean {
+    return !!this.seed.personas[userId];
+  }
+
+  /** Public prompt of a diagnostic (the answer key stays server-side). */
+  diagnosticPrompt(questionId: string): { conceptId: string; prompt: string } | undefined {
+    const q = this.diagnostics.get(questionId);
+    return q ? { conceptId: q.conceptId, prompt: q.prompt } : undefined;
+  }
+
+  /** Concepts with at least one correct diagnostic in the learner's recorded history. */
+  async verifiedConceptIds(userId: string): Promise<Set<string>> {
+    const recent = await this.adapters.temporal.getRecentTransitions(userId, 500);
+    const out = new Set<string>();
+    for (const t of [...recent, ...this.seedHistory(userId)]) if (t.observation.kind === "diagnostic_correct") out.add(t.conceptId);
+    return out;
+  }
+
+  /** A short, sourced lesson on one concept for two people at once (shared gaps). */
+  conceptLesson(conceptId: string): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
+    const concept = this.concepts.get(conceptId);
+    if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
+    const claims = [...this.claims.values()].filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
+    const source = claims.flatMap((c) => c.sourceIds).map((id) => this.sources.get(id)).find(Boolean);
+    const sections = [
+      { heading: "The idea", body: concept.description },
+      ...claims.slice(0, 2).map((c, i) => ({ heading: i === 0 ? "What the evidence says" : "And", body: c.text })),
+    ];
+    return { sections, ...(source ? { resourceTitle: source.title } : {}) };
   }
 
   async reset(userId: string): Promise<void> {

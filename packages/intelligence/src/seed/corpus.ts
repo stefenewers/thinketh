@@ -9,6 +9,7 @@ import type { Claim, Concept, ConceptEdge, Development, KnowledgeState, Source, 
 import { DAY_MS } from "../util.ts";
 import { DIAGNOSTICS } from "./diagnostics.ts";
 import { replayHistory } from "./history.ts";
+import { buildPersonas, PLAYGROUND_DIAGNOSTICS } from "./personas.ts";
 import { DIAGRAMS, MEMORY_AIDS } from "./learning.ts";
 import type { DevelopmentMeta, SeedCorpus } from "./types.ts";
 
@@ -612,7 +613,8 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
     storylines,
     baselineStates,
     history: [...agentMemory.transitions, ...evaluators.transitions],
-    diagnostics: DIAGNOSTICS,
+    diagnostics: [...DIAGNOSTICS, ...PLAYGROUND_DIAGNOSTICS],
+    personas: buildPersonas(now, CONCEPTS),
     memories: [
       {
         id: "mem-pref-analogies",
