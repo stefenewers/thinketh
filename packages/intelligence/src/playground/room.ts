@@ -143,7 +143,8 @@ export class PlaygroundService {
   async compare(roomId: string, userId: string): Promise<PlaygroundRoom> {
     const room = this.forParticipant(roomId, userId);
     if (room.participants.length < 2) throw new BadRequestError("Invite someone first.");
-    this.emit(room, "compare_started", "muse", "Muse is comparing both Minds.");
+    // Thinketh computes the comparison from evidence; Muse only conducts what follows.
+    this.emit(room, "compare_started", "thinketh", "Thinketh is comparing the evidence in both Minds.");
     room.snapshots = await Promise.all(room.participants.map((p) => this.snapshot(p)));
     const [a, b] = room.snapshots as [MindSnapshot, MindSnapshot];
     const importance = Object.fromEntries(this.svc.conceptList().map((c) => [c.id, c.importance]));
@@ -157,7 +158,8 @@ export class PlaygroundService {
     room.completedTeachings = [];
     room.scene = "overview";
     const d = room.delta;
-    this.emit(room, "delta_ready", "thinketh", "Three useful differences in your current evidence.", {
+    const n = d.aTeachesB.length + d.bTeachesA.length + d.sharedGaps.length;
+    this.emit(room, "delta_ready", "thinketh", `Thinketh found ${n} useful ${n === 1 ? "difference" : "differences"} in your evidence.`, {
       aTeachesB: d.aTeachesB.length,
       bTeachesA: d.bTeachesA.length,
       sharedGaps: d.sharedGaps.length,
@@ -402,7 +404,7 @@ export class PlaygroundService {
     this.markDone(room, (i) => i.type === "resource");
     room.scene = "resource";
     room.spotlight = null;
-    this.emit(room, "resource_introduced", actor, "Same source. Different delta.", { by });
+    this.emit(room, "resource_introduced", actor, "One source, read against both Minds.", { by });
     await this.refreshResource(room);
   }
 
