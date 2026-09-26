@@ -101,6 +101,8 @@ export type DeltaPhrasingContext = {
  */
 export type AskContext = {
   question: string;
+  /** How much to explain. Presentation only. */
+  mode?: "quick" | "teach" | "deep";
   profile: PersonaProfile;
   memories: MemoryItem[];
   sourcesSay: string[];

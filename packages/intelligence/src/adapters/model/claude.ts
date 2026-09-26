@@ -352,12 +352,18 @@ Keep the same meaning and the same number of items in every array. Do not add fa
 
   async ask(ctx: AskContext): Promise<AskResult> {
     if (ctx.sourcesSay.length === 0) return { thinkethInfers: [] };
+    const mode = ctx.mode ?? "quick";
+    const shape = {
+      quick: "1-2 short sentences that answer the question directly.",
+      teach: "3-5 sentences that start from what this user already understands, explain only what is new, give one concrete example, and connect it to concepts they know.",
+      deep: "4-7 sentences covering mechanisms, caveats, competing interpretations where the inputs support them, which claims come from which kind of source, and what remains explicitly uncertain.",
+    }[mode];
     const out = await this.structured(
       AskWire,
-      `Write the "Thinketh infers" layer of an answer to the user's question: 1-3 short sentences of inference that connect what the sources say to what this user already understands and what remains uncertain.
+      `Write the "Thinketh infers" layer of an answer to the user's question (mode: ${mode}): ${shape} Each array item is one sentence.
 - Build only on sourcesSay, youAlreadyUnderstand and stillUncertain. Don't restate them; say what follows from them.
 - Follow the user's explanation preferences and memories.
-- No new factual claims beyond the inputs.`,
+- No new factual claims beyond the inputs. Never state numeric mastery or uncertainty.`,
       {
         question: ctx.question,
         sourcesSay: ctx.sourcesSay,
@@ -368,7 +374,7 @@ Keep the same meaning and the same number of items in every array. Do not add fa
         memories: ctx.memories.map((m) => m.content),
       },
     );
-    const infers = out.thinkethInfers.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    const infers = out.thinkethInfers.map((s) => s.trim()).filter(Boolean).slice(0, mode === "quick" ? 2 : mode === "teach" ? 5 : 7);
     if (infers.length === 0) throw new Error("Claude returned no inferences");
     return { thinkethInfers: infers };
   }

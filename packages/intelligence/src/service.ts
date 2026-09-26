@@ -619,7 +619,7 @@ export class ThinkethService {
     return r.value;
   }
 
-  async ask(userId: string, input: { question: string; developmentId?: string }): Promise<AskResponse> {
+  async ask(userId: string, input: { question: string; developmentId?: string; mode?: "quick" | "teach" | "deep" }): Promise<AskResponse> {
     const { semantic, localSemantic } = this.adapters;
     const [memories, hits] = await Promise.all([
       this.recall(userId, input.question),
@@ -694,6 +694,7 @@ export class ThinkethService {
       const shiftDev = citedDevelopmentIds.map((id) => this.meta[id]?.mentalModelShift).find((m) => m?.after);
       const ctx: AskContext = {
         question: input.question,
+        mode: input.mode ?? "quick",
         profile: this.profileFor(userId),
         memories,
         sourcesSay: said.map((c) => c.text),

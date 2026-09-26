@@ -16,18 +16,26 @@ const SUGGESTED = [
   "Explain MCP based on what I already know.",
 ];
 
+type AskMode = "quick" | "teach" | "deep";
+const MODES: { key: AskMode; label: string; loading: string }[] = [
+  { key: "quick", label: "Quick answer", loading: "Grounding this in your sources…" },
+  { key: "teach", label: "Teach me", loading: "Finding the actual delta for you…" },
+  { key: "deep", label: "Go deep", loading: "Comparing sources and what's still uncertain…" },
+];
+
 export default function Ask() {
-  const { q, dev } = useLocalSearchParams<{ q?: string; dev?: string }>();
+  const { q, dev, mode: modeParam } = useLocalSearchParams<{ q?: string; dev?: string; mode?: AskMode }>();
+  const [mode, setMode] = useState<AskMode>("quick");
   const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<(AskResponse & { question: string }) | null>(null);
+  const [answer, setAnswer] = useState<(AskResponse & { question: string; developmentId?: string }) | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   // Names for related concepts.
   const lookup = useApi(async () => (await api.getKnowledge()).items.map((i) => i.concept), []);
 
-  const ask = async (question: string, developmentId?: string) => {
+  const ask = async (question: string, developmentId?: string, asMode: AskMode = mode) => {
     const text = question.trim();
     if (!text || asking) return;
     setInput("");
@@ -35,7 +43,7 @@ export default function Ask() {
     setFailed(null);
     setAnswer(null);
     try {
-      setAnswer({ ...(await api.ask({ question: text, developmentId })), question: text });
+      setAnswer({ ...(await api.ask({ question: text, ...(developmentId ? { developmentId } : {}), mode: asMode })), question: text, developmentId });
     } catch {
       setFailed(text);
     } finally {
@@ -47,9 +55,11 @@ export default function Ask() {
   // A question handed over from another screen (e.g. "Explain deeper").
   useEffect(() => {
     if (q) {
+      const m = modeParam && MODES.some((x) => x.key === modeParam) ? modeParam : mode;
       // eslint-disable-next-line react-hooks/set-state-in-effect -- responding to a navigation param, once
-      ask(q, dev);
-      router.setParams({ q: undefined, dev: undefined });
+      setMode(m);
+      ask(q, dev, m);
+      router.setParams({ q: undefined, dev: undefined, mode: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -74,10 +84,30 @@ export default function Ask() {
           <T variant="support" style={{ marginTop: space.s }}>
             Answers grounded in your sources and in what you already understand.
           </T>
+          <View style={styles.modes} accessibilityRole="radiogroup">
+            {MODES.map((m) => (
+              <Pressable
+                key={m.key}
+                onPress={() => {
+                  if (m.key === mode) return;
+                  setMode(m.key);
+                  if (answer && !asking) ask(answer.question, answer.developmentId, m.key);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: mode === m.key }}
+                hitSlop={8}
+                style={[styles.mode, mode === m.key && styles.modeOn]}
+              >
+                <T variant="meta" style={{ color: mode === m.key ? color.ink : color.ink3 }}>
+                  {m.label}
+                </T>
+              </Pressable>
+            ))}
+          </View>
         </Gutter>
 
         {asking ? (
-          <LoadingState message="Checking your sources and your knowledge state…" />
+          <LoadingState message={MODES.find((m) => m.key === mode)!.loading} />
         ) : answer ? (
           <View style={{ marginTop: space.xxl }}>
             <Gutter>
@@ -217,6 +247,9 @@ function AnswerBlock({ label, lines, rule, muted }: { label: string; lines: stri
 }
 
 const styles = StyleSheet.create({
+  modes: { flexDirection: "row", gap: space.l, marginTop: space.l },
+  mode: { minHeight: 32, justifyContent: "center", borderBottomWidth: 1.5, borderBottomColor: "transparent" },
+  modeOn: { borderBottomColor: color.ink },
   memory: { padding: space.l, backgroundColor: color.fog, borderRadius: radius.surface },
   inlineLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   composer: {

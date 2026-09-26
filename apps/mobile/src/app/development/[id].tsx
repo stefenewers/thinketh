@@ -163,6 +163,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
               params: {
                 q: `Explain what changed in ${(primaryConcept?.name ?? d.title).toLowerCase()}, based on what I already know.`,
                 dev: d.id,
+                mode: "teach",
               },
             })
           }
