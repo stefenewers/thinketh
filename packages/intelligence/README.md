@@ -58,7 +58,7 @@ No stack traces are ever returned.
 | – | `POST /developments/:id/feedback` | `FeedbackResponse` (Got it / I already knew this / Explain deeper / saved / viewed) |
 | – | `GET /config` | `AppConfigResponse`: feature flags. Hide anything that is `false`. |
 | – | `POST /demo/reset` | `{ ok: true }`: resets the current user to the seeded persona (for rehearsals). |
-| – | `GET /health` | Adapter status (live vs fallback, last error). |
+| – | `GET /health` | Adapter `status` (`live` / `degraded` / `unverified` / `fallback`) and last error. `?probe=1` checks sponsors first. |
 
 ### Examples (real responses from the seeded demo, trimmed with …)
 
@@ -259,5 +259,11 @@ always reads as "today".
 - **Supabase**: `supabase db push` applies `supabase/migrations/…_thinketh_init.sql`: profiles (RLS: own row), feature_flags (read: authenticated), integration_ids (service role only). Deploy the API with `supabase functions deploy api` and set secrets with `supabase secrets set --env-file .env`.
 - **Tiger Data**: `npm run seed:tiger --workspace @thinketh/intelligence` applies `infra/tiger.sql` (4 hypertables, plus a `daily_concept_mastery` continuous aggregate) and seeds world-state events.
 - **MongoDB Atlas**: `npm run seed:mongo --workspace @thinketh/intelligence` upserts the corpus and creates the Search / Vector Search indexes (see `infra/mongo.md`).
-- **Backboard**: set `BACKBOARD_API_KEY`. One assistant is created per user and its id is stored in Supabase `integration_ids` (or pin one with `BACKBOARD_ASSISTANT_ID`). Thinketh writes preferences, misconceptions and questions as memories and recalls them for Ask and delta phrasing.
+- **Backboard**: set `BACKBOARD_API_KEY` and `BACKBOARD_ASSISTANT_ID`. Without a pinned id, one assistant is created per user and stored in Supabase `integration_ids`. Memory lives on the assistant, so it carries across every thread.
+  - Recall (Ask, delta phrasing, Make It Stick) searches the assistant's memories: retrieval only, no writes. Items come back in `memoryUsed` with `source: "backboard"` (`"local"` when on the fallback).
+  - Thinketh-authored facts (a detected misconception, a question asked) are written directly with their kind.
+  - Each Ask question is also posted to the user's thread with `memory: "Auto"` in the background, so Backboard extracts preferences and topics itself.
+  - Backboard never stores mastery numbers. Those stay in the knowledge-state engine.
+  - `npm run verify:backboard --workspace @thinketh/intelligence` proves cross-thread recall. Thread A (Auto) states a preference and a misconception. Thread B, a new thread on the same assistant (Readonly), must retrieve both, and `/ask` must return them. Add `-- --fresh` to run against a new, empty assistant. With no `BACKBOARD_ASSISTANT_ID` set, it creates one and prints the id to pin.
+  - `GET /health?probe=1` checks Backboard before answering. Each adapter's `status` is `live | degraded | unverified | fallback`.
 - **ElevenLabs**: create an agent that uses `{{brief_script}}`, then set `ELEVENLABS_API_KEY` and `ELEVENLABS_AGENT_ID`.

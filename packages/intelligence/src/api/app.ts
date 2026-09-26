@@ -89,7 +89,11 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     await next();
   });
 
-  app.get("/health", (c) => c.json({ ok: true, adapters: adapterHealth() }));
+  // `?probe=1` actively checks configured sponsors first (no secrets are returned either way).
+  app.get("/health", async (c) => {
+    if (c.req.query("probe")) await service.probeAdapters();
+    return c.json({ ok: true, adapters: adapterHealth() });
+  });
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));
 
