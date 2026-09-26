@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, useFonts } from "@expo-google-fonts/inter";
 import {
@@ -12,6 +13,8 @@ import {
 import { color } from "@/theme/tokens";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// react-native-svg's web build forwards responder props to the DOM; harmless, web-only.
+LogBox.ignoreLogs(["Unknown event handler property"]);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({

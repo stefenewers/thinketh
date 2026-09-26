@@ -34,16 +34,13 @@ export default function Library() {
           style={styles.preview}
         >
           {data ? (
-            <View pointerEvents="none">
-              <MindGraph
-                concepts={data.concepts}
-                states={data.states}
-                edges={data.edges}
-                selectedId={null}
-                updatedIds={updatedIds}
-                onSelect={() => {}}
-              />
-            </View>
+            <MindGraph
+              concepts={data.concepts}
+              states={data.states}
+              edges={data.edges}
+              selectedId={null}
+              updatedIds={updatedIds}
+            />
           ) : (
             <View style={{ height: 200 }} />
           )}
