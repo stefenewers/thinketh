@@ -32,6 +32,7 @@ import type { SupabaseBackend } from "../adapters/supabase.ts";
 import type { ThinkethConfig } from "../config.ts";
 import { env } from "../config.ts";
 import { logEvent } from "../log.ts";
+import { MAX_ANSWER_CHARS, MAX_BODY_BYTES, MAX_QUESTION_CHARS, rateLimit, requireAppKey, safeEqual } from "./protect.ts";
 import { BadRequestError, InvalidAnswerError, NotFoundError, type ThinkethService } from "../service.ts";
 
 type Vars = { Variables: { userId: string } };
@@ -49,6 +50,7 @@ const IngestRequestSchema = z.object({
 async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
   let raw: unknown = {};
   const text = await c.req.text();
+  if (text.length > MAX_BODY_BYTES) throw new BadRequestError("Request body is too large");
   if (text.trim()) {
     try {
       raw = JSON.parse(text);
@@ -69,6 +71,9 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   const app = new Hono<Vars>();
 
   app.use("*", cors());
+  // Public demo URL: throttle per client first (so the key can't be guessed quickly), then require the app key.
+  app.use("*", rateLimit());
+  app.use("*", requireAppKey(env("THINKETH_APP_KEY")));
 
   /**
    * User resolution:
@@ -119,6 +124,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.post("/diagnostics/:id/answer", async (c) => {
     const { answer } = await body(c, DiagnosticAnswerRequestSchema);
+    if (answer.length > MAX_ANSWER_CHARS) throw new BadRequestError(`answer: keep it under ${MAX_ANSWER_CHARS} characters`);
     return c.json(DiagnosticAnswerResponseSchema.parse(await service.answerDiagnostic(c.get("userId"), c.req.param("id"), answer)));
   });
 
@@ -130,6 +136,8 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.post("/ask", async (c) => {
     const input = await body(c, AskRequestSchema);
+    // Bounds what reaches Claude and what Backboard can extract into learner memory.
+    if (input.question.length > MAX_QUESTION_CHARS) throw new BadRequestError(`question: keep it under ${MAX_QUESTION_CHARS} characters`);
     return c.json(AskResponseSchema.parse(await service.ask(c.get("userId"), input)));
   });
 
@@ -153,7 +161,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.post("/admin/ingest", async (c) => {
     const adminToken = env("THINKETH_ADMIN_TOKEN");
-    if (!adminToken || c.req.header("x-thinketh-admin-token") !== adminToken) {
+    if (!adminToken || !safeEqual(c.req.header("x-thinketh-admin-token"), adminToken)) {
       return c.json({ error: { code: "forbidden", message: "Admin token required" } }, 403);
     }
     const input = await body(c, IngestRequestSchema);

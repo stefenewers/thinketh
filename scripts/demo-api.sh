@@ -34,11 +34,13 @@ done
 for _ in $(seq 1 20); do curl -sf --max-time 10 "$URL/health" >/dev/null && break; sleep 2; done
 
 echo; echo "Public API: $URL"; echo
-node supabase/verify-remote.mjs "$URL" || true
+APP_KEY=$(grep -E '^THINKETH_APP_KEY=' .env | cut -d= -f2- || true)
+THINKETH_APP_KEY=$APP_KEY node supabase/verify-remote.mjs "$URL" || true
 cat <<EOF
 
 Mobile (.env for the Expo app):
   EXPO_PUBLIC_API_URL=$URL
+  EXPO_PUBLIC_THINKETH_APP_KEY=${APP_KEY:-<THINKETH_APP_KEY from .env>}
   EXPO_PUBLIC_USE_MOCK_API=false
   EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false   # set true for judging
 
