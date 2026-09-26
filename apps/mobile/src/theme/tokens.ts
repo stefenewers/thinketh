@@ -120,3 +120,26 @@ export const depth = {
 } as const;
 
 export const gutter = layout.pageX;
+
+// The inner world's material: the pixel spaces (Mind library, Playground room) share one warm palette.
+// Paper walls, soft floors, quiet wood and stone. Coral and blue stay reserved for meaning.
+export const pixel = {
+  /** One source pixel = 2pt, rendered nearest-neighbour. */
+  unit: 2,
+  wall: "#FFFFFF",
+  trim: "#EEE9E3",
+  floor: "#F5F0EA",
+  floorLine: "rgba(22,22,22,0.035)",
+  woodLight: "#D9C3A5",
+  wood: "#BFA17D",
+  woodDark: "#8C7155",
+  woodDeep: "#5A4838",
+  shelfBack: "#F1EADF",
+  stone: "#C9C2B8",
+  stoneMid: "#A39B90",
+  stoneDark: "#6E675F",
+  ink: "#3A3531",
+  inkDeep: "#25211E",
+  paper: "#FBF9F7",
+  paperEdge: "#E7DFD3",
+} as const;

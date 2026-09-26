@@ -9,6 +9,7 @@ These files are a small, modified subset of the **Pixel Office 32x32** asset pac
 - `plant.png`: from `Props/Props.png`.
 
 **How the files were modified:**
+- The door, window and plant were recoloured to the shared warm material palette (`pixel` in `src/theme/tokens.ts`), so blue and coral stay reserved for meaning.
 - The two characters were recoloured to represent Stefen and Nadani, who are both Black. The exact colour mapping is in `assets.ts`.
 - Each character's idle frames and stepping frames were combined into one horizontal strip.
 - The props were cropped to their visible pixels.
