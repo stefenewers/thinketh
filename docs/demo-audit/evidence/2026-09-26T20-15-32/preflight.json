@@ -1,0 +1,131 @@
+{
+  "runId": "2026-09-26T20-15-32",
+  "auditUser": "audit-2026-09-26t20-15-32",
+  "startedAt": "2026-09-26T20:15:32.133Z",
+  "git": {
+    "sha": "9e87c25a264b07d4cbf6962608d16164c0aaa76b",
+    "short": "9e87c25",
+    "branch": "stefen-playground-room",
+    "dirty": 3
+  },
+  "node": "v24.14.1",
+  "deps": {
+    "rootNodeModules": true,
+    "playwrightCore": true,
+    "chrome": true
+  },
+  "env": {
+    "rootEnvFile": true,
+    "required": {
+      "ANTHROPIC_API_KEY": true,
+      "MONGODB_URI": true,
+      "TIGER_DATABASE_URL": true,
+      "BACKBOARD_API_KEY": true,
+      "BACKBOARD_ASSISTANT_ID": true,
+      "SUPABASE_URL": true,
+      "SUPABASE_SERVICE_ROLE_KEY": true,
+      "ELEVENLABS_API_KEY": true,
+      "ELEVENLABS_AGENT_ID": true,
+      "THINKETH_APP_KEY": true
+    },
+    "optional": {
+      "MUSE_API_KEY": true,
+      "MUSE_MODEL": true,
+      "MUSE_API_BASE": true,
+      "VOYAGE_API_KEY": false,
+      "ANTHROPIC_WORKSPACE_ID": true,
+      "SUPABASE_ANON_KEY": true
+    },
+    "mobileEnvLocal": true
+  },
+  "otherServices": {
+    "demoApi8787": true,
+    "metro8081": true,
+    "note": "left untouched"
+  },
+  "urls": {
+    "api": "http://localhost:8797",
+    "web": "http://localhost:8091"
+  },
+  "started": {
+    "api": "already running",
+    "web": "already running (verify it was started with mock fallback off)"
+  },
+  "logs": "scripts/demo-audit/.logs/2026-09-26T20-15-32",
+  "mockFallback": {
+    "EXPO_PUBLIC_USE_MOCK_API": "false",
+    "EXPO_PUBLIC_API_FALLBACK_TO_MOCK": "false",
+    "appliesTo": "unknown: web was already running"
+  },
+  "apiUp": true,
+  "webUp": true,
+  "health": {
+    "ok": true,
+    "ms": 335,
+    "adapters": {
+      "claude": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "model claude-opus-5 available",
+          "ms": 333
+        }
+      },
+      "backboard": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "assistant ab52d134…, 4 memories",
+          "ms": 162
+        },
+        "lastError": "backboard POST /assistants failed: HTTP 500 {\"detail\":\"Something went wrong. Please try again later.\"}"
+      },
+      "mongo": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "7 developments stored",
+          "ms": 58
+        }
+      },
+      "tiger": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "52 transitions stored",
+          "ms": 285
+        }
+      },
+      "elevenlabs": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "agent thinketh reachable",
+          "ms": 171
+        }
+      },
+      "supabase": {
+        "status": "live",
+        "configured": true,
+        "probe": {
+          "status": "live",
+          "detail": "5 feature flags readable",
+          "ms": 255
+        }
+      }
+    }
+  },
+  "featureFlags": {
+    "voice": true,
+    "ask": true,
+    "visualize": true,
+    "make_it_stick": true,
+    "storylines": true
+  },
+  "tigerDirect": "reachable"
+}
