@@ -123,22 +123,58 @@ The **What just happened** rail lists the current exchange from the recorded eve
 
 The comparison is Thinketh's: `compare_started` is a Thinketh event, and there's no longer a timed "Muse is comparing" checklist.
 
-## The learning room (2.5D world)
+## The room (pixel agents)
 
-From arrival to the shared source, the Playground is one persistent room: an elevated-angle floor with each Mind on its own platform (host left, guest right, on every device), concepts as spheres on stems, Muse as a small dark presence, and Thinketh's actions (comparison sweep, checkpoint gate, grading) drawn as system objects rather than characters. The room stays mounted and centred; the action area scrolls beneath it.
+The Playground is one small room that stays mounted for the whole session, from before a room exists to the end. Stefen's agent and Nadani's agent arrive, approach each other, teach, answer and react. Everything they do comes from the room the server returns. Native controls, text input, sheets and the evidence rail sit beneath it in a compact action area.
 
-Two pure functions own the meaning; the renderer only draws:
+**Truth.** `projectPlayground(room, me, pending)` in `apps/mobile/src/components/playground/world/worldState.ts` is pure. It turns the room, the viewer and this device's in-flight request (`compare`, `conduct`, `explain`, `answer`) into a `WorldView`:
+- where each agent stands and which way they face
+- the teacher and the learner, taken from `teaching`, `transfer` or `plan` and never assumed, so the reverse move works
+- the idea object and its state
+- Thinketh's checkpoint and the learner's Mind
+- Muse's cue, labelled "Planner" when the fallback made the move
+- Thinketh's own action (comparing or grading)
+- a "Now" line: who is teaching, what idea, what Thinketh is waiting for, and whether it was verified
 
-- `projectRoomToWorld(room, me, pending)` in `apps/mobile/src/lib/roomWorld.ts` turns the server's room (plus this device's in-flight request) into a `World`: people and sides, up to 7 concepts per Mind in stable order, heights equal to snapshot mastery, focus/related/quiet roles, the teaching path and its progress (from `roomStory.stageState`), Muse's target, Thinketh's `comparing`/`grading`, the shared gap, the source and its two computed outcomes, and a camera frame. It reads only snapshot and event data, never explanation text, Ask history, memories or unshared sources.
-- `eventToVisualCue(event, room, me)` maps one recorded event to a cue: kind, actor (Thinketh, Muse, Planner or a person) and label. Only `transfer_verified` celebrates.
+It reuses `stageState` and reads only permissioned snapshot and event data. There is no separate game state that could disagree with the room.
 
-**Once only.** Broadcasts carry `{seq, type}`; the client refetches the room. `useRoomCues` (`components/playground/room/RoomParts.tsx`) keeps the last seen seq per room at module level. On first sight of a room (load, reconnect, return) it settles with a still caption and plays nothing. Later events in one response queue in seq order and play one after another (1.8 s each, never blocking input). With reduced motion only the latest cue shows, and every move is a jump.
+| Room state | On screen |
+|---|---|
+| No room / waiting | Your agent alone in the room; the code and consent text below. |
+| Arrival | The guest walks in through the door, **once, if this device saw the join happen**. Compare stays your action. |
+| Comparing | Thinketh's light pass across both agents while the request is in flight. |
+| Overview | The strongest teachable difference floats between them as an idea ("can move"). |
+| Muse choosing | Muse's cue pulses: "Muse · choosing…". |
+| Teaching | The teacher walks up to the listener and faces them; the idea is "being taught". One-device mode says the host is typing for the seeded persona. |
+| Checkpoint | The idea stops before Thinketh's gate, short of the learner's Mind (dashed ring). |
+| Grading | The gate pulses "GRADING"; the idea stays put. |
+| Verified | Only after `transfer_verified`: the idea enters the learner's Mind, the ring turns solid, and the learner hops once. The real numbers and reason are below. |
+| Not verified | The idea stays at the gate ("NOT YET"). No motion, no haptic, and the real feedback is shown. |
+| Shared gap / source | Both agents face one shared idea or source. No checkpoint, no transfer. |
+| Ended | Every recorded move with verified or not (`sessionOutcome`), and See your Mind. |
 
-**Camera is not learning state.** Follow Muse frames the World's `frame`; Explore enables pan and pinch, with "Return to live". Nothing in the camera feeds back into the projection.
+**Once only.** A module-level map keeps the seq at which this device first saw each room, and `freshEffects` returns only newer joins and verifications that haven't played. A refetch, reconnect, remount, return or late join starts settled. Characters and the idea start at their settled places on mount and walk only when the projected place changes while mounted.
 
-**Touch and text.** Every concept, the path, the gap, the source and the latest action are 44 pt targets with labels. Each opens the evidence sheet (rule, numbers, before/after, grader, what the snapshot excludes). The "What just happened" rail stays as the textual event view.
+**Stale responses.** `acceptRoom` (`lib/roomSync.ts`) orders polls, realtime refetches and action responses by `seq`:
+- an older room never replaces a newer one
+- same-seq resource progress still lands
 
-**Renderer.** `RoomScene.tsx` uses react-native-svg and Reanimated (per-shape animated props; no JS calls inside worklets). A Skia spike (`@shopify/react-native-skia` 2.6.2, SDK 57's version) rendered the same projection on web through CanvasKit (8 MB wasm, ~1.7 s first load) and built for the iOS simulator. But the phone's dev client doesn't include Skia and would need a rebuild, and native rendering couldn't be checked on hardware. So the demo build stays on SVG. The projection is renderer-independent if Skia is adopted later.
+**Camera.** Follow shows the whole room. Explore zooms slightly and allows a limited pan, with "Return to live". Camera state never feeds back into the learning state.
+
+**Rendering.** The characters are pre-sliced Pixel Office strips (`assets/playground/pixel-office/`, with `ATTRIBUTION.md`). They're described in `world/assets.ts`, including where each frame came from.
+- **Frames:** the idle loop (5 frames) and the stepping cycle (10 frames) advance on the UI thread with Reanimated.
+- **Facing:** every source frame faces three-quarters right, so sprites are mirrored to face left. There is no talking or handing-over animation in the pack, so teaching is shown through position, facing and the idea object.
+- **Pausing:** rendering pauses when the app is backgrounded or another screen covers the Playground.
+- **Reduced motion:** agents and the idea jump to their places, and frames hold.
+
+**Why not Skia (yet).** A spike rendered the room with `@shopify/react-native-skia` 2.6.2 on web and built it for the simulator. The blocker is the demo phone:
+- its installed dev client has no Skia native module
+- a bundle that imports Skia would break the Playground until the client is rebuilt
+- the phone was unavailable to rebuild
+
+Pre-sliced PNG frames with native images and Reanimated need no native change. The world state is renderer-independent, so moving to a Skia Atlas later only replaces `Character` and `WorldCanvas`.
+
+**Secondary view.** "Inspect both Minds as a diagram" swaps the room for the earlier Mind diagram (`room/RoomScene.tsx`), which draws `projectRoomToWorld` from `lib/roomWorld.ts`. The two are never shown side by side.
 
 ## Resource dual delta
 

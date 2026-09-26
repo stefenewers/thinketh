@@ -13,3 +13,7 @@ supabase/.temp/
 # Local-only demo portraits (not published)
 apps/mobile/assets/people/
 apps/mobile/src/content/portraits.local.ts
+
+# Purchased asset archives: only the curated subset in apps/mobile/assets/playground is committed.
+/playground/
+/playground.zip
