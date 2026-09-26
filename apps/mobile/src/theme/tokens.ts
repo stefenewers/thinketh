@@ -21,6 +21,9 @@ export const color = {
   lineSoft: "#EFEFED",
   overlay: "rgba(22,22,22,0.22)",
   canvas: "#FFFFFF",
+  // The other Mind in the Playground (you are coral). Restrained, never a theme.
+  partner: "#4E7BA6",
+  partnerTint: "#E9F0F7",
   // Neutral hairline for white-on-white surfaces.
   hairline: "rgba(22,22,22,0.08)",
 } as const;

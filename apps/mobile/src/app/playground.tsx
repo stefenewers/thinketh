@@ -9,7 +9,8 @@ import { playground, PLAYGROUND_AVAILABLE, PlaygroundError } from "@/api/playgro
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { StageSteps } from "@/components/StageSteps";
-import { CardTitle, Dot, DotTag, MuseCard, StepRow, TwoMinds, type DotTone } from "@/components/playground/pieces";
+import { MindVenn } from "@/components/playground/MindVenn";
+import { CardTitle, Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, TwoMinds, type DotTone } from "@/components/playground/pieces";
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
 import { useReducedMotion } from "@/lib/hooks";
@@ -215,7 +216,7 @@ function useSides(room: PlaygroundRoom) {
   return { left, right };
 }
 
-function Duo({ room, focus, trace, muse, changed }: { room: PlaygroundRoom; focus?: string | null; trace?: Parameters<typeof DuoMind>[0]["trace"]; muse?: boolean; changed?: Record<string, string[]> }) {
+function Duo({ room, me, focus, trace, muse, changed, compact }: { room: PlaygroundRoom; me: string; focus?: string | null; trace?: Parameters<typeof DuoMind>[0]["trace"]; muse?: boolean; changed?: Record<string, string[]>; compact?: boolean }) {
   const { width } = useWindowDimensions();
   const { left, right } = useSides(room);
   const d = room.delta;
@@ -223,24 +224,29 @@ function Duo({ room, focus, trace, muse, changed }: { room: PlaygroundRoom; focu
   const followingMuse = useContext(FollowContext);
   if (!left || !right) return <ArrivalDuo room={room} />;
   const w = width - 32;
-  const duo = (
-    <DuoMind
-      left={left}
-      right={right}
-      edges={left.edges}
-      width={w}
-      height={256}
-      // Following: Muse's spotlight frames the view. Exploring: nothing dimmed, pan and pinch freely.
-      focusConceptId={followingMuse ? (focus ?? null) : null}
-      trace={trace ?? null}
-      muse={muse}
-      changed={changed}
-      keyConcepts={keyConcepts}
-    />
-  );
+  // Following Muse (storyboard 09-11): two overlapping Minds, composed around the concept in play.
+  if (followingMuse) {
+    return (
+      <View style={{ alignItems: "center", marginTop: space.m }}>
+        <MindVenn
+          left={left}
+          right={right}
+          me={me}
+          width={w}
+          height={compact ? 190 : 240}
+          focusConceptId={focus ?? null}
+          trace={trace ? { conceptId: trace.conceptId, fromUserId: trace.from === "left" ? left.userId : right.userId, mode: trace.mode } : null}
+          muse={muse}
+        />
+      </View>
+    );
+  }
+  // Exploring: the full two-Mind canvas, nothing dimmed, pan and pinch freely.
   return (
     <View style={{ alignItems: "center", marginTop: space.m }}>
-      {followingMuse ? duo : <MindCanvas width={w} height={256} hits={[]}>{duo}</MindCanvas>}
+      <MindCanvas width={w} height={256} hits={[]}>
+        <DuoMind left={left} right={right} edges={left.edges} width={w} height={256} focusConceptId={null} trace={trace ?? null} muse={muse} changed={changed} keyConcepts={keyConcepts} />
+      </MindCanvas>
     </View>
   );
 }
@@ -282,7 +288,7 @@ function Waiting({
       <View style={{ alignItems: "center", marginTop: space.l }}>
         <TwoMinds />
         <T variant="display" style={{ marginTop: space.xl, textAlign: "center" }}>
-          Learn together.
+          Learn together with Muse
         </T>
         <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22, textAlign: "center", maxWidth: 300 }}>
           Bring another Mind in. Thinketh will find the useful differences.
@@ -354,7 +360,7 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
   return (
     <View>
       <DotTag tone="coral" label={guest?.userId === me ? `You joined ${nameOf(room, room.hostId)}` : `${guest?.displayName ?? "Someone"} joined`} style={{ marginHorizontal: gutter, marginTop: space.m }} />
-      <Duo room={room} />
+      <Duo room={room} me={me} />
       <View style={{ paddingHorizontal: gutter, marginTop: space.xl }}>
         <T variant="title">Two minds. One learning space.</T>
         <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
@@ -367,7 +373,7 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
 }
 
 /** Storyboard 09 (Figma 1:142): Muse compares while the delta is computed. */
-function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
+function Comparing({ room, me }: { room: PlaygroundRoom; me: string }) {
   const [step, setStep] = useState(0);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -379,7 +385,7 @@ function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
   const rows = ["Shared strengths", "Peer teaching opportunities", "Shared gaps"];
   return (
     <View>
-      {room.snapshots.length === 2 ? <Duo room={room} muse /> : <ArrivalDuo room={room} />}
+      {room.snapshots.length === 2 ? <Duo room={room} me={me} muse /> : <ArrivalDuo room={room} />}
       <View style={{ paddingHorizontal: gutter }}>
         <T variant="title" style={{ marginTop: space.xl, textAlign: "center" }}>
           Comparing your thinking
@@ -406,19 +412,19 @@ function Comparing({ room }: { room: PlaygroundRoom; me: string }) {
 }
 
 /** Storyboard 09 / Figma 1:197: the collaborative delta, computed and explainable. */
-function Overview({ room, busy, onStart }: { room: PlaygroundRoom; me: string; busy: boolean; onStart: () => void }) {
+function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: string; busy: boolean; onStart: () => void }) {
   const d = room.delta!;
   const aName = nameOf(room, d.aId);
   const bName = nameOf(room, d.bId);
   const items: { tag: string; tone: DotTone; item: CollaborativeDeltaItem }[] = [
-    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(bName)} → ${upper(aName)}`, tone: "coral" as const, item })),
-    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(aName)} → ${upper(bName)}`, tone: "ink" as const, item })),
+    ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(bName)} → ${upper(aName)}`, tone: (d.bId === me ? "coral" : "partner") as DotTone, item })),
+    ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(aName)} → ${upper(bName)}`, tone: (d.aId === me ? "coral" : "partner") as DotTone, item })),
     ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "MUSE → BOTH", tone: "muted" as const, item })),
   ];
   const words = ["No", "One", "Two", "Three"][items.length] ?? String(items.length);
   return (
     <View>
-      {room.snapshots.length === 2 ? <Duo room={room} /> : null}
+      {room.snapshots.length === 2 ? <Duo room={room} me={me} /> : null}
       <View style={{ paddingHorizontal: gutter }}>
         <T variant="display" style={{ marginTop: space.l }}>
           {items.length ? "You can teach each other." : "You're closely matched."}
@@ -506,15 +512,17 @@ function PeerTeaching({ room, me, busy, onExplain }: { room: PlaygroundRoom; me:
           {sentence(t.conceptName)}
         </T>
       </View>
-      <Duo room={room} focus={t.conceptId} trace={{ conceptId: t.conceptId, from, mode: "teaching" }} />
+      <Duo room={room} me={me} compact focus={t.conceptId} trace={{ conceptId: t.conceptId, from, mode: "teaching" }} />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l, gap: space.m }}>
         <MuseCard>{room.museLine ?? `${teacher}, teach this in your own words.`}</MuseCard>
-        <RaisedCard>
-          <T variant="label">Prompt</T>
-          <T variant="body" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
+        <ThreadCard who={t.teacherId === me ? "You" : teacher} tone={t.teacherId === me ? "coral" : "partner"}>
+          <T variant="meta" style={{ color: color.ink3 }}>
+            Muse asked
+          </T>
+          <T variant="body" style={{ marginTop: 2, fontSize: 15.5, lineHeight: 23 }}>
             {t.prompt}
           </T>
-        </RaisedCard>
+        </ThreadCard>
         {canSpeak ? (
           <View style={styles.speak}>
             <TextInput
@@ -570,15 +578,14 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
           {tr.prompt}
         </T>
         {t?.explanation ? (
-          <RaisedCard style={{ marginTop: space.l, paddingVertical: space.m }}>
-            <T variant="label">{nameOf(room, t.teacherId)} explained</T>
-            <T variant="support" style={{ marginTop: space.xs, fontSize: 15, lineHeight: 22, color: color.ink2 }}>
+          <ThreadCard who={`${t.teacherId === me ? "You" : nameOf(room, t.teacherId)} explained`} tone={t.teacherId === me ? "coral" : "partner"} style={{ marginTop: space.l }}>
+            <T variant="support" style={{ fontSize: 15, lineHeight: 22, color: color.ink }}>
               “{t.explanation}”
             </T>
-          </RaisedCard>
+          </ThreadCard>
         ) : null}
       </View>
-      <Duo room={room} focus={tr.conceptId} trace={t ? { conceptId: tr.conceptId, from: left?.userId === t.teacherId ? "left" : "right", mode: "teaching" } : null} />
+      <Duo room={room} me={me} compact focus={tr.conceptId} trace={t ? { conceptId: tr.conceptId, from: left?.userId === t.teacherId ? "left" : "right", mode: "teaching" } : null} />
       <View style={{ paddingHorizontal: gutter }}>
         {canAnswer ? (
           <>
@@ -620,6 +627,14 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
     if (verified) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [verified]);
   const tn = tr.transition;
+  // Concepts the moved one connects to in the learner's own Mind (from the room snapshot).
+  const learnerSnap = room.snapshots.find((x) => x.userId === tr.learnerId);
+  const related = learnerSnap
+    ? [...new Set(learnerSnap.edges.flatMap((e) => (e.fromConceptId === tr.conceptId ? [e.toConceptId] : e.toConceptId === tr.conceptId ? [e.fromConceptId] : [])))]
+        .map((id) => learnerSnap.concepts.find((c) => c.conceptId === id)?.short)
+        .filter((n): n is string => !!n)
+        .slice(0, 4)
+    : [];
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
@@ -632,21 +647,30 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
       </View>
       <Duo
         room={room}
+        me={me}
         focus={verified ? null : tr.conceptId}
         trace={verified && t ? { conceptId: tr.conceptId, from: left?.userId === t.teacherId ? "left" : "right", mode: "moved" } : null}
         changed={verified ? { [tr.learnerId]: [tr.conceptId] } : undefined}
       />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
         <ListCard>
-          <View style={[styles.changeRow, tn ? styles.changeDivided : null]}>
-            <DotTag tone={verified ? "coral" : "muted"} label={upper(t?.conceptName ?? "")} />
-            <T variant="section" style={{ marginTop: space.s }}>
-              {verified ? "New connection verified" : "Recorded, not verified"}
-            </T>
-            <T variant="support" style={{ marginTop: space.xs }}>
-              {verified ? `${teacher} explained it. ${learner} applied it in a new context. Thinketh updated only after demonstration.` : (tr.feedback ?? "")}
-            </T>
-          </View>
+          {verified ? (
+            <>
+              <OutcomeRow icon="sparkle" title={`Strengthened ${tr.learnerId === me ? "your" : `${learner}'s`} thinking on ${sentence(t?.conceptName ?? "")}`} body="New connection verified" />
+              {t?.explanation ? <OutcomeRow icon="people" title={`Added a new perspective from ${t.teacherId === me ? "you" : teacher}`} body={`“${t.explanation}”`} /> : null}
+              {related.length ? <OutcomeRow icon="mind" title={`Connected to ${related.length} related concept${related.length === 1 ? "" : "s"}`} body={related.join(" · ")} last={!tn} /> : null}
+            </>
+          ) : (
+            <View style={[styles.changeRow, tn ? styles.changeDivided : null]}>
+              <DotTag tone="muted" label={upper(t?.conceptName ?? "")} />
+              <T variant="section" style={{ marginTop: space.s }}>
+                Recorded, not verified
+              </T>
+              <T variant="support" style={{ marginTop: space.xs }}>
+                {tr.feedback ?? ""}
+              </T>
+            </View>
+          )}
           {tn ? (
             <Pressable onPress={() => setWhy((w) => !w)} accessibilityRole="button" accessibilityState={{ expanded: why }} style={({ pressed }) => [styles.changeRow, { minHeight: 44 }, pressed && { backgroundColor: color.surfaceMuted }]}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.s }}>
@@ -683,7 +707,7 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
 }
 
 /** Figma 1:322: neither Mind has it; Muse teaches both. */
-function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void }) {
+function SharedGap({ room, me, busy, onNext }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void }) {
   const g = room.sharedGap!;
   const [open, setOpen] = useState(false);
   const source = room.events.findLast((e) => e.type === "shared_gap_taught")?.data?.resourceTitle;
@@ -695,7 +719,7 @@ function SharedGap({ room, busy, onNext }: { room: PlaygroundRoom; me: string; b
           {sentence(g.conceptName)}
         </T>
       </View>
-      <Duo room={room} focus={g.conceptId} muse />
+      <Duo room={room} me={me} focus={g.conceptId} muse />
       <View style={{ paddingHorizontal: gutter, marginTop: space.l, gap: space.m }}>
         <MuseCard>
           <T style={{ fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 21, color: color.ink, marginTop: space.s }}>Neither Mind has strong evidence here.</T>
