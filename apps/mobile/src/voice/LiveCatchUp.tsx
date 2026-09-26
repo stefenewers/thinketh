@@ -1,6 +1,6 @@
 // Only loaded through ./availability (dev/release builds): importing
 // @elevenlabs/react-native registers native WebRTC globals.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import {
   ConversationProvider,
@@ -13,7 +13,13 @@ import type { VoiceSession } from "@thinketh/contracts";
 import { api } from "@/api";
 import { T } from "@/components/Text";
 import { Button } from "@/components/ui";
+import { useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { color, space } from "@/theme/tokens";
+import { captionLines, initialCaption, isAligned, lastCompleteSentence, pendingReveal, reduceCaption } from "./captionState";
+import { nextFocus, type FocusConcept } from "./conceptFocus";
+import { isEndIntent } from "./endIntent";
+import { LiveBriefingCanvas, type BriefingMind } from "./LiveBriefingCanvas";
+import { USER_HOLD_MS, USER_VAD_THRESHOLD, voicePhase } from "./voiceVisualState";
 
 export type LiveCatchUpProps = {
   /** Voice failed at any point: the screen switches to the transcript. */
@@ -22,6 +28,12 @@ export type LiveCatchUpProps = {
   onEnded: () => void;
   /** The user chose the text version. */
   onShowTranscript: () => void;
+  /** Presentation only: the Mind to visualize while Thinketh speaks. Absent = no canvas graph. */
+  mind?: BriefingMind | null;
+  /** Concepts the live words can be matched against. */
+  concepts?: FocusConcept[];
+  /** The briefing's lead topic, shown as "Now" before any concept is named. */
+  seed?: { conceptId?: string; label?: string };
 };
 
 const CONNECT_TIMEOUT_MS = 15_000;
@@ -50,8 +62,8 @@ export function LiveCatchUp(props: LiveCatchUpProps) {
   );
 }
 
-function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps) {
-  const { startSession, endSession, sendContextualUpdate } = useConversationControls();
+function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, concepts = [], seed }: LiveCatchUpProps) {
+  const { startSession, endSession, sendContextualUpdate, getOutputVolume } = useConversationControls();
   const { status } = useConversationStatus();
   const { isSpeaking } = useConversationMode();
   const { isMuted, setMuted } = useConversationInput();
@@ -62,6 +74,19 @@ function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps
     handlers.current = { onFallback, onEnded };
   }, [onFallback, onEnded]);
   const settled = useRef(false); // a fallback or end was already reported
+
+  // Live Briefing Canvas state. Presentation only: none of it touches knowledge state.
+  const [caption, dispatch] = useReducer(reduceCaption, initialCaption);
+  const [now, setNow] = useState(() => Date.now());
+  const [lastVoiceAt, setLastVoiceAt] = useState<number | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(seed?.conceptId ?? null);
+  const reduceMotion = useReducedMotion();
+  const level = useSharedValue(0);
+  // Dev-only: note once per session which caption signals the device actually receives.
+  const seen = useRef({ message: false, alignment: false });
+  // Saying "end", "finish", "that's enough"... closes the call like the End button (the agent may not hang up itself).
+  const [ending, setEnding] = useState(false);
+  const endByVoice = useRef<() => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +126,32 @@ function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps
               // The agent still has its own opening; the transcript remains available.
             }
           },
+          // Captions and attention. Pure display: dispatch into the caption reducer, nothing else.
+          onMessage: ({ message, role }) => {
+            if (__DEV__ && role === "agent" && !seen.current.message) {
+              seen.current.message = true;
+              console.log("[voice] agent transcript arriving");
+            }
+            dispatch(role === "agent" ? { type: "agent_message", text: message } : { type: "user_message", text: message });
+            if (role === "user" && isEndIntent(message)) {
+              if (__DEV__) console.log("[voice] end intent heard");
+              setEnding(true);
+              // A beat so the screen can say it is ending; then the same path as the End button.
+              setTimeout(() => endByVoice.current(), 900);
+            }
+          },
+          onAudioAlignment: (chunk) => {
+            if (__DEV__ && !seen.current.alignment) {
+              seen.current.alignment = true;
+              console.log("[voice] audio alignment arriving");
+            }
+            dispatch({ type: "alignment", chunk, receivedAt: Date.now() });
+          },
+          onAgentResponseCorrection: (e) => dispatch({ type: "correction", text: e.corrected_agent_response }),
+          onInterruption: () => dispatch({ type: "turn_end", now: Date.now() }),
+          onVadScore: ({ vadScore }) => {
+            if (vadScore >= USER_VAD_THRESHOLD) setLastVoiceAt((t) => (t && Date.now() - t < 200 ? t : Date.now()));
+          },
           onError: (message) => fail(message || "voice connection error"),
           onDisconnect: () => {
             clearTimeout(timeout);
@@ -128,6 +179,50 @@ function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Thinketh stopped speaking: the turn settles.
+  useEffect(() => {
+    if (!isSpeaking) dispatch({ type: "turn_end", now: Date.now() });
+  }, [isSpeaking]);
+
+  // Reveal aligned words on ElevenLabs' own timings; tick only while there is text left to show,
+  // and while the "you're talking" hold is running.
+  useEffect(() => {
+    const t = Date.now();
+    const holding = lastVoiceAt !== null && t - lastVoiceAt < USER_HOLD_MS;
+    if (!pendingReveal(caption, t) && !holding) return;
+    const id = setTimeout(() => setNow(Date.now()), holding && !pendingReveal(caption, t) ? USER_HOLD_MS : 80);
+    return () => clearTimeout(id);
+  }, [caption, now, lastVoiceAt]);
+
+  const lines = captionLines(caption, now);
+  const spoken = `${lines.previous} ${lines.current}`.trim();
+  // Attention follows the words: a newly named concept moves the view; otherwise it stays put.
+  // (Adjusted during render when the spoken text changes, per React's guidance; no effect.)
+  const [seenSpoken, setSeenSpoken] = useState(spoken);
+  if (spoken !== seenSpoken) {
+    setSeenSpoken(spoken);
+    const next = nextFocus(focusId, spoken, concepts);
+    if (next !== focusId) setFocusId(next);
+  }
+
+  // The only audio-reactive signal: output level into a shared value, off the React render loop.
+  useEffect(() => {
+    if (!isSpeaking || reduceMotion) {
+      level.set(withTiming(0, { duration: 200 }));
+      return;
+    }
+    const id = setInterval(() => {
+      let v = 0;
+      try {
+        v = Math.max(0, Math.min(1, getOutputVolume()));
+      } catch {
+        v = 0;
+      }
+      level.set(withTiming(v, { duration: 110 }));
+    }, 100);
+    return () => clearInterval(id);
+  }, [isSpeaking, reduceMotion, getOutputVolume, level]);
+
   const end = (then: () => void) => {
     settled.current = true;
     try {
@@ -137,6 +232,12 @@ function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps
     }
     then();
   };
+  useEffect(() => {
+    // Only if nothing else has already ended or failed the session.
+    endByVoice.current = () => {
+      if (!settled.current) end(onEnded);
+    };
+  });
 
   if (!connected || status === "connecting") {
     return (
@@ -150,29 +251,25 @@ function LiveSession({ onFallback, onEnded, onShowTranscript }: LiveCatchUpProps
     );
   }
 
+  const focusName = focusId ? concepts.find((c) => c.id === focusId)?.name : undefined;
   return (
-    <View style={styles.block}>
-      <View style={styles.stateRow}>
-        <View style={[styles.dot, { backgroundColor: isSpeaking ? color.coral : color.ink }]} />
-        <T variant="meta">Live · Catch Me Up</T>
-      </View>
-      <T variant="display" style={{ marginTop: space.l }} accessibilityLiveRegion="polite">
-        {isSpeaking ? "Thinketh is speaking" : "Thinketh is listening"}
-      </T>
-      <T variant="support" style={{ marginTop: space.m }}>
-        {isSpeaking ? "Interrupt any time. Just start talking." : isMuted ? "Your mic is off. Turn it on to reply." : "Go ahead. Ask a question or say what you'd like next."}
-      </T>
-      <View style={{ marginTop: space.xxl, gap: space.m }}>
-        <Button
-          kind="secondary"
-          label={isMuted ? "Mic off · turn on" : "Mic on · turn off"}
-          accessibilityLabel={isMuted ? "Microphone is off. Turn it on." : "Microphone is on. Turn it off."}
-          onPress={() => setMuted(!isMuted)}
-        />
-        <Button label="End catch-up" onPress={() => end(onEnded)} />
-        <Button kind="quiet" label="Read it as text instead" style={styles.quiet} onPress={() => end(onShowTranscript)} />
-      </View>
-    </View>
+    <LiveBriefingCanvas
+      phase={voicePhase({ connected: true, isSpeaking, lastUserVoiceAt: lastVoiceAt, now })}
+      topic={focusName ?? seed?.label ?? null}
+      focusId={focusId}
+      mind={mind}
+      caption={lines}
+      announce={lastCompleteSentence(caption, now)}
+      aligned={isAligned(caption)}
+      lastUser={caption.lastUser}
+      ending={ending}
+      isMuted={isMuted}
+      level={level}
+      reduceMotion={!!reduceMotion}
+      onToggleMic={() => setMuted(!isMuted)}
+      onEnd={() => end(onEnded)}
+      onText={() => end(onShowTranscript)}
+    />
   );
 }
 
