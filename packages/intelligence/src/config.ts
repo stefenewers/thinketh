@@ -58,6 +58,11 @@ export function loadConfig() {
     },
     tiger: {
       url: env("TIGER_DATABASE_URL"),
+      /**
+       * HACKGT DEMO ONLY: Deno rejects Tiger managed certificate chain; remove this bypass after the event.
+       * Off unless explicitly "true"/"1". Affects the Tiger connection only; it stays encrypted.
+       */
+      tlsInsecure: flag("TIGER_TLS_INSECURE", false),
     },
     supabase: {
       url: env("SUPABASE_URL")?.replace(/\/+$/, ""),

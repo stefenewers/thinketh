@@ -74,7 +74,7 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
 
   const temporal = new ResilientTemporalStore(
     new LocalTemporalStore(),
-    config.tiger.url ? new TigerTemporalStore(config.tiger.url) : undefined,
+    config.tiger.url ? new TigerTemporalStore(config.tiger.url, { tlsInsecure: config.tiger.tlsInsecure }) : undefined,
   );
 
   const voice =

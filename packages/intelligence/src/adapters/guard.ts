@@ -14,7 +14,21 @@ export type AdapterHealth = {
   lastError?: string;
   calls: number;
   fallbacks: number;
+  /** Calls answered from the fallback without trying the sponsor (circuit open). */
+  skipped?: number;
+  /** Circuit breaker: while set and in the future, calls skip straight to the fallback. */
+  openUntil?: number;
 };
+
+/** After a failure, skip the adapter for this long so one request never waits on it twice. */
+export const CIRCUIT_COOLDOWN_MS = 30_000;
+
+/**
+ * Failures that retrying cannot fix in this runtime, e.g. Deno's TLS stack rejecting
+ * Timescale's certificate (CaUsedAsEndEntity). These keep the circuit open for the
+ * life of the instance. Certificate verification itself is never disabled.
+ */
+const PERMANENT_FAILURE = /certificate|CaUsedAsEndEntity|UnknownIssuer|self[- ]signed/i;
 
 const health = new Map<AdapterName, AdapterHealth>();
 
@@ -26,20 +40,51 @@ export function markConfigured(name: AdapterName, configured: boolean): void {
 
 /**
  * live: configured and the most recent call succeeded. degraded: the most
- * recent call failed (serving fallback). unverified: configured, no calls yet.
+ * recent call failed or the circuit is open (serving fallback). unverified: configured, no calls yet.
  * fallback: not configured.
  */
 export type AdapterStatus = "live" | "degraded" | "unverified" | "fallback";
 
 function statusOf(h: AdapterHealth): AdapterStatus {
   if (!h.configured) return "fallback";
+  if (isOpen(h)) return "degraded";
   if (!h.lastOkAt && !h.lastErrorAt) return "unverified";
   if (h.lastOkAt && (!h.lastErrorAt || h.lastOkAt >= h.lastErrorAt)) return "live";
   return "degraded";
 }
 
-export function adapterHealth(): Record<string, AdapterHealth & { status: AdapterStatus }> {
-  return Object.fromEntries([...health].map(([name, h]) => [name, { status: statusOf(h), ...h }]));
+function isOpen(h: AdapterHealth | undefined): boolean {
+  return !!h?.openUntil && h.openUntil > Date.now();
+}
+
+/** True while the adapter is being skipped. `permanent` limits it to failures retrying cannot fix. */
+export function circuitOpen(name: AdapterName, permanent = false): boolean {
+  const h = health.get(name);
+  return isOpen(h) && (!permanent || h!.openUntil === Infinity);
+}
+
+export type AdapterHealthView = Omit<AdapterHealth, "openUntil"> & {
+  status: AdapterStatus;
+  circuit: "closed" | "open" | "open_permanent";
+  retryAt?: string;
+};
+
+export function adapterHealth(): Record<string, AdapterHealthView> {
+  return Object.fromEntries(
+    [...health].map(([name, h]) => {
+      const { openUntil, ...rest } = h;
+      const circuit = !isOpen(h) ? "closed" : openUntil === Infinity ? "open_permanent" : "open";
+      return [
+        name,
+        { status: statusOf(h), circuit, ...(circuit === "open" ? { retryAt: new Date(openUntil!).toISOString() } : {}), ...rest },
+      ];
+    }),
+  );
+}
+
+/** Test helper: close every circuit. */
+export function resetCircuits(): void {
+  for (const h of health.values()) delete h.openUntil;
 }
 
 /** Record one call outcome for an adapter (used by guarded calls and health probes). */
@@ -47,11 +92,16 @@ export function recordCall(name: AdapterName, ok: boolean, error?: string): void
   const h = health.get(name) ?? { configured: true, calls: 0, fallbacks: 0 };
   h.calls++;
   const now = new Date().toISOString();
-  if (ok) h.lastOkAt = now;
-  else {
+  if (ok) {
+    h.lastOkAt = now;
+    delete h.openUntil;
+  } else {
     h.fallbacks++;
     h.lastErrorAt = now;
     if (error) h.lastError = error.slice(0, 300);
+    const permanent = !!error && PERMANENT_FAILURE.test(error);
+    if (!isOpen(h)) logEvent("adapter.circuit_open", { adapter: name, permanent, error: h.lastError }, "warn");
+    h.openUntil = permanent ? Infinity : Date.now() + CIRCUIT_COOLDOWN_MS;
   }
   health.set(name, h);
 }
@@ -79,6 +129,11 @@ export async function guarded<T>(
   timeoutMs: number,
 ): Promise<Guarded<T>> {
   if (!live) return { value: await fallback(), source: "fallback" };
+  const h = health.get(adapter);
+  if (isOpen(h)) {
+    h!.skipped = (h!.skipped ?? 0) + 1;
+    return { value: await fallback(), source: "fallback" };
+  }
   const started = Date.now();
   try {
     const value = await withTimeout(live(), timeoutMs, `${adapter}.${op}`);
