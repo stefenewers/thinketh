@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import type { Concept, DiagnosticQuestion } from "@thinketh/contracts";
-import { api, type DiagnosticAnswerResponse } from "@/api";
+import type { Concept, DiagnosticAnswerResponse, DiagnosticQuestion, DiagnosticSelectResponse } from "@thinketh/contracts";
+import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { KnowledgeStateTransitionView } from "@/components/KnowledgeStateTransitionView";
 import { T } from "@/components/Text";
@@ -18,11 +18,11 @@ export default function DiagnosticScreen() {
   const insets = useSafeAreaInsets();
   const { data, error, loading, reload } = useApi(
     async () => {
-      const [question, knowledge] = await Promise.all([
+      const [picked, knowledge] = await Promise.all([
         api.selectDiagnostic({ developmentId, conceptId }),
         api.getKnowledge(),
       ]);
-      return { question, concepts: knowledge.concepts };
+      return { picked, concepts: knowledge.items.map((i) => i.concept) };
     },
     [developmentId, conceptId],
   );
@@ -40,13 +40,21 @@ export default function DiagnosticScreen() {
       ) : error || !data ? (
         <ErrorState onRetry={reload} />
       ) : (
-        <Diagnostic question={data.question} concepts={data.concepts} />
+        <Diagnostic question={data.picked.question} selection={data.picked.selection} concepts={data.concepts} />
       )}
     </View>
   );
 }
 
-function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; concepts: Concept[] }) {
+function Diagnostic({
+  question,
+  selection,
+  concepts,
+}: {
+  question: DiagnosticQuestion;
+  selection: DiagnosticSelectResponse["selection"];
+  concepts: Concept[];
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [whyOpen, setWhyOpen] = useState(false);
@@ -62,7 +70,7 @@ function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; conc
     setSubmitting(true);
     setSubmitError(false);
     try {
-      const res = await api.answerDiagnostic(question.id, { answer });
+      const res = await api.answerDiagnostic(question.id, answer);
       Haptics.notificationAsync(
         res.answer.correctness >= 0.99 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
       ).catch(() => {});
@@ -74,13 +82,7 @@ function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; conc
     }
   };
 
-  const verdict = result
-    ? result.answer.correctness >= 0.99
-      ? "Right."
-      : result.answer.correctness > 0
-        ? "Partly there."
-        : "One connection needs clarification."
-    : null;
+  const [verdict, explanation] = result ? splitFeedback(result.answer.correctness, result.answer.feedback) : [null, null];
 
   return (
     <Screen topInset={false}>
@@ -103,7 +105,7 @@ function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; conc
             </T>
           </Pressable>
         ) : null}
-        {whyOpen && !result ? <WhyThisQuestion question={question} /> : null}
+        {whyOpen && !result ? <WhyThisQuestion question={question} selection={selection} /> : null}
 
         <View style={{ marginTop: space.xl, gap: space.m }}>
           {question.type === "multiple_choice" ? (
@@ -163,9 +165,11 @@ function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; conc
           <Gutter style={{ marginTop: space.xxl }}>
             <View style={styles.feedback} accessibilityLiveRegion="polite">
               <T variant="section">{verdict}</T>
-              <T variant="body" style={{ marginTop: space.s, color: color.ink2 }}>
-                {result.answer.feedback}
-              </T>
+              {explanation ? (
+                <T variant="body" style={{ marginTop: space.s, color: color.ink2 }}>
+                  {explanation}
+                </T>
+              ) : null}
             </View>
           </Gutter>
           <Gutter style={{ marginTop: space.xl }}>
@@ -190,7 +194,22 @@ function Diagnostic({ question, concepts }: { question: DiagnosticQuestion; conc
   );
 }
 
-function WhyThisQuestion({ question }: { question: DiagnosticQuestion }) {
+// Feedback may lead with its own verdict ("Right. …"); use it as the heading
+// instead of stacking a second one above it.
+function splitFeedback(correctness: number, feedback: string): [string, string] {
+  const m = feedback.match(/^(Right|Correct|Not quite|Partly|Almost)[^.!]{0,20}[.!]\s*/i);
+  if (m) return [m[0].trim(), feedback.slice(m[0].length)];
+  const verdict = correctness >= 0.99 ? "Right." : correctness > 0 ? "Partly there." : "One connection needs clarification.";
+  return [verdict, feedback];
+}
+
+function WhyThisQuestion({
+  question,
+  selection,
+}: {
+  question: DiagnosticQuestion;
+  selection: DiagnosticSelectResponse["selection"];
+}) {
   const d = question.selectionDebug;
   const rows: [string, number][] = d
     ? [
@@ -201,34 +220,58 @@ function WhyThisQuestion({ question }: { question: DiagnosticQuestion }) {
         ["Prerequisite centrality", d.prerequisiteCentrality],
       ]
     : [];
+  const top = Math.max(...selection.candidates.map((c) => c.priority), 0.0001);
   return (
     <View style={styles.whyPanel}>
       <T variant="support" style={{ color: color.ink }}>
-        {question.rationale}
+        {selection.explanation}
       </T>
+      {question.rationale && question.rationale !== selection.explanation ? (
+        <T variant="support" style={{ marginTop: space.s }}>
+          {question.rationale}
+        </T>
+      ) : null}
+
       {d ? (
-        <View style={{ marginTop: space.m, gap: 6 }}>
+        <View style={{ marginTop: space.l, gap: 6 }}>
           {rows.map(([label, v]) => (
             <View key={label} style={styles.debugRow}>
               <T variant="meta" style={{ flex: 1 }}>
                 {label}
               </T>
               <View style={styles.debugTrack}>
-                <View style={[styles.debugFill, { width: `${v * 100}%` }]} />
+                <View style={[styles.debugFill, { width: `${Math.min(1, v) * 100}%` }]} />
               </View>
               <T variant="meta" style={styles.debugNum}>
                 {fmt2(v)}
               </T>
             </View>
           ))}
-          <View style={[styles.debugRow, { marginTop: space.xs }]}>
-            <T variant="meta" style={{ flex: 1, color: color.ink, fontFamily: font.sansSemibold }}>
-              Selection priority
-            </T>
-            <T variant="meta" style={[styles.debugNum, { color: color.ink, fontFamily: font.sansSemibold }]}>
-              {fmt2(d.priority)}
-            </T>
-          </View>
+        </View>
+      ) : null}
+
+      {selection.candidates.length > 1 ? (
+        <View style={{ marginTop: space.l }}>
+          <T variant="label" style={{ marginBottom: space.s }}>
+            Concepts Thinketh weighed
+          </T>
+          {selection.candidates.map((c, i) => (
+            <View key={c.conceptId} style={styles.debugRow}>
+              <T
+                variant="meta"
+                numberOfLines={1}
+                style={[{ flex: 1 }, i === 0 && { color: color.ink, fontFamily: font.sansSemibold }]}
+              >
+                {c.conceptName}
+              </T>
+              <View style={styles.debugTrack}>
+                <View style={[styles.debugFill, { width: `${(c.priority / top) * 100}%` }, i === 0 && { backgroundColor: color.ink }]} />
+              </View>
+              <T variant="meta" style={[styles.debugNum, i === 0 && { color: color.ink, fontFamily: font.sansSemibold }]}>
+                {fmt2(c.priority)}
+              </T>
+            </View>
+          ))}
         </View>
       ) : null}
     </View>

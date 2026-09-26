@@ -1,70 +1,96 @@
 import type { z } from "zod";
-import { ConceptHistoryResponseSchema, AskResponseSchema, DevelopmentDetailResponseSchema, DiagnosticAnswerResponseSchema, DiagnosticSelectResponseSchema, FeedbackResponseSchema, KnowledgeResponseSchema, MakeItStickResponseSchema, TodayResponseSchema, VisualizeResponseSchema, VoiceSessionSchema } from "./types";
+import {
+  AskResponseSchema,
+  BriefResponseSchema,
+  ConceptHistoryResponseSchema,
+  DevelopmentDetailResponseSchema,
+  DiagnosticAnswerResponseSchema,
+  DiagnosticSelectResponseSchema,
+  DiagramSpecSchema,
+  FeedbackResponseSchema,
+  KnowledgeResponseSchema,
+  MemoryAidSchema,
+  VoiceSessionSchema,
+} from "@thinketh/contracts";
 import { DEMO_USER_ID, type ThinkethApi } from "./client";
 
 const TIMEOUT_MS = 8000;
 
+export class ApiError extends Error {}
+
+// Talks to the Thinketh API (packages/intelligence). Every response is
+// validated against the canonical contract. With a fallback, failures are
+// logged and served from the seeded mock so the demo never shows an error;
+// without one (integration testing), they throw.
 export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): ThinkethApi {
+  const base = baseUrl.replace(/\/$/, "");
+
   async function call<S extends z.ZodTypeAny>(
     schema: S,
     method: "GET" | "POST",
     path: string,
     body: unknown,
-    fallbackCall: ((api: ThinkethApi) => Promise<z.infer<S>>) | null,
+    fallbackCall: (api: ThinkethApi) => Promise<z.infer<S>>,
   ): Promise<z.infer<S>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const res = await fetch(`${baseUrl}${path}`, {
+      const res = await fetch(`${base}${path}`, {
         method,
-        headers: { "Content-Type": "application/json", "X-Thinketh-User": DEMO_USER_ID },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { "Content-Type": "application/json", "x-thinketh-user-id": DEMO_USER_ID },
+        body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
-      return schema.parse(await res.json());
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = (json as { error?: { message?: string } } | null)?.error?.message;
+        throw new ApiError(`${method} ${path} -> ${res.status}${message ? `: ${message}` : ""}`);
+      }
+      const parsed = schema.safeParse(json);
+      if (!parsed.success) {
+        throw new ApiError(`${method} ${path} returned an unexpected shape: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`);
+      }
+      return parsed.data;
     } catch (err) {
-      // Never block the demo on the network: log and serve seeded data.
       console.warn(`[thinketh-api] ${method} ${path} failed`, err);
-      if (fallback && fallbackCall) return fallbackCall(fallback);
+      if (fallback) return fallbackCall(fallback);
       throw err;
     } finally {
       clearTimeout(timer);
     }
   }
 
-  const userId = DEMO_USER_ID;
-  const f = <T>(fn: (api: ThinkethApi) => Promise<T>) => (fallback ? fn : null);
+  const id = encodeURIComponent;
 
   return {
-    getTodayBrief: () => call(TodayResponseSchema, "GET", "/brief/today", undefined, f((a) => a.getTodayBrief())),
-    getDevelopment: (id) =>
-      call(DevelopmentDetailResponseSchema, "GET", `/developments/${encodeURIComponent(id)}`, undefined, f((a) => a.getDevelopment(id))),
-    sendFeedback: (id, kind) =>
-      call(FeedbackResponseSchema, "POST", `/developments/${encodeURIComponent(id)}/feedback`, { userId, kind }, f((a) => a.sendFeedback(id, kind))),
+    getTodayBrief: () => call(BriefResponseSchema, "GET", "/brief/today", undefined, (a) => a.getTodayBrief()),
+    getDevelopment: (devId) =>
+      call(DevelopmentDetailResponseSchema, "GET", `/developments/${id(devId)}`, undefined, (a) => a.getDevelopment(devId)),
+    sendFeedback: (devId, kind) =>
+      call(FeedbackResponseSchema, "POST", `/developments/${id(devId)}/feedback`, { kind }, (a) => a.sendFeedback(devId, kind)),
     selectDiagnostic: (req) =>
-      call(DiagnosticSelectResponseSchema, "POST", "/diagnostics/select", { userId, ...req }, f((a) => a.selectDiagnostic(req))),
-    answerDiagnostic: (questionId, req) =>
-      call(
-        DiagnosticAnswerResponseSchema,
-        "POST",
-        `/diagnostics/${encodeURIComponent(questionId)}/answer`,
-        { userId, ...req },
-        f((a) => a.answerDiagnostic(questionId, req)),
+      call(DiagnosticSelectResponseSchema, "POST", "/diagnostics/select", req, (a) => a.selectDiagnostic(req)),
+    answerDiagnostic: (questionId, answer) =>
+      call(DiagnosticAnswerResponseSchema, "POST", `/diagnostics/${id(questionId)}/answer`, { answer }, (a) =>
+        a.answerDiagnostic(questionId, answer),
       ),
-    getKnowledge: () => call(KnowledgeResponseSchema, "GET", "/knowledge", undefined, f((a) => a.getKnowledge())),
+    getKnowledge: () => call(KnowledgeResponseSchema, "GET", "/knowledge", undefined, (a) => a.getKnowledge()),
     getConceptHistory: (conceptId) =>
-      call(
-        ConceptHistoryResponseSchema,
-        "GET",
-        `/knowledge/${encodeURIComponent(conceptId)}/history`,
-        undefined,
-        f((a) => a.getConceptHistory(conceptId)),
+      call(ConceptHistoryResponseSchema, "GET", `/knowledge/${id(conceptId)}/history`, undefined, (a) =>
+        a.getConceptHistory(conceptId),
       ),
-    ask: (req) => call(AskResponseSchema, "POST", "/ask", { userId, ...req }, f((a) => a.ask(req))),
-    visualize: (req) => call(VisualizeResponseSchema, "POST", "/visualize", { userId, ...req }, f((a) => a.visualize(req))),
-    makeItStick: (req) => call(MakeItStickResponseSchema, "POST", "/make-it-stick", { userId, ...req }, f((a) => a.makeItStick(req))),
-    createVoiceSession: (req) =>
-      call(VoiceSessionSchema, "POST", "/voice/session", { userId, ...req }, f((a) => a.createVoiceSession(req))),
+    ask: (req) => call(AskResponseSchema, "POST", "/ask", req, (a) => a.ask(req)),
+    visualize: (req) => call(DiagramSpecSchema, "POST", "/visualize", req, (a) => a.visualize(req)),
+    makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req)),
+    createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
+    resetDemo: async () => {
+      const res = await fetch(`${base}/demo/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-thinketh-user-id": DEMO_USER_ID },
+        body: "{}",
+      });
+      if (!res.ok) throw new ApiError(`POST /demo/reset -> ${res.status}`);
+      await fallback?.resetDemo();
+    },
   };
 }

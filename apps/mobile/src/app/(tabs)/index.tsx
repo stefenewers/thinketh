@@ -1,29 +1,47 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import type { Development, Source } from "@thinketh/contracts";
-import { api, type TodayResponse } from "@/api";
+import type { BriefResponse, Development, KnowledgeResponse, Source } from "@thinketh/contracts";
+import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
 import { Sheet } from "@/components/Sheet";
 import { T } from "@/components/Text";
 import { Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { fmt2, isMajor, longDate, masteryLabel, relativeTime, significanceLabel } from "@/lib/knowledge";
+import {
+  fmt2,
+  improved,
+  isMajor,
+  longDate,
+  masteryLabel,
+  relativeTime,
+  significanceLabel,
+  skipLabel,
+  todaysTransitions,
+  understoodDevelopmentIds,
+} from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
 
 const SKIP_DEFINITIONS: Record<string, string> = {
-  "Duplicate reports": "Several sources covering the same event. You see the strongest version once.",
-  "Low-signal opinions": "Commentary that reacts to events without adding new facts or evidence.",
-  "Already understood": "Developments that fall within what your knowledge state already covers well.",
-  "Minor updates": "Incremental changes that extend a known pattern without changing your mental model.",
-  "Low-confidence claims": "Reports without enough corroboration or primary sources yet.",
+  duplicate: "Several sources covering the same event. You see the strongest version once.",
+  low_signal: "Commentary that reacts to events without adding new facts or evidence.",
+  already_understood: "Developments that fall within what your knowledge state already covers well.",
+  minor_update: "Incremental changes that extend a known pattern without changing your mental model.",
+  low_confidence: "Reports without enough corroboration or primary sources yet.",
 };
 
 const VISIBLE_ROWS = 3;
 
 export default function Today() {
-  const { data, error, loading, reload } = useApi(() => api.getTodayBrief(), [], { refetchOnFocus: true });
+  const { data, error, loading, reload } = useApi(
+    async () => {
+      const [today, knowledge] = await Promise.all([api.getTodayBrief(), api.getKnowledge()]);
+      return { today, knowledge };
+    },
+    [],
+    { refetchOnFocus: true },
+  );
 
   if (loading && !data) {
     return (
@@ -39,11 +57,13 @@ export default function Today() {
       </Screen>
     );
   }
-  return <TodayContent data={data} />;
+  return <TodayContent today={data.today} knowledge={data.knowledge} />;
 }
 
-function TodayContent({ data }: { data: TodayResponse }) {
-  const { brief, developments, sources, concepts, understoodDevelopmentIds, recentTransitions } = data;
+function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: KnowledgeResponse }) {
+  const { brief, developments } = today;
+  const sources = today.sources ?? [];
+  const concepts = knowledge.items.map((i) => i.concept);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
@@ -51,14 +71,14 @@ function TodayContent({ data }: { data: TodayResponse }) {
   const ordered = brief.developmentIds.map((id) => byId.get(id)).filter((d): d is Development => !!d);
   const hero = byId.get(brief.heroDevelopmentId) ?? ordered[0];
   const rest = ordered.filter((d) => d.id !== hero?.id);
-  const understood = new Set(understoodDevelopmentIds);
+  const understood = understoodDevelopmentIds(developments, knowledge.items);
   const next = ordered.find((d) => !understood.has(d.id)) ?? hero;
   const remainingMinutes = Math.max(
     0,
     Math.round(brief.estimatedMinutes * (1 - understood.size / Math.max(brief.meaningfulCount, 1))),
   );
   const sourceFor = (d: Development): Source | undefined => sources.find((s) => d.sourceIds.includes(s.id));
-  const latest = recentTransitions[0];
+  const latest = todaysTransitions(knowledge.items).find(improved);
   const latestConcept = latest ? concepts.find((c) => c.id === latest.conceptId) : undefined;
 
   if (!hero) {
@@ -150,8 +170,10 @@ function TodayContent({ data }: { data: TodayResponse }) {
               {latestConcept.name}
             </T>
             <T variant="support" style={{ marginTop: space.xs }}>
-              {masteryLabel(latest.before.mastery)} → {masteryLabel(latest.after.mastery)} · mastery {fmt2(latest.before.mastery)} →{" "}
-              {fmt2(latest.after.mastery)}
+              {masteryLabel(latest.before.mastery) === masteryLabel(latest.after.mastery)
+                ? masteryLabel(latest.after.mastery)
+                : `${masteryLabel(latest.before.mastery)} → ${masteryLabel(latest.after.mastery)}`}
+              {` · mastery ${fmt2(latest.before.mastery)} → ${fmt2(latest.after.mastery)}`}
             </T>
             <View style={styles.inlineLink}>
               <T variant="meta" style={{ color: color.ink }}>
@@ -171,10 +193,12 @@ function TodayContent({ data }: { data: TodayResponse }) {
           style={({ pressed }) => [styles.hero, pressed && { opacity: 0.85 }]}
         >
           <View style={styles.heroMeta}>
-            <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
-              {sourceFor(hero)?.publisher ?? "Source"}
-            </T>
-            <T variant="meta">· {relativeTime(hero.happenedAt)}</T>
+            {sourceFor(hero)?.publisher ? (
+              <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
+                {sourceFor(hero)?.publisher} ·
+              </T>
+            ) : null}
+            <T variant="meta">{relativeTime(hero.happenedAt)}</T>
             <View style={{ flex: 1 }} />
             {understood.has(hero.id) ? <UnderstoodTag /> : <T variant="meta">{significanceLabel(hero)}</T>}
           </View>
@@ -208,7 +232,7 @@ function TodayContent({ data }: { data: TodayResponse }) {
           >
             <View style={{ flexDirection: "row", gap: space.s, alignItems: "center" }}>
               <T variant="meta">
-                {sourceFor(d)?.publisher ?? "Source"} · {relativeTime(d.happenedAt)}
+                {[sourceFor(d)?.publisher, relativeTime(d.happenedAt)].filter(Boolean).join(" · ")}
               </T>
               {understood.has(d.id) ? <UnderstoodTag /> : isMajor(d) ? <T variant="meta" style={{ color: color.ink }}>· Major</T> : null}
             </View>
@@ -242,7 +266,7 @@ function TodayContent({ data }: { data: TodayResponse }) {
           <View key={label} style={styles.skipRow}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <T variant="body" style={{ fontFamily: font.sansMedium }}>
-                {label}
+                {skipLabel(label)}
               </T>
               <T variant="body" style={{ fontVariant: ["tabular-nums"] }}>
                 {count}

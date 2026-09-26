@@ -2,14 +2,24 @@ import { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import Svg, { Circle, Polyline } from "react-native-svg";
-import type { Concept, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
-import { api, type KnowledgeResponse } from "@/api";
+import type { Concept, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
+import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MasteryBar, MindGraph } from "@/components/MindGraph";
 import { T } from "@/components/Text";
 import { BackBar, Divider, ErrorState, Gutter, LoadingState, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { evidenceLabel, fmt2, masteryLabel, observationLabel, relativeTime, shortDate } from "@/lib/knowledge";
+import {
+  evidenceLabel,
+  fmt2,
+  improved,
+  improvedTodayIds,
+  levelLabel,
+  observationLabel,
+  relativeTime,
+  shortDate,
+  todaysTransitions,
+} from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
 
 export default function MindScreen() {
@@ -30,13 +40,16 @@ export default function MindScreen() {
   );
 }
 
-const BANDS = ["Strong", "Intermediate", "Developing", "Weak"] as const;
+const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];
 
 function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConceptId?: string }) {
-  const { concepts, states, edges, recentTransitions } = data;
-  const updatedIds = new Set(recentTransitions.filter((t) => t.after.mastery > t.before.mastery).map((t) => t.conceptId));
+  const { items, edges } = data;
+  const concepts = items.map((i) => i.concept);
+  const states = items.map((i) => i.state);
+  const levelOfConcept = new Map(items.map((i) => [i.concept.id, i.level]));
+  const updatedIds = improvedTodayIds(items);
   const [selectedId, setSelectedId] = useState<string>(
-    initialConceptId ?? recentTransitions[0]?.conceptId ?? concepts[0]?.id,
+    initialConceptId ?? todaysTransitions(items).find(improved)?.conceptId ?? concepts[0]?.id,
   );
   const scrollRef = useRef<ScrollView>(null);
   const stateOf = new Map(states.map((s) => [s.conceptId, s]));
@@ -71,29 +84,34 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
 
       {selected && selectedState ? (
         <Gutter style={{ marginTop: space.xl }}>
-          <ConceptPanel concept={selected} state={selectedState} justImproved={updatedIds.has(selected.id)} />
+          <ConceptPanel
+            concept={selected}
+            state={selectedState}
+            level={levelOfConcept.get(selected.id) ?? "weak"}
+            justImproved={updatedIds.has(selected.id)}
+          />
         </Gutter>
       ) : null}
 
       <View style={{ marginTop: space.x3 }}>
         {BANDS.map((band) => {
-          const items = concepts
+          const inBand = concepts
             .map((c) => ({ c, s: stateOf.get(c.id) }))
-            .filter((x): x is { c: Concept; s: KnowledgeState } => !!x.s && masteryLabel(x.s.mastery) === band)
+            .filter((x): x is { c: Concept; s: KnowledgeState } => !!x.s && levelOfConcept.get(x.c.id) === band)
             .sort((a, b) => b.s.mastery - a.s.mastery);
-          if (!items.length) return null;
+          if (!inBand.length) return null;
           return (
             <View key={band} style={{ marginBottom: space.xl }}>
               <Gutter>
-                <SectionLabel>{band}</SectionLabel>
+                <SectionLabel>{levelLabel[band]}</SectionLabel>
               </Gutter>
               <Divider />
-              {items.map(({ c, s }) => (
+              {inBand.map(({ c, s }) => (
                 <Pressable
                   key={c.id}
                   onPress={() => select(c.id, true)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${c.name}. ${masteryLabel(s.mastery)}, ${evidenceLabel(s.uncertainty)}.${updatedIds.has(c.id) ? " Just improved." : ""}`}
+                  accessibilityLabel={`${c.name}. ${levelLabel[band]}, ${evidenceLabel(s.uncertainty)}.${updatedIds.has(c.id) ? " Just improved." : ""}`}
                   style={({ pressed }) => [styles.conceptRow, (pressed || c.id === selectedId) && { backgroundColor: color.fog }]}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
@@ -128,8 +146,19 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
   );
 }
 
-function ConceptPanel({ concept, state, justImproved }: { concept: Concept; state: KnowledgeState; justImproved: boolean }) {
-  const { data: history, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
+function ConceptPanel({
+  concept,
+  state,
+  level,
+  justImproved,
+}: {
+  concept: Concept;
+  state: KnowledgeState;
+  level: KnowledgeLevel;
+  justImproved: boolean;
+}) {
+  const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
+  const history = data?.transitions;
 
   return (
     <View style={styles.panel}>
@@ -140,7 +169,7 @@ function ConceptPanel({ concept, state, justImproved }: { concept: Concept; stat
         {concept.name}
       </T>
       <T variant="support" style={{ marginTop: space.xs }}>
-        {masteryLabel(state.mastery)} · {evidenceLabel(state.uncertainty).toLowerCase()}
+        {levelLabel[level]} · {evidenceLabel(state.uncertainty).toLowerCase()}
       </T>
       <View style={{ marginTop: space.l }}>
         <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />

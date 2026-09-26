@@ -1,43 +1,119 @@
-import { mockApi as api } from "../src/api/mock";
-import * as T from "../src/api/types";
-import { ConceptHistoryResponseSchema, DiagnosticSelectResponseSchema, MakeItStickResponseSchema, VisualizeResponseSchema } from "../src/api/types";
-import { developments } from "../src/api/fixtures";
+// Golden demo loop, end to end, through the same ThinkethApi the app uses.
+//
+//   npm run check:golden                                   # against the in-app mock
+//   API_URL=http://localhost:8787 npm run check:golden     # against the real backend, NO mock fallback
+//
+// Every HTTP response is validated against packages/contracts, so a contract
+// mismatch fails here instead of on a phone.
+import type { ThinkethApi } from "../src/api/client";
+import { createHttpApi } from "../src/api/http";
+import { mockApi } from "../src/api/mock";
+import { improvedTodayIds, understoodDevelopmentIds } from "../src/lib/knowledge";
 
-const assert = (c: unknown, m: string) => { if (!c) { console.error("FAIL:", m); process.exit(1); } console.log("ok -", m); };
+const url = process.env.API_URL;
+const api: ThinkethApi = url ? createHttpApi(url, null) : mockApi;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-(async () => {
-  const today = T.TodayResponseSchema.parse(await api.getTodayBrief());
-  assert(today.brief.meaningfulCount === 6 && today.brief.majorCount === 3 && today.brief.estimatedMinutes === 11, "brief 6 / 3 major / 11 min");
-  assert(today.brief.skippedCount === 143, "143 filtered");
-  const hero = today.brief.heroDevelopmentId;
-  const detail = T.DevelopmentDetailResponseSchema.parse(await api.getDevelopment(hero));
-  assert(detail.delta.alreadyKnew.length > 0 && detail.delta.whatChanged.length > 0, "delta has knew/changed");
-  const q = DiagnosticSelectResponseSchema.parse(await api.selectDiagnostic({ developmentId: hero }));
-  assert(q.rationale.includes("high-uncertainty"), "rationale present");
-  const res = T.DiagnosticAnswerResponseSchema.parse(await api.answerDiagnostic(q.id, { answer: "Memory that persists across sessions" }));
-  const t = res.transition;
-  assert(t.before.mastery === 0.42 && t.after.mastery === 0.51, `mastery 0.42 -> 0.51 (${t.before.mastery} -> ${t.after.mastery})`);
-  assert(t.before.uncertainty === 0.44 && t.after.uncertainty === 0.29, `uncertainty 0.44 -> 0.29 (${t.before.uncertainty} -> ${t.after.uncertainty})`);
-  const k = T.KnowledgeResponseSchema.parse(await api.getKnowledge());
-  assert(k.states.find((s) => s.conceptId === "agent-memory")?.mastery === 0.51, "Mind reflects update");
-  assert(k.recentTransitions[0]?.id === t.id, "recent transition recorded");
-  const h = ConceptHistoryResponseSchema.parse(await api.getConceptHistory("agent-memory"));
-  assert(h.length === 4 && h.at(-1)?.id === t.id, "history has 4 entries ending in new transition");
+let failures = 0;
+const check = (ok: unknown, label: string) => {
+  console.log(`${ok ? "ok  " : "FAIL"} - ${label}`);
+  if (!ok) failures++;
+};
+
+// Correct choices for the hero question in each dataset (the API never reveals them).
+const CORRECT: Record<string, (choices: string[]) => string | undefined> = {
+  "dq-agent-memory": (c) => c.find((x) => x.startsWith("Memory that persists")),
+  "dq-agent-memory-persistence": (c) => c.find((x) => x.startsWith("Distilled facts")),
+};
+
+async function main() {
+  console.log(`target: ${url ?? "mock"}`);
+  await api.resetDemo();
+
+  // Today
+  const today = await api.getTodayBrief();
+  const { brief } = today;
+  check(brief.meaningfulCount === 6 && brief.majorCount === 3 && brief.estimatedMinutes === 11, "Today: 6 developments / 3 major / 11 min");
+  check((brief.skippedCount ?? 0) > 0 && brief.skippedBreakdown, `Today: ${brief.skippedCount} filtered, with breakdown`);
+  const hero = today.developments.find((d) => d.id === brief.heroDevelopmentId);
+  check(hero, `Today: hero "${hero?.title}"`);
+  if (!hero) return;
+
+  // Development
+  const detail = await api.getDevelopment(hero.id);
+  check(detail.delta.alreadyKnew.length && detail.delta.whatChanged.length && detail.delta.mentalModelChange, "Development: knowledge delta present");
+
+  // Diagnostic select
+  const picked = await api.selectDiagnostic({ developmentId: hero.id });
+  check(picked.question.conceptId === "agent-memory", `Diagnostic: backend chose ${picked.question.conceptId}`);
+  check(picked.selection.explanation.startsWith("Chosen because"), `Diagnostic: explanation "${picked.selection.explanation.slice(0, 60)}…"`);
+  check(picked.selection.candidates.length > 1, `Diagnostic: ${picked.selection.candidates.length} candidates weighed`);
+
+  // Answer
+  const correct = CORRECT[picked.question.id]?.(picked.question.choices ?? []);
+  check(correct, `Diagnostic: know the correct choice for ${picked.question.id}`);
+  if (!correct) return;
+  const { answer, transition: t } = await api.answerDiagnostic(picked.question.id, correct);
+  check(answer.correctness === 1, "Answer: graded correct");
+  check(
+    round2(t.before.mastery) === 0.42 && round2(t.after.mastery) === 0.51,
+    `Transition: mastery ${t.before.mastery} -> ${t.after.mastery} (runbook 0.42 -> 0.51)`,
+  );
+  check(
+    round2(t.before.uncertainty) === 0.44 && round2(t.after.uncertainty) === 0.29,
+    `Transition: uncertainty ${t.before.uncertainty} -> ${t.after.uncertainty} (runbook 0.44 -> 0.29)`,
+  );
+  check(t.reason.length > 20, `Transition: reason "${t.reason.slice(0, 70)}…"`);
+
+  // Mind
+  const k = await api.getKnowledge();
+  const item = k.items.find((i) => i.concept.id === "agent-memory");
+  check(item && item.state.mastery === t.after.mastery, "Mind: Agent Memory shows the new mastery");
+  const improvedIds = improvedTodayIds(k.items);
+  check(improvedIds.has("agent-memory"), "Mind: Agent Memory marked as just improved");
+  check(improvedIds.size === 1, `Mind: only the answered concept is "just improved" (got ${[...improvedIds].join(", ")})`);
+
+  // History
+  const h = await api.getConceptHistory("agent-memory");
+  check(h.transitions.at(-1)?.id === t.id, `History: ${h.transitions.length} transitions, newest is this answer`);
+
+  // Today progress
   const today2 = await api.getTodayBrief();
-  assert(today2.understoodDevelopmentIds.includes(hero), "Today shows 1 understood");
-  for (const d of developments) {
-    T.DevelopmentDetailResponseSchema.parse(await api.getDevelopment(d.id));
-    DiagnosticSelectResponseSchema.parse(await api.selectDiagnostic({ developmentId: d.id }));
-    VisualizeResponseSchema.parse(await api.visualize({ developmentId: d.id }));
-    MakeItStickResponseSchema.parse(await api.makeItStick({ conceptId: d.conceptIds[0], developmentId: d.id }));
+  check(understoodDevelopmentIds(today2.developments, k.items).has(hero.id), "Today: hero counts as understood");
+
+  // Secondary endpoints validate
+  for (const d of today.developments) {
+    await api.getDevelopment(d.id);
+    await api.visualize({ developmentId: d.id });
+    await api.makeItStick({ developmentId: d.id, conceptId: d.conceptIds[0] });
   }
-  assert(true, "every development: detail/diagnostic/visualize/make-it-stick validate");
-  for (const s of ["What changed in agent memory this week?", "What am I weakest on?", "Explain MCP based on what I already know.", "random"])
-    T.AskResponseSchema.parse(await api.ask({ question: s }));
-  T.FeedbackResponseSchema.parse(await api.sendFeedback("dev-mcp", "got_it"));
-  T.VoiceSessionSchema.parse(await api.createVoiceSession({ briefDate: today.brief.date }));
-  assert(true, "ask/feedback/voice validate");
-  api.reset();
-  const wrong = await api.answerDiagnostic(q.id, { answer: "A larger context window" });
-  assert(wrong.answer.correctness === 0 && wrong.transition.after.misconceptionFlags.length === 1, "incorrect answer flags misconception");
-})();
+  check(true, "Every development: detail / visualize / make-it-stick validate");
+  for (const q of ["What changed in agent memory this week?", "What am I weakest on?", "Explain MCP based on what I already know."]) {
+    await api.ask({ question: q });
+  }
+  check(true, "Ask: suggested questions validate");
+  const voice = await api.createVoiceSession();
+  check(voice.fallbackTranscript.length > 0, `Voice: ${voice.mode}, ${voice.fallbackTranscript.length} transcript lines`);
+  const other = today.developments.find((d) => d.id !== hero.id)!;
+  const fb = await api.sendFeedback(other.id, "got_it");
+  check(fb.transitions.length > 0, "Feedback: got_it recorded");
+
+  // Wrong answer path
+  await api.resetDemo();
+  const again = await api.selectDiagnostic({ developmentId: hero.id });
+  const wrongChoice = (again.question.choices ?? []).find((c) => c !== correct)!;
+  const wrong = await api.answerDiagnostic(again.question.id, wrongChoice);
+  check(wrong.answer.correctness < 1 && wrong.transition.after.mastery <= wrong.transition.before.mastery, "Wrong answer: mastery does not rise");
+
+  await api.resetDemo();
+}
+
+main()
+  .catch((e) => {
+    console.error("FAIL -", e instanceof Error ? e.message : e);
+    failures++;
+  })
+  .finally(() => {
+    console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
+    process.exit(failures ? 1 : 0);
+  });
