@@ -52,8 +52,8 @@ const CONCEPTS: Concept[] = [
     importance: 0.7,
   },
   {
-    id: "retrieval-augmented-generation",
-    name: "Retrieval-Augmented Generation",
+    id: "retrieval",
+    name: "Retrieval (RAG)",
     description: "Fetching relevant documents at query time and placing them in context so the model can ground its answer.",
     domain: DEMO_DOMAIN,
     importance: 0.7,
@@ -66,8 +66,8 @@ const CONCEPTS: Concept[] = [
     importance: 0.6,
   },
   {
-    id: "long-horizon-agents",
-    name: "Long-Horizon Agents",
+    id: "long-running-agents",
+    name: "Long-running Agents",
     description: "Agents that pursue a goal over many steps, sessions or days rather than a single request.",
     domain: DEMO_DOMAIN,
     importance: 0.8,
@@ -85,14 +85,14 @@ const CONCEPTS: Concept[] = [
 const EDGES: ConceptEdge[] = [
   { fromConceptId: "context-windows", toConceptId: "agent-memory", type: "prerequisite", weight: 0.8 },
   { fromConceptId: "agent-tool-use", toConceptId: "agent-memory", type: "prerequisite", weight: 0.5 },
-  { fromConceptId: "agent-memory", toConceptId: "long-horizon-agents", type: "prerequisite", weight: 0.8 },
+  { fromConceptId: "agent-memory", toConceptId: "long-running-agents", type: "prerequisite", weight: 0.8 },
   { fromConceptId: "agent-tool-use", toConceptId: "mcp", type: "prerequisite", weight: 0.7 },
   { fromConceptId: "context-windows", toConceptId: "context-compaction", type: "prerequisite", weight: 0.6 },
   { fromConceptId: "memory-consolidation", toConceptId: "agent-memory", type: "part_of", weight: 0.7 },
-  { fromConceptId: "retrieval-augmented-generation", toConceptId: "agent-memory", type: "related", weight: 0.6 },
+  { fromConceptId: "retrieval", toConceptId: "agent-memory", type: "related", weight: 0.6 },
   { fromConceptId: "context-compaction", toConceptId: "agent-memory", type: "related", weight: 0.5 },
-  { fromConceptId: "evaluator-architectures", toConceptId: "long-horizon-agents", type: "supports", weight: 0.6 },
-  { fromConceptId: "agent-tool-use", toConceptId: "long-horizon-agents", type: "supports", weight: 0.4 },
+  { fromConceptId: "evaluator-architectures", toConceptId: "long-running-agents", type: "supports", weight: 0.6 },
+  { fromConceptId: "agent-tool-use", toConceptId: "long-running-agents", type: "supports", weight: 0.4 },
 ];
 
 export function buildSeed(now: Date = new Date()): SeedCorpus {
@@ -215,7 +215,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       text: "Agents can now write distilled facts to a persistent memory store and recall them in later sessions, even when each session starts with an empty context window.",
       confidence: 0.9,
       sourceIds: ["src-memory-engineering-post", "src-memory-repo"],
-      conceptIds: ["agent-memory", "long-horizon-agents"],
+      conceptIds: ["agent-memory", "long-running-agents"],
       stance: "supports",
     },
     {
@@ -231,7 +231,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       text: "Recall is scoped: the agent retrieves only memories relevant to the current task, so memory is closer to a curated database than to a longer context window.",
       confidence: 0.85,
       sourceIds: ["src-memory-engineering-post", "src-memory-repo"],
-      conceptIds: ["agent-memory", "retrieval-augmented-generation", "context-windows"],
+      conceptIds: ["agent-memory", "retrieval", "context-windows"],
       stance: "supports",
     },
     {
@@ -248,7 +248,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       text: "A separate evaluator model catches substantially more agent errors than asking the same model to critique itself.",
       confidence: 0.8,
       sourceIds: ["src-evaluator-report"],
-      conceptIds: ["evaluator-architectures", "long-horizon-agents"],
+      conceptIds: ["evaluator-architectures", "long-running-agents"],
       stance: "supports",
     },
     {
@@ -272,7 +272,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       text: "Systems that score well on retrieval benchmarks do not necessarily score well on multi-session memory benchmarks.",
       confidence: 0.75,
       sourceIds: ["src-memory-vs-rag-benchmark"],
-      conceptIds: ["retrieval-augmented-generation", "agent-memory"],
+      conceptIds: ["retrieval", "agent-memory"],
       stance: "neutral",
     },
     {
@@ -305,7 +305,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       text: "RAG retrieves documents at query time and places them in context; nothing is learned or retained afterwards.",
       confidence: 0.9,
       sourceIds: ["src-rag-primer"],
-      conceptIds: ["retrieval-augmented-generation"],
+      conceptIds: ["retrieval"],
       stance: "neutral",
     },
     {
@@ -332,7 +332,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       novelty: 0.85,
       credibility: 0.82,
       momentum: 0.8,
-      conceptIds: ["agent-memory", "memory-consolidation", "long-horizon-agents", "context-windows", "retrieval-augmented-generation"],
+      conceptIds: ["agent-memory", "memory-consolidation", "long-running-agents", "context-windows", "retrieval"],
       claimIds: [
         "clm-memory-persists-across-sessions",
         "clm-write-time-consolidation",
@@ -354,7 +354,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       novelty: 0.7,
       credibility: 0.8,
       momentum: 0.7,
-      conceptIds: ["evaluator-architectures", "long-horizon-agents"],
+      conceptIds: ["evaluator-architectures", "long-running-agents"],
       claimIds: ["clm-separate-evaluator"],
       sourceIds: ["src-evaluator-report"],
       storylineIds: ["story-context-to-persistent-agents"],
@@ -399,7 +399,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       novelty: 0.65,
       credibility: 0.75,
       momentum: 0.5,
-      conceptIds: ["retrieval-augmented-generation", "agent-memory"],
+      conceptIds: ["retrieval", "agent-memory"],
       claimIds: ["clm-memory-benchmarks-diverge"],
       sourceIds: ["src-memory-vs-rag-benchmark"],
       storylineIds: [],
@@ -499,7 +499,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       summary:
         "Agents are moving from single-session reasoning inside one context window toward long-running systems with compaction, memory and independent evaluation.",
       developmentIds: ["dev-compaction-api", "dev-evaluator-layer", FLAGSHIP_DEVELOPMENT_ID],
-      conceptIds: ["context-windows", "context-compaction", "agent-memory", "evaluator-architectures", "long-horizon-agents"],
+      conceptIds: ["context-windows", "context-compaction", "agent-memory", "evaluator-architectures", "long-running-agents"],
     },
   ];
 
@@ -565,9 +565,9 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
     agentMemory.end,
     evaluators.end,
     state("context-windows", 0.78, 0.8, 0.18, 10, 24),
-    state("retrieval-augmented-generation", 0.68, 0.7, 0.24, 8, 26),
+    state("retrieval", 0.68, 0.7, 0.24, 8, 26),
     state("memory-consolidation", 0.22, 0.25, 0.5, 1, 48),
-    state("long-horizon-agents", 0.5, 0.5, 0.32, 4, 36),
+    state("long-running-agents", 0.5, 0.5, 0.32, 4, 36),
     state("context-compaction", 0.45, 0.4, 0.38, 3, 44),
   ];
 
@@ -578,13 +578,13 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       interests: [
         {
           topic: "AI agents",
-          conceptIds: ["agent-memory", "long-horizon-agents", "agent-tool-use", "mcp"],
+          conceptIds: ["agent-memory", "long-running-agents", "agent-tool-use", "mcp"],
           weight: 1,
         },
         { topic: "Evaluation", conceptIds: ["evaluator-architectures"], weight: 0.8 },
         {
           topic: "LLM infrastructure",
-          conceptIds: ["context-windows", "retrieval-augmented-generation", "context-compaction", "memory-consolidation"],
+          conceptIds: ["context-windows", "retrieval", "context-compaction", "memory-consolidation"],
           weight: 0.6,
         },
       ],
@@ -599,7 +599,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
     developmentMeta,
     baselineClaimIds: {
       "context-windows": ["clm-baseline-context-bounded"],
-      "retrieval-augmented-generation": ["clm-baseline-rag-query-time"],
+      "retrieval": ["clm-baseline-rag-query-time"],
       "agent-tool-use": ["clm-baseline-tools-structured", "clm-function-calling-basics"],
     },
     storylines,

@@ -31,7 +31,8 @@ import type {
 } from "./contracts.ts";
 import { guarded, runInBackground } from "./adapters/guard.ts";
 import type { Adapters } from "./adapters/registry.ts";
-import type { LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import { lexicalScore } from "./adapters/model/deterministic.ts";
+import type { AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
@@ -206,6 +207,17 @@ export class ThinkethService {
   // Today
   // -------------------------------------------------------------------------
 
+  /** Calendar day (in the configured time zone) of an ISO timestamp. */
+  private localDay(iso: string | Date): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: this.config.timeZone }).format(new Date(iso));
+  }
+
+  /** Newest first, primary transitions only (propagated side effects excluded). */
+  private async recentPrimaryTransitions(userId: string, limit = 20): Promise<KnowledgeStateTransition[]> {
+    const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
+    return recent.filter((t) => !t.observation.sourceRef?.startsWith("propagated:")).slice(0, limit);
+  }
+
   async brief(userId: string): Promise<BriefResponse> {
     const states = await this.statesFor(userId);
     const { brief, ordered } = buildBrief({
@@ -221,7 +233,23 @@ export class ThinkethService {
     // Warm the Claude phrasing of the hero card so the first tap is already personalized.
     const hero = ordered[0];
     if (hero) runInBackground("warm-delta", this.phrasedDelta(userId, hero, states));
-    return { brief, developments: ordered };
+
+    const recentTransitions = await this.recentPrimaryTransitions(userId);
+    const today = this.localDay(this.now());
+    const passedToday = new Set(
+      recentTransitions
+        .filter((t) => t.observation.kind === "diagnostic_correct" && this.localDay(t.createdAt) === today)
+        .map((t) => t.conceptId),
+    );
+    const sourceIds = new Set(ordered.flatMap((d) => d.sourceIds));
+    return {
+      brief,
+      developments: ordered,
+      sources: [...this.sources.values()].filter((s) => sourceIds.has(s.id)),
+      concepts: [...this.concepts.values()],
+      understoodDevelopmentIds: ordered.filter((d) => d.conceptIds[0] && passedToday.has(d.conceptIds[0])).map((d) => d.id),
+      recentTransitions,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -452,7 +480,7 @@ export class ThinkethService {
       return [{ concept, state, level: knowledgeLevel(state), ...(last ? { lastTransition: last } : {}) }];
     });
     items.sort((a, b) => b.state.mastery - a.state.mastery);
-    return { userId, items, edges: this.seed.edges };
+    return { userId, items, edges: this.seed.edges, recentTransitions: await this.recentPrimaryTransitions(userId) };
   }
 
   async conceptHistory(userId: string, conceptId: string): Promise<ConceptHistoryResponse> {
@@ -553,29 +581,83 @@ export class ThinkethService {
       ).then((r) => r.value),
     ]);
 
-    // Expand search hits into claims: claims directly, developments/concepts via their claims.
-    const claimIds = new Set<string>();
-    if (input.developmentId) for (const id of (await this.getDevelopment(input.developmentId)).claimIds) claimIds.add(id);
+    // Expand search hits into candidate claims: claims directly, developments/concepts via their claims.
+    const devClaimIds = new Set(input.developmentId ? (await this.getDevelopment(input.developmentId)).claimIds : []);
+    const candidateIds = new Set(devClaimIds);
     for (const h of hits) {
-      if (h.kind === "claim") claimIds.add(h.id);
-      if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) claimIds.add(id);
-      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) claimIds.add(c.id);
+      if (h.kind === "claim") candidateIds.add(h.id);
+      if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) candidateIds.add(id);
+      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
     }
-    const claims = [...claimIds].flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : [])).slice(0, 12);
-    const sources = [...new Set(claims.flatMap((c) => c.sourceIds))].flatMap((id) => (this.sources.has(id) ? [this.sources.get(id)!] : []));
+    const ranked = [...candidateIds]
+      .flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : []))
+      .map((c) => ({ c, score: lexicalScore(input.question, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.c);
+
+    // Layer 1: what sources say (verbatim claims).
+    const said = ranked.filter((c) => c.stance !== "challenges").slice(0, 3);
+    const citedConceptIds = [...new Set(said.flatMap((c) => c.conceptIds))].slice(0, 5);
+    const citedDevelopmentIds = [
+      ...new Set([
+        ...(input.developmentId ? [input.developmentId] : []),
+        ...[...this.developments.values()].filter((d) => said.some((c) => d.claimIds.includes(c.id))).map((d) => d.id),
+      ]),
+    ];
+
+    // Layer 3: what you already understand (from the knowledge state, never from the model).
     const states = await this.statesFor(userId);
-    const conceptIds = new Set(claims.flatMap((c) => c.conceptIds));
-    const ctx = {
-      question: input.question,
-      profile: this.profileFor(userId),
-      memories,
-      claims,
-      sources,
-      concepts: [...this.concepts.values()],
-      states: [...conceptIds].flatMap((id) => (states.has(id) ? [states.get(id)!] : [])),
-    };
-    const model = this.model();
-    const { value } = await guarded("claude", "ask", model ? () => model.ask(ctx) : undefined, () => this.adapters.fallbackModel.ask(ctx), this.claudeTimeout());
+    const background = new Set(citedConceptIds);
+    for (const e of this.seed.edges) if (e.type === "prerequisite" && background.has(e.toConceptId)) background.add(e.fromConceptId);
+    const youAlreadyUnderstand = [...background]
+      .flatMap((id) => {
+        const s = states.get(id);
+        return s && s.mastery >= 0.6 ? [{ id, s }] : [];
+      })
+      .sort((a, b) => b.s.mastery - a.s.mastery)
+      .slice(0, 3)
+      .map(({ id, s }) => {
+        const claim = this.claims.get(this.seed.baselineClaimIds[id]?.[0] ?? "");
+        return `${claim?.text ?? this.concepts.get(id)?.description ?? id} (${knowledgeLevel(s)})`;
+      });
+
+    // Layer 4: still uncertain (contested claims, and concepts Thinketh has little evidence on).
+    const stillUncertain = [
+      ...ranked.filter((c) => c.stance === "challenges").map((c) => `Sources push back: ${c.text}`),
+      ...citedConceptIds.flatMap((id) => {
+        const s = states.get(id);
+        const name = this.concepts.get(id)?.name ?? id;
+        return s && s.uncertainty >= 0.4 ? [`Thinketh has little evidence yet on how well you know ${name} (uncertainty ${s.uncertainty.toFixed(2)}).`] : [];
+      }),
+    ].slice(0, 3);
+
+    let thinkethInfers: string[] = [];
+    if (said.length === 0) {
+      stillUncertain.splice(0, stillUncertain.length, "Thinketh doesn't have enough evidence in your sources to answer this well yet. Try asking about one of today's developments.");
+    } else {
+      const weakest = citedConceptIds
+        .flatMap((id) => (states.has(id) ? [states.get(id)!] : []))
+        .sort((a, b) => a.mastery - b.mastery)[0];
+      const flag = weakest?.misconceptionFlags.find((f) => MISCONCEPTIONS[f]);
+      const shiftDev = citedDevelopmentIds.map((id) => this.meta[id]?.mentalModelShift).find((m) => m?.after);
+      const ctx: AskContext = {
+        question: input.question,
+        profile: this.profileFor(userId),
+        memories,
+        sourcesSay: said.map((c) => c.text),
+        youAlreadyUnderstand,
+        stillUncertain,
+        ...(shiftDev ? { shift: shiftDev } : {}),
+        ...(weakest
+          ? { focus: { name: this.concepts.get(weakest.conceptId)?.name ?? weakest.conceptId, mastery: weakest.mastery, ...(flag ? { misconception: MISCONCEPTIONS[flag] } : {}) } }
+          : {}),
+      };
+      const model = this.model();
+      thinkethInfers = (
+        await guarded("claude", "ask", model ? () => model.ask(ctx) : undefined, () => this.adapters.fallbackModel.ask(ctx), this.claudeTimeout())
+      ).value.thinkethInfers;
+    }
 
     await this.remember(userId, {
       id: newId("mem"),
@@ -585,16 +667,22 @@ export class ThinkethService {
     });
     if (input.developmentId) {
       await this.withUserLock(userId, async () => {
-        for (const conceptId of value.relatedConceptIds.slice(0, 2)) {
+        for (const conceptId of citedConceptIds.slice(0, 2)) {
           await this.observe(userId, conceptId, "asked_followup", { sourceRef: `ask:${input.developmentId}` });
         }
       });
     }
+    const sourcesSay = said.map((c) => c.text);
+    const answer =
+      sourcesSay.length === 0 ? (stillUncertain[0] ?? "") : [`From your sources: ${sourcesSay.join(" ")}`, ...thinkethInfers].join(" ");
+    const citedSourceIds = [...new Set(said.flatMap((c) => c.sourceIds))];
     return {
-      answer: value.answer,
-      citations: value.citedSourceIds.flatMap((id) => (this.sources.has(id) ? [{ sourceId: id, title: this.sources.get(id)!.title }] : [])),
-      relatedConceptIds: value.relatedConceptIds,
+      answer,
+      citations: citedSourceIds.flatMap((id) => (this.sources.has(id) ? [{ sourceId: id, title: this.sources.get(id)!.title }] : [])),
+      relatedConceptIds: citedConceptIds,
       memoryUsed: memories,
+      // Trust layers (design spec). The app renders these when present, otherwise `answer`.
+      sections: { sourcesSay, thinkethInfers, youAlreadyUnderstand, stillUncertain },
     };
   }
 

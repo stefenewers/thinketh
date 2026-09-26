@@ -73,11 +73,7 @@ const DiagramWire = z.object({
   caption: z.string(),
 });
 
-const AskWire = z.object({
-  answer: z.string(),
-  citedSourceIds: z.array(z.string()),
-  relatedConceptIds: z.array(z.string()),
-});
+const AskWire = z.object({ thinkethInfers: z.array(z.string()) });
 
 const NormalizeWire = z.object({
   title: z.string(),
@@ -320,24 +316,25 @@ Keep the same meaning and the same number of items in every array. Do not add fa
   }
 
   async ask(ctx: AskContext): Promise<AskResult> {
+    if (ctx.sourcesSay.length === 0) return { thinkethInfers: [] };
     const out = await this.structured(
       AskWire,
-      `Answer the user's question using only the provided claims and sources. Connect the answer to what the user already knows (their knowledge states) and follow their explanation preferences and memories. 2-5 sentences. If the corpus doesn't cover it, say so plainly.`,
+      `Write the "Thinketh infers" layer of an answer to the user's question: 1-3 short sentences of inference that connect what the sources say to what this user already understands and what remains uncertain.
+- Build only on sourcesSay, youAlreadyUnderstand and stillUncertain. Don't restate them; say what follows from them.
+- Follow the user's explanation preferences and memories.
+- No new factual claims beyond the inputs.`,
       {
         question: ctx.question,
+        sourcesSay: ctx.sourcesSay,
+        youAlreadyUnderstand: ctx.youAlreadyUnderstand,
+        stillUncertain: ctx.stillUncertain,
+        mentalModelShift: ctx.shift,
         explanationPreferences: ctx.profile.explanationPreferences,
         memories: ctx.memories.map((m) => m.content),
-        claims: ctx.claims.map((c) => ({ text: c.text, sourceIds: c.sourceIds, conceptIds: c.conceptIds, stance: c.stance })),
-        sources: ctx.sources.map((s) => ({ id: s.id, title: s.title })),
-        knowledge: ctx.states.map((s) => ({ conceptId: s.conceptId, mastery: s.mastery })),
       },
     );
-    const sourceIds = new Set(ctx.sources.map((s) => s.id));
-    const conceptIds = new Set(ctx.concepts.map((c) => c.id));
-    return {
-      answer: out.answer,
-      citedSourceIds: out.citedSourceIds.filter((id) => sourceIds.has(id)),
-      relatedConceptIds: out.relatedConceptIds.filter((id) => conceptIds.has(id)),
-    };
+    const infers = out.thinkethInfers.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    if (infers.length === 0) throw new Error("Claude returned no inferences");
+    return { thinkethInfers: infers };
   }
 }

@@ -160,7 +160,7 @@ describe("transitions and propagation", () => {
     });
     const ids = t.propagatedChanges.map((p) => p.conceptId);
     expect(ids).toContain("context-windows"); // prerequisite of agent-memory
-    expect(ids).not.toContain("long-horizon-agents"); // depends on agent-memory
+    expect(ids).not.toContain("long-running-agents"); // depends on agent-memory
     for (const p of t.propagatedChanges) expect(p.deltaMastery).toBeGreaterThan(0);
     expect(propagatedTransitions).toHaveLength(t.propagatedChanges.length);
     expect(propagatedTransitions[0]!.observation.sourceRef).toBe(`propagated:${t.id}`);

@@ -73,7 +73,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   /**
    * User resolution:
    *  1. Supabase access token (Authorization: Bearer) when Supabase is configured
-   *  2. x-thinketh-user-id header (local development)
+   *  2. X-Thinketh-User header (x-thinketh-user-id also accepted)
    *  3. the demo persona
    */
   app.use("*", async (c, next) => {
@@ -85,7 +85,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
       if (!userId && requireAuth) throw new UnauthorizedError("Invalid or expired session");
     }
     if (!userId && requireAuth && c.req.path !== "/health") throw new UnauthorizedError("Sign in required");
-    c.set("userId", userId ?? c.req.header("x-thinketh-user-id") ?? config.demoUserId);
+    c.set("userId", userId ?? c.req.header("x-thinketh-user") ?? c.req.header("x-thinketh-user-id") ?? config.demoUserId);
     await next();
   });
 

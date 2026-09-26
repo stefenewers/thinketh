@@ -64,7 +64,7 @@ export const DIAGNOSTICS: DiagnosticItem[] = [
   },
   {
     id: "dq-long-horizon",
-    conceptId: "long-horizon-agents",
+    conceptId: "long-running-agents",
     type: "multiple_choice",
     prompt: "What most limits an agent that must work on the same project across many days?",
     choices: [
@@ -80,7 +80,7 @@ export const DIAGNOSTICS: DiagnosticItem[] = [
       "Rate limits matter, but continuity and verification matter more over days.",
       "Not relevant here.",
     ],
-    expectedConcepts: ["long-horizon-agents", "agent-memory", "evaluator-architectures"],
+    expectedConcepts: ["long-running-agents", "agent-memory", "evaluator-architectures"],
     rationale: "Connects long-horizon work to memory and evaluation.",
   },
   {
@@ -144,7 +144,7 @@ export const DIAGNOSTICS: DiagnosticItem[] = [
   },
   {
     id: "dq-rag",
-    conceptId: "retrieval-augmented-generation",
+    conceptId: "retrieval",
     type: "multiple_choice",
     prompt: "What does a classic RAG system retain after answering a question?",
     choices: ["Nothing about the interaction", "A fine-tuned copy of the model", "A memory of the user's preferences", "The whole conversation in its weights"],
@@ -155,7 +155,7 @@ export const DIAGNOSTICS: DiagnosticItem[] = [
       "That would be agent memory, not classic RAG.",
       "No weights change.",
     ],
-    expectedConcepts: ["retrieval-augmented-generation"],
+    expectedConcepts: ["retrieval"],
     rationale: "Separates RAG (stateless retrieval) from memory.",
   },
   {

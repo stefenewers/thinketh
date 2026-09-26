@@ -157,23 +157,14 @@ export class DeterministicModel implements IntelligenceModel {
   }
 
   async ask(ctx: AskContext): Promise<AskResult> {
-    const ranked = [...ctx.claims]
-      .map((c) => ({ c, score: lexicalScore(ctx.question, c.text) }))
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map((x) => x.c);
-    if (ranked.length === 0) {
-      return {
-        answer: "I don't have anything in your corpus on that yet. Try asking about one of today's developments.",
-        citedSourceIds: [],
-        relatedConceptIds: [],
-      };
+    if (ctx.sourcesSay.length === 0) return { thinkethInfers: [] };
+    const infers: string[] = [];
+    if (ctx.shift?.after) infers.push(`The practical shift: ${ctx.shift.after}`);
+    if (ctx.focus?.misconception) {
+      infers.push(`You've previously leaned toward the idea ${ctx.focus.misconception}. This is the part worth re-checking.`);
+    } else if (ctx.focus && ctx.focus.mastery < 0.55) {
+      infers.push(`${ctx.focus.name} is still developing for you (mastery ${ctx.focus.mastery.toFixed(2)}), so a quick understanding check here would tell Thinketh a lot.`);
     }
-    return {
-      answer: `From your sources: ${ranked.map((c) => c.text).join(" ")}`,
-      citedSourceIds: [...new Set(ranked.flatMap((c) => c.sourceIds))],
-      relatedConceptIds: [...new Set(ranked.flatMap((c) => c.conceptIds))],
-    };
+    return { thinkethInfers: infers };
   }
 }
