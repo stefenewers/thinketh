@@ -84,7 +84,9 @@ This sprint added no native code or dependencies. The new screens were checked r
 - **The queue lives in memory:** restarting the API clears saved resources. Demo reset also clears them, on purpose.
 - **Long pages take 20–30 s to analyze** with Claude; the screen shows progress while it works.
 - **The quick-tunnel URL changes** if the tunnel restarts. When it does, update `apps/mobile/.env.local` and restart Metro with `--clear`.
-- **Some sites block readers or are script-rendered.** They fail honestly. Good demo URLs are listed below.
+- **Some sites block readers or are script-rendered.** These now go through a reader service (Jina Reader, `r.jina.ai`), which **sends the URL, and only the URL, to a third party**. Turn it off with `THINKETH_READER_FALLBACK=off`. Anything it still can't read fails honestly.
+- **YouTube transcripts** come from YouTube's internal player API, so they could break if YouTube changes it. If that happens, videos still get read from their title and description, and the screen says so.
+- **PDFs** are read on our server with `unpdf` (capped at 20 MB). Scanned-image PDFs have no text layer, so they fail with a clear message.
 
 ## 11. Demo path
 
@@ -97,7 +99,10 @@ This sprint added no native code or dependencies. The new screens were checked r
 7. Ask: try Teach me or Go deep.
 8. Voice: Catch Me Up.
 
-Other good URLs: `https://arxiv.org/abs/2310.08560` (MemGPT) and `https://platform.claude.com/docs/en/build-with-claude/context-windows`.
+Other good links:
+- Papers and PDFs: `https://arxiv.org/pdf/2310.08560` (MemGPT, **core**) and *Attention Is All You Need* (`https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf`).
+- Video: `https://www.youtube.com/watch?v=zjkBMFhNj_g` (Karpathy, *Intro to LLMs*, read from its transcript).
+- Relevance working in the other direction: an off-topic link (for example a cooking video) is read, summarized honestly, and labeled *Outside what you're learning*.
 
 ## 12. Five-minute check before judging
 

@@ -61,6 +61,11 @@ export function loadConfig() {
       apiKey: env("VOYAGE_API_KEY"),
       model: env("VOYAGE_MODEL") ?? "voyage-3.5",
     },
+    /**
+     * Reader service for script-rendered pages the direct reader can't see (only the URL is sent).
+     * Set THINKETH_READER_FALLBACK=off to disable, or to another base URL.
+     */
+    readerFallback: env("THINKETH_READER_FALLBACK") === "off" ? null : (env("THINKETH_READER_FALLBACK") ?? "https://r.jina.ai/"),
     tiger: {
       url: env("TIGER_DATABASE_URL"),
       /**

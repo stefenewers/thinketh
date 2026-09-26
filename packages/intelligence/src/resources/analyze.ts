@@ -19,6 +19,8 @@ export type ConceptView = {
 
 export type ResourceContext = {
   page: Page;
+  /** Topics the user follows, for judging relevance. */
+  interests: string[];
   /** Page text as passed to the model: capped, and always treated as data. */
   excerpt: string;
   concepts: ConceptView[];
@@ -35,6 +37,9 @@ export type ResourceAnalysis = {
   whyNow: string;
   /** Share of the piece that is new to this user (0..1); turned into useful minutes. */
   usefulFraction: number;
+  relevance: { level: "core" | "adjacent" | "outside"; reason: string };
+  /** When the source had no usable title (e.g. an untitled PDF). */
+  suggestedTitle?: string;
 };
 
 export type TeachContext = {
@@ -93,6 +98,7 @@ export function inferSourceType(rawUrl: string): ResourceSourceType {
   const path = u.pathname.toLowerCase();
   if (host === "arxiv.org" || host.endsWith(".arxiv.org")) return "preprint";
   if (host === "github.com") return "repository";
+  if (host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com")) return "video";
   if (host.startsWith("docs.") || /\/(docs|documentation|reference|api-reference)(\/|$)/.test(path)) return "documentation";
   if (onHost(host, REPORTING_HOSTS)) return "reporting";
   if (/\/(research|papers|publications)(\/|$)/.test(path) && onHost(host, PRIMARY_HOSTS)) return "research";
@@ -175,6 +181,11 @@ export function deterministicAnalysis(ctx: ResourceContext): ResourceAnalysis {
     })),
     whyNow,
     usefulFraction,
+    relevance: hits.length >= 2
+      ? { level: "core", reason: `It discusses ${names(hits.slice(0, 3))}, which you're learning.` }
+      : hits.length === 1
+        ? { level: "adjacent", reason: `It touches ${hits[0]!.c.name}, but mostly covers other ground.` }
+        : { level: "outside", reason: "It doesn't discuss the topics you're learning." },
   };
 }
 
@@ -207,6 +218,11 @@ export function enforceAnalysis(a: ResourceAnalysis, concepts: ConceptView[]): R
     relevantConnections: a.relevantConnections.filter((c) => byId.has(c.conceptId)).map((c) => ({ conceptId: c.conceptId, why: clip(c.why.trim(), 240) })).slice(0, 5),
     whyNow: clip(a.whyNow.trim(), 320),
     usefulFraction: Number.isFinite(a.usefulFraction) ? Math.min(1, Math.max(0.05, a.usefulFraction)) : 0.3,
+    relevance: {
+      level: ["core", "adjacent", "outside"].includes(a.relevance?.level) ? a.relevance.level : matched.length ? "adjacent" : "outside",
+      reason: clip((a.relevance?.reason ?? "").trim() || "Judged from the concepts it discusses.", 240),
+    },
+    ...(a.suggestedTitle?.trim() ? { suggestedTitle: clip(a.suggestedTitle.trim(), 160) } : {}),
   };
 }
 

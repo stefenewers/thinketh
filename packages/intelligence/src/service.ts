@@ -61,7 +61,7 @@ import {
   type ConceptView,
   type TeachContext,
 } from "./resources/analyze.ts";
-import { fetchPage, ResourceReadError, validateUrl } from "./resources/fetchPage.ts";
+import { fetchPage, ResourceReadError, validateUrl, youtubeId } from "./resources/fetchPage.ts";
 
 /** Background analysis of a saved resource: nobody waits on it, so Claude gets room. */
 const RESOURCE_ANALYSIS_TIMEOUT_MS = 50_000;
@@ -867,6 +867,9 @@ export class ThinkethService {
     } catch (err) {
       throw new BadRequestError(err instanceof ResourceReadError ? err.message : "That doesn't look like a web address.");
     }
+    // One video, one entry: youtu.be, shorts and watch links all normalize to the watch URL.
+    const video = youtubeId(url);
+    if (video) url = new URL(`https://www.youtube.com/watch?v=${video}`);
     const q = this.queue(userId);
     const existing = [...q.values()].find((r) => r.url === url.toString() && r.status !== "failed");
     if (existing) return existing;
@@ -910,8 +913,8 @@ export class ThinkethService {
   private async processResource(userId: string, id: string): Promise<void> {
     const started = Date.now();
     try {
-      const page = await fetchPage(this.getResource(userId, id).url);
-      const readMin = readMinutes(page.words);
+      const page = await fetchPage(this.getResource(userId, id).url, fetch, { readerBase: this.config.readerFallback });
+      const readMin = page.durationMinutes ?? readMinutes(page.words);
       this.updateResource(userId, id, {
         title: page.title ?? this.getResource(userId, id).title,
         ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
@@ -920,13 +923,18 @@ export class ThinkethService {
         ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
         fetchedAt: this.now().toISOString(),
         estimatedReadMinutes: readMin,
+        readVia: page.readVia,
+        // PDFs and videos are typed by what they are; web pages keep the URL-based class.
+        ...(page.kind === "video" ? { sourceType: "video" as const } : page.kind === "pdf" && this.getResource(userId, id).sourceType === "article" ? { sourceType: "document" as const } : {}),
+        url: page.url,
         stage: "mapping",
       });
       const concepts = await this.conceptViews(userId);
       const excerpt = page.text.slice(0, MAX_EXCERPT_CHARS);
       this.resourceText.set(id, { excerpt });
       this.updateResource(userId, id, { stage: "comparing" });
-      const ctx = { page, excerpt, concepts, preferences: this.profileFor(userId).explanationPreferences };
+      const profile = this.profileFor(userId);
+      const ctx = { page, excerpt, concepts, preferences: profile.explanationPreferences, interests: profile.interests.map((i) => i.topic) };
       const model = this.model();
       const r = await guarded(
         "claude",
@@ -946,6 +954,8 @@ export class ThinkethService {
         newToYou: a.newToYou,
         relevantConnections: a.relevantConnections,
         whyNow: a.whyNow,
+        relevance: a.relevance,
+        ...(!page.title && a.suggestedTitle ? { title: a.suggestedTitle } : {}),
         estimatedUsefulMinutes: usefulMinutes(readMin, a.usefulFraction),
         analyzedBy: r.source === "live" ? "claude" : "deterministic",
       });

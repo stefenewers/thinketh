@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { openExternal } from "@/lib/links";
-import { hostOf, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
+import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
 import { color, font, space } from "@/theme/tokens";
 
 const POLL_MS = 1200;
@@ -72,7 +72,7 @@ function Processing({ resource }: { resource: Resource }) {
       </T>
       <View style={styles.stage} accessibilityLiveRegion="polite">
         <ActivityIndicator color={color.coral} />
-        <T variant="body">{STAGE_COPY[resource.stage]}</T>
+        <T variant="body">{resource.sourceType === "video" && resource.stage === "reading" ? "Reading the transcript…" : STAGE_COPY[resource.stage]}</T>
       </View>
       <T variant="support" style={{ marginTop: space.m }}>
         Thinketh is working out which parts you already understand and which are genuinely new.
@@ -138,9 +138,20 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
           <Icon name="external" size={13} color={color.ink} />
         </Pressable>
 
+        {r.relevance ? (
+          <View style={[styles.relevance, r.relevance.level === "outside" && { borderLeftColor: color.ink3 }]}>
+            <T variant="label" tone={r.relevance.level === "core" ? "coral" : undefined}>
+              {RELEVANCE_LABEL[r.relevance.level]}
+            </T>
+            <T variant="support" style={{ marginTop: 2 }}>
+              {r.relevance.reason}
+            </T>
+          </View>
+        ) : null}
+
         <View style={styles.times}>
           <View>
-            <T variant="label">Full read</T>
+            <T variant="label">Full {consumeVerb(r)}</T>
             <T variant="display" style={styles.minutes}>
               ~{r.estimatedReadMinutes ?? "?"} min
             </T>
@@ -230,6 +241,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
 
       <Gutter style={{ marginTop: space.xl }}>
         <T variant="meta" style={{ textAlign: "center" }}>
+          {r.readVia ? `${READ_VIA_COPY[r.readVia]} ` : ""}
           {r.analyzedBy === "claude" ? "Compared with your knowledge state by Claude." : "Compared with your knowledge state from the source text."} Reading doesn&apos;t change what Thinketh thinks you know; checking your understanding does.
         </T>
       </Gutter>
@@ -286,4 +298,5 @@ const styles = StyleSheet.create({
   times: { flexDirection: "row", gap: space.x3, marginTop: space.l },
   minutes: { fontSize: 30, lineHeight: 36, marginTop: space.xs },
   rule: { borderLeftWidth: 2, paddingLeft: space.l },
+  relevance: { borderLeftWidth: 2, borderLeftColor: color.coral, paddingLeft: space.m, marginTop: space.l },
 });

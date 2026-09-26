@@ -8,7 +8,7 @@ import { Button, Divider, Gutter, Row, Screen, SectionLabel } from "@/components
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { improvedTodayIds } from "@/lib/knowledge";
-import { hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
+import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
 import { color, font, radius, space } from "@/theme/tokens";
 
 export default function Library() {
@@ -93,7 +93,9 @@ export default function Library() {
                     ? STAGE_COPY[r.stage]
                     : r.status === "failed"
                       ? "Couldn't read this one"
-                      : `~${r.estimatedUsefulMinutes ?? "?"} useful min of ~${r.estimatedReadMinutes ?? "?"} · ${r.newToYou.length} new to you`}
+                      : r.relevance?.level === "outside"
+                        ? "Outside what you're learning"
+                        : `~${r.estimatedUsefulMinutes ?? "?"} useful min of ~${r.estimatedReadMinutes ?? "?"} ${consumeVerb(r)} · ${r.newToYou.length} new to you`}
                 </T>
               </Row>
             ))}

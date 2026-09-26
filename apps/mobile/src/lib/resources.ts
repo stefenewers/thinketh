@@ -9,7 +9,27 @@ export const SOURCE_TYPE_LABEL: Record<Resource["sourceType"], string> = {
   repository: "Repository",
   reporting: "Reporting",
   article: "Article",
+  video: "Video",
+  document: "PDF document",
 };
+
+/** How the text was obtained, said plainly. */
+export const READ_VIA_COPY: Record<NonNullable<Resource["readVia"]>, string> = {
+  page: "Read from the page.",
+  pdf: "Read from the PDF.",
+  transcript: "Read from the video's transcript.",
+  description: "This video has no transcript, so Thinketh read its title and description only.",
+  "reader-service": "This site blocks direct reading, so it was read through a reader service.",
+};
+
+export const RELEVANCE_LABEL: Record<NonNullable<Resource["relevance"]>["level"], string> = {
+  core: "Core to what you're learning",
+  adjacent: "Adjacent to what you're learning",
+  outside: "Outside what you're learning",
+};
+
+/** "watch" for videos, "read" for everything else. */
+export const consumeVerb = (r: Pick<Resource, "sourceType">) => (r.sourceType === "video" ? "watch" : "read");
 
 /** What Thinketh is actually doing right now (mirrors the server's stages). */
 export const STAGE_COPY: Record<Resource["stage"], string> = {

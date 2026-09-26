@@ -89,6 +89,9 @@ const ResourceWire = z.object({
   relevantConnections: z.array(z.object({ conceptId: z.string(), why: z.string() })),
   whyNow: z.string(),
   usefulFraction: z.number(),
+  relevanceLevel: z.enum(["core", "adjacent", "outside"]),
+  relevanceReason: z.string(),
+  suggestedTitle: z.string(),
 });
 const TeachWire = z.object({
   sections: z.array(z.object({ heading: z.string(), body: z.string() })),
@@ -391,10 +394,15 @@ Keep the same meaning and the same number of items in every array. Do not add fa
 - relevantConnections: how the page connects to specific concepts the user has (conceptId plus one sentence why).
 - whyNow: one sentence on why this is worth this user's time now, grounded in their levels and misconceptions.
 - usefulFraction: the fraction (0 to 1) of the page's reading time that is genuinely new for this user.
+- relevanceLevel: "core" if it substantively covers what the user is learning (their interests and concepts), "adjacent" if it only touches it, "outside" if it doesn't; relevanceReason is one short sentence why. Content outside their interests still gets an honest summary.
+- suggestedTitle: a short, accurate title only if the source's title is missing or unhelpful (for example an untitled PDF); otherwise "".
+- The source may be a web page, a PDF, or a video transcript (sourceKind). Transcripts are spoken language; ignore filler.
 Never add content that is not in the page. Never state numeric mastery or confidence.`,
       {
         title: ctx.page.title,
         publisher: ctx.page.publisher,
+        sourceKind: ctx.page.kind,
+        userInterests: ctx.interests,
         pageText: ctx.excerpt,
         concepts: ctx.concepts.map((c) => ({ id: c.id, name: c.name, description: c.description, userLevel: c.level, misconceptions: c.misconceptions })),
         explanationPreferences: ctx.preferences,
@@ -402,7 +410,14 @@ Never add content that is not in the page. Never state numeric mastery or confid
       RESOURCE_TIMEOUT_MS,
     );
     const idea = (i: { idea: string; conceptId: string }) => ({ idea: i.idea, ...(i.conceptId ? { conceptId: i.conceptId } : {}) });
-    return { ...out, alreadyUnderstood: out.alreadyUnderstood.map(idea), newToYou: out.newToYou.map(idea) };
+    const { relevanceLevel, relevanceReason, suggestedTitle, ...rest } = out;
+    return {
+      ...rest,
+      alreadyUnderstood: out.alreadyUnderstood.map(idea),
+      newToYou: out.newToYou.map(idea),
+      relevance: { level: relevanceLevel, reason: relevanceReason },
+      ...(suggestedTitle ? { suggestedTitle } : {}),
+    };
   }
 
   async teachDelta(ctx: TeachContext): Promise<TeachResult> {

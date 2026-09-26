@@ -22,10 +22,11 @@
     "secrets:remote": "node scripts/remote-secrets.ts"
   },
   "dependencies": {
-    "@thinketh/contracts": "*",
     "@anthropic-ai/sdk": "^0.128.0",
     "@hono/node-server": "^2.1.1",
+    "@thinketh/contracts": "*",
     "hono": "^4.13.9",
+    "unpdf": "1.8.1",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
