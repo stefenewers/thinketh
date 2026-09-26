@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon, type IconName } from "@/components/Icon";
@@ -26,7 +26,7 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 };
 
 const VISIBLE_ROWS = 3;
-const LEAD_BAND_H = 132;
+const LEAD_BAND_H = 84;
 
 export default function Today() {
   const profile = useProfile();
@@ -140,8 +140,8 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <View style={styles.tiles}>
           <ContinueTile
             icon="mind"
-            tint={glow.tileCoral}
-            ink={color.coral}
+            tint={glow.tileNeutral}
+            ink={color.ink}
             title="Your Mind"
             // What changed today is the reason to open it.
             subtitle={latest ? `${conceptById.get(latest.conceptId)?.name ?? "A concept"} changed today` : "Explore your thinking"}
@@ -149,7 +149,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
           />
           <ContinueTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ContinueTile icon="people" tint={glow.tilePeach} ink={glow.tilePeachInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
+          <ContinueTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
         </View>
 
         {rest.length ? (
@@ -236,51 +236,51 @@ function IntelligenceHero({ count, knowledge, active }: { count: number; knowled
   );
 }
 
-// Fixed slots keep the drawing calm and identical on every launch.
-const SLOTS: [number, number][] = [
-  [96, 88],
-  [48, 50],
-  [138, 36],
-  [164, 100],
-  [128, 150],
-  [58, 140],
-  [20, 94],
-  [94, 18],
-  [104, 124],
-];
-
-/** A small Mindprint of your actual Mind: filled = strong, hollow = developing, coral = changing today. */
+/**
+ * A mini Mindprint, composed rather than scattered: what changed sits at the centre (coral),
+ * your other concepts on two faint rings. Filled = strong, hollow = developing.
+ */
 function HeroMindprint({ knowledge, active }: { knowledge: KnowledgeResponse; active: Set<string> }) {
-  const picked = [...knowledge.items].sort((a, b) => Number(active.has(b.concept.id)) - Number(active.has(a.concept.id))).slice(0, SLOTS.length);
-  const slot = new Map(picked.map((it, i) => [it.concept.id, i]));
-  const links = knowledge.edges
-    .map((e) => [slot.get(e.fromConceptId), slot.get(e.toConceptId)] as const)
-    .filter((l): l is readonly [number, number] => l[0] !== undefined && l[1] !== undefined && l[0] !== l[1]);
-  // Sparse data still reads as a graph: tie any unlinked node to the centre.
-  const linked = new Set(links.flat());
-  const all = [...links, ...picked.map((_, i) => i).filter((i) => i > 0 && !linked.has(i)).map((i) => [0, i] as const)];
+  const items = knowledge.items;
+  const centre = items.find((it) => active.has(it.concept.id)) ?? items[0];
+  const others = items.filter((it) => it !== centre).slice(0, 10);
+  const inner = others.slice(0, 4);
+  const outer = others.slice(4);
+  const C = 64;
+  const at = (i: number, n: number, radius: number, offset: number) => {
+    const a = offset + (i / Math.max(n, 1)) * Math.PI * 2;
+    return [C + Math.cos(a) * radius, C + Math.sin(a) * radius] as const;
+  };
+  const innerPts = inner.map((_, i) => at(i, inner.length, 28, -Math.PI / 3));
+  const outerPts = outer.map((_, i) => at(i, outer.length, 52, -Math.PI / 5));
+  const node = (it: (typeof items)[number], [x, y]: readonly [number, number]) =>
+    it.level === "strong" || it.level === "intermediate" ? (
+      <Circle key={it.concept.id} cx={x} cy={y} r={3.2} fill={color.ink} />
+    ) : (
+      <Circle key={it.concept.id} cx={x} cy={y} r={3} fill={color.canvas} stroke={color.ink2} strokeWidth={1.1} />
+    );
+  if (!centre) return null;
   return (
-    <Svg width={128} height={118} viewBox="0 0 184 170">
-      <Ellipse cx={96} cy={88} rx={84} ry={62} stroke={color.edge} strokeWidth={0.8} strokeDasharray="1 5" fill="none" />
-      {all.map(([a, b]) => (
-        <Path key={`${a}-${b}`} d={`M${SLOTS[a][0]} ${SLOTS[a][1]} L${SLOTS[b][0]} ${SLOTS[b][1]}`} stroke={color.edge} strokeWidth={0.9} />
+    <Svg width={128} height={128} viewBox="0 0 128 128">
+      <Circle cx={C} cy={C} r={28} stroke={color.hairline} strokeWidth={1} fill="none" />
+      <Circle cx={C} cy={C} r={52} stroke={color.hairline} strokeWidth={1} fill="none" />
+      {innerPts.map(([x, y], i) => (
+        <Path key={`c${i}`} d={`M${C} ${C} L${x} ${y}`} stroke={color.ink} strokeOpacity={0.16} strokeWidth={0.9} />
       ))}
-      {picked.map((it, i) => {
-        const [x, y] = SLOTS[i];
-        if (active.has(it.concept.id)) {
-          return (
-            <G key={it.concept.id}>
-              <Circle cx={x} cy={y} r={8.5} fill="none" stroke={color.coral} strokeOpacity={0.28} strokeWidth={1} />
-              <Circle cx={x} cy={y} r={4.2} fill={color.coral} />
-            </G>
-          );
-        }
-        return it.level === "strong" || it.level === "intermediate" ? (
-          <Circle key={it.concept.id} cx={x} cy={y} r={3.6} fill={color.ink} />
-        ) : (
-          <Circle key={it.concept.id} cx={x} cy={y} r={3.4} fill={color.canvas} stroke={color.ink2} strokeWidth={1.2} />
-        );
+      {outerPts.map(([x, y], j) => {
+        const [px, py] = innerPts[Math.floor((j * innerPts.length) / Math.max(outerPts.length, 1))] ?? [C, C];
+        return <Path key={`o${j}`} d={`M${px} ${py} L${x} ${y}`} stroke={color.ink} strokeOpacity={0.12} strokeWidth={0.8} />;
       })}
+      {inner.map((it, i) => node(it, innerPts[i]))}
+      {outer.map((it, i) => node(it, outerPts[i]))}
+      {active.has(centre.concept.id) ? (
+        <G>
+          <Circle cx={C} cy={C} r={8} fill="none" stroke={color.coral} strokeOpacity={0.3} strokeWidth={1} />
+          <Circle cx={C} cy={C} r={4} fill={color.coral} />
+        </G>
+      ) : (
+        <Circle cx={C} cy={C} r={4} fill={color.ink} />
+      )}
     </Svg>
   );
 }
@@ -330,16 +330,22 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
     >
       {/* A photographic texture band: real depth at the top of an otherwise white product card. */}
       <View style={styles.leadBand}>
-        <Texture source={imageFor(development.conceptIds)} style={StyleSheet.absoluteFill} />
+        <Texture source={imageFor(development.conceptIds)} style={[StyleSheet.absoluteFill, { opacity: 0.5 }]} />
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg width={width - space.xl * 2} height={LEAD_BAND_H}>
             <Defs>
               <LinearGradient id="bandFade" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0.55" stopColor={color.canvas} stopOpacity={0} />
-                <Stop offset="1" stopColor={color.canvas} stopOpacity={0.55} />
+                <Stop offset="0" stopColor={color.canvas} stopOpacity={0.15} />
+                <Stop offset="1" stopColor={color.canvas} stopOpacity={0.9} />
               </LinearGradient>
             </Defs>
             <Rect x={0} y={0} width={width} height={LEAD_BAND_H} fill="url(#bandFade)" />
+            {/* A faint Mindprint line field: the material is knowledge, not scenery. */}
+            {[14, 30, 46, 62].map((y, i) => (
+              <Path key={y} d={`M${width * 0.38} ${y + 8} C ${width * 0.55} ${y - 6 + i * 2}, ${width * 0.7} ${y + 12 - i * 2}, ${width} ${y - 4}`} stroke={color.ink} strokeOpacity={0.08} strokeWidth={0.9} fill="none" />
+            ))}
+            <Circle cx={width * 0.62} cy={24} r={2.4} fill={color.ink} fillOpacity={0.35} />
+            <Circle cx={width * 0.74} cy={50} r={2.4} fill="none" stroke={color.ink} strokeOpacity={0.4} strokeWidth={1} />
           </Svg>
         </View>
         <View style={styles.leadPill}>
@@ -437,7 +443,7 @@ function RecentInsightRow({ development: d, last, category, understood }: { deve
       <View style={[styles.insightBody, !last && styles.insightDivided]}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {understood ? <Icon name="check" size={12} color={color.ink} /> : <View style={styles.dot} />}
+            {understood ? <Icon name="check" size={12} color={color.ink} /> : <View style={styles.metaDot} />}
             <T style={styles.insightCategory} numberOfLines={1}>
               {understood ? "Understood" : (category ?? significanceLabel(d))}
             </T>
@@ -482,27 +488,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: color.canvas,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.edge,
+    borderColor: color.hairline,
   },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted },
   hero: { paddingTop: space.l },
-  heroGraph: { position: "absolute", right: -space.s, top: -space.m },
+  heroGraph: { position: "absolute", right: -space.xs, top: space.xl },
   kicker: { fontFamily: font.sansMedium, fontSize: 11.5, lineHeight: 14, letterSpacing: 2.4, textTransform: "uppercase", color: color.ink3 },
   headline: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 41, letterSpacing: -1.2, color: color.ink, marginTop: space.m, maxWidth: "68%" },
   heroCopy: { fontFamily: font.sans, fontSize: 15.5, lineHeight: 22, color: color.ink2, marginTop: space.m, maxWidth: "88%" },
   metrics: { flexDirection: "row", marginTop: space.xl },
   metric: { paddingHorizontal: space.s },
   metricFirst: { paddingLeft: 0 },
-  metricDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.edge },
+  metricDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
   metricLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 0.9, textTransform: "uppercase", color: color.ink2, marginTop: space.xs },
   metricSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink3 },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.xl },
   cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 48, paddingHorizontal: space.xl, borderRadius: radius.pill, backgroundColor: color.ink },
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
-  listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
-  lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised, shadowOpacity: 0.08, shadowRadius: 18 },
-  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: color.surfaceMuted },
+  listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
+  lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
+  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: color.canvas },
   leadBody: { padding: space.xl, paddingTop: space.l },
   leadPill: {
     flexDirection: "row",
@@ -514,30 +520,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: "rgba(255,255,255,0.86)",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.edge,
+    borderColor: color.hairline,
   },
   leadPillText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink },
-  leadTitle: { fontFamily: font.sansSemibold, fontSize: 23, lineHeight: 29, letterSpacing: -0.6, color: color.ink, marginTop: space.s },
-  leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2, marginTop: space.s },
+  leadTitle: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: color.ink, marginTop: space.xs },
+  leadSummary: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 21, color: color.ink2, marginTop: space.s },
   leadFooter: { flexDirection: "row", alignItems: "center", marginTop: space.l, gap: space.m },
   leadMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.ink2, flexShrink: 1 },
-  leadArrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
-  conceptDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: glow.tileCoral, borderWidth: 1.5, borderColor: color.canvas, alignItems: "center", justifyContent: "center" },
-  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, color: color.coral },
+  leadArrow: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
+  conceptDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: color.surfaceMuted, borderWidth: 1.5, borderColor: color.canvas, alignItems: "center", justifyContent: "center" },
+  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, color: color.ink2 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.xxl, marginBottom: space.s },
   sectionTitle: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 23, letterSpacing: -0.3, color: color.ink },
   tiles: { flexDirection: "row", gap: 10 },
-  tile: { flex: 1, padding: space.m, paddingBottom: space.s, borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.lineSoft, ...shadow.raised },
+  tile: { flex: 1, padding: space.m, paddingBottom: space.s, borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
   tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   tileTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.2, color: color.ink, marginTop: space.m },
   tileSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink2, marginTop: 2, minHeight: 32 },
   tileArrow: { alignSelf: "flex-end", marginTop: space.xs },
-  insights: { borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.lineSoft, overflow: "hidden", ...shadow.raised },
+  insights: { borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, overflow: "hidden", ...shadow.soft },
   insight: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },
   insightBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: space.m, paddingRight: space.m, marginLeft: space.m },
-  insightDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.lineSoft },
+  insightDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   thumb: { width: 56, height: 56, borderRadius: 12, alignSelf: "center", backgroundColor: color.surfaceMuted },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral },
+  metaDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.ink3 },
   insightCategory: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink2, flexShrink: 1 },
   insightTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink, marginTop: 3 },
   insightSummary: { fontFamily: font.sans, fontSize: 13, lineHeight: 18, color: color.ink2, marginTop: 2 },

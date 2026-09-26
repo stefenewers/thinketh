@@ -21,15 +21,17 @@ export const color = {
   overlay: "rgba(26,25,24,0.22)",
   // White-first home (Today).
   canvas: "#FFFFFF",
+  // Neutral hairline for white-on-white surfaces (no beige outline).
+  hairline: "rgba(26,25,24,0.07)",
 } as const;
 
-// Tile tints (Today "Continue" tiles, concept initials). Soft, never neon.
+// Tile tints (Today "Continue" tiles). Near-neutral; coral stays out.
 export const glow = {
-  tileCoral: "#FCE9E2",
-  tileCool: "#E9EFF4",
-  tileCoolInk: "#3E6784",
-  tilePeach: "#FBEEE2",
-  tilePeachInk: "#A8653A",
+  tileNeutral: "#F4F3F1",
+  tileCool: "#EDF1F4",
+  tileCoolInk: "#3E5B70",
+  tileWarm: "#F5F2EE",
+  tileWarmInk: "#6B5A4E",
 } as const;
 
 // 4-point scale from the design spec; the upper steps are compact for mobile
@@ -84,6 +86,8 @@ export const motion = {
 export const shadow = {
   raised: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
   sheet: { shadowColor: color.ink, shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 12 },
+  // Very soft lift for white cards on a white page.
+  soft: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
 } as const;
 
 export const gutter = layout.pageX;
