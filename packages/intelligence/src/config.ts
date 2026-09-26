@@ -91,7 +91,7 @@ export function loadConfig() {
       apiKey: env("MUSE_API_KEY"),
       baseUrl: (env("MUSE_API_BASE") ?? "https://api.llama.com/compat/v1").replace(/\/+$/, ""),
       model: env("MUSE_MODEL"),
-      timeoutMs: Number(env("MUSE_TIMEOUT_MS") ?? 4000),
+      timeoutMs: Number(env("MUSE_TIMEOUT_MS") ?? 8000),
     },
     port: Number(env("PORT") ?? 8787),
   };

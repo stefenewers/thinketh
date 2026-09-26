@@ -4,7 +4,7 @@ Two Minds in one learning space. Thinketh works out what can usefully move betwe
 
 > Mongo models the changing world. Tiger models your changing understanding. Backboard remembers qualitative things about you that numbers cannot. Claude reasons over the delta. Muse orchestrates the shared learning environment. ElevenLabs makes the interaction conversational. Thinketh decides what you need next.
 
-**Live status (2026-09-26):** Mongo, Tiger, Backboard, Claude, ElevenLabs and Supabase are live. **Muse is not configured yet.** Its conductor is built behind a strict tool surface, and the deterministic conductor makes the same kind of decisions until `MUSE_API_KEY` and `MUSE_MODEL` are set. Every room shows which one conducted.
+**Live status (2026-09-26):** Mongo, Tiger, Backboard, Claude, ElevenLabs, Supabase and **Muse** are live. Muse (`muse-spark-1.3` on Meta's Model API) conducts the room behind a strict tool surface; if it times out, errs or proposes anything invalid, the deterministic conductor decides instead. Every room shows which one conducted.
 
 ## The pieces
 
@@ -43,7 +43,7 @@ Muse chooses **what the room looks at next**, and nothing else. Its entire world
 - **What it cannot change:** there is **no** tool that sets mastery, marks something understood, changes uncertainty or verifies anything.
 - **Validation:** every proposed call is checked server-side against the room, twice (in the Muse adapter and again before it's applied). Only known tools and known arguments are accepted, strings are capped at 280 characters, and a teacher/learner/concept can be assigned only if it came from the computed delta. Transfer questions must follow an explanation.
 - **Fallback:** on a timeout, an error or an invalid call, the deterministic conductor decides from the same view, and the room keeps working.
-- **Integration:** an OpenAI-compatible tool-calling endpoint (`MUSE_API_BASE`, default `https://api.llama.com/compat/v1`), with `MUSE_API_KEY` and `MUSE_MODEL` kept server-side only. It is unverified against the real Muse endpoint until a key is provided.
+- **Integration:** Meta Model API's OpenAI-compatible chat completions (`MUSE_API_BASE`, `MUSE_API_KEY`, `MUSE_MODEL`, all server-side only). Muse Spark reasons before it answers, so the call uses `reasoning_effort: "low"` and a 1,500-token budget (reasoning counts against it), and `tool_choice: "auto"` (the only value the API accepts); a reply without a tool call falls back. Verified live 2026-09-26: Muse chose `assign_peer_teacher` (Nadani → Stefen, Evaluator Architectures) in about 4 s, then `ask_transfer_question` after the explanation in about 3 s. Both passed validation and were recorded with `actor: "muse"`.
 
 ## Thinketh's exact evidence responsibility
 

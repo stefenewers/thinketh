@@ -19,7 +19,7 @@ Built for HackGT 13 (Oracle of the Deep, ML/AI).
 
 > Mongo models the changing world. Tiger models your changing understanding. Backboard remembers qualitative things about you that numbers cannot. Claude reasons over the delta. Muse orchestrates the shared learning environment. ElevenLabs makes the interaction conversational. Thinketh decides what you need next.
 
-Live as of 2026-09-26: MongoDB Atlas, Tiger Data, Backboard, Claude, ElevenLabs and Supabase (including Realtime for the Playground). **Muse isn't configured yet**; the Playground runs its deterministic conductor through the same validated tool surface. Evidence: [docs/evidence](docs/evidence/README.md).
+Live as of 2026-09-26: MongoDB Atlas, Tiger Data, Backboard, Claude, ElevenLabs, Supabase (including Realtime for the Playground) and Muse (Muse Spark 1.3 conducts the Playground; a deterministic conductor takes over if it's slow or proposes anything invalid). Evidence: [docs/evidence](docs/evidence/README.md).
 
 ## Repository
 

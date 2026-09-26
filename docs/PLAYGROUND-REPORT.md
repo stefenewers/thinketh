@@ -40,10 +40,10 @@ See `docs/PLAYGROUND.md`.
 - **Resources:** one source runs through the normal pipeline once per Mind, with live SOURCE → CONCEPTS → YOUR MIND → DELTA stages. Each column shows useful minutes, new ideas and a focus concept. The conductor's note is derived from the two deltas. The page says "Different delta" only when the deltas really differ.
 
 ## Muse
-- **API:** an OpenAI-compatible tool-calling adapter (`MUSE_API_BASE`, `MUSE_API_KEY`, `MUSE_MODEL`, all server-only), temperature 0 and `tool_choice: required`. **It isn't live: no key has been provided, so it hasn't been verified against the real endpoint.**
+- **API:** an OpenAI-compatible tool-calling adapter (`MUSE_API_BASE`, `MUSE_API_KEY`, `MUSE_MODEL`, all server-only), temperature 0, `tool_choice: "auto"` (the only value Meta's Model API accepts), `reasoning_effort: "low"` and 1,500 max tokens (Muse Spark's reasoning counts against it; at 300 it ran out before calling a tool). **Live with `muse-spark-1.3` (2026-09-26):** it chose `assign_peer_teacher` (≈4 s) and then `ask_transfer_question` (≈3 s), both validated and recorded as `actor: "muse"`.
 - **Tool surface:** the nine specified tools. None can change knowledge state, and a test asserts that.
 - **Validation:** unknown tools and arguments are rejected, strings are capped at 280 characters, and teacher/learner/concept must come from the computed delta. Ordering is enforced (explanation before transfer). Validation runs twice: in the adapter and before the action is applied.
-- **Fallback:** the deterministic conductor on missing configuration, a timeout (4 s), an error or an invalid call. Tests cover a malicious `set_mastery` call (falls back) and a valid call (accepted as `by: "muse"`). The app shows which conductor ran.
+- **Fallback:** the deterministic conductor on missing configuration, a timeout (8 s), an error or an invalid call. Tests cover a malicious `set_mastery` call (falls back) and a valid call (accepted as `by: "muse"`). The app shows which conductor ran.
 
 ## Realtime
 - **Broadcast:** server REST → channel `playground:<roomId>`, payload `{seq, type}` only. Each phone subscribes over the Phoenix websocket (no SDK) and refetches the room.
@@ -111,7 +111,7 @@ All passing:
 ## Known risks and fallbacks
 | Risk | Fallback |
 |---|---|
-| Muse not configured or not verified | The deterministic conductor runs the same flow, labelled as such |
+| Muse not configured, slow or invalid | The deterministic conductor runs the same flow, labelled as such |
 | Claude grading slow or down | Keyword rubric grading (same rubric); 20 s client timeout on answers |
 | Realtime socket blocked on venue Wi-Fi | Polling every 1.5 s; one-device mode needs no second phone |
 | A weak transfer answer | "Not yet" is shown honestly. For the demo, answer with the rubric's ideas |
