@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import type { BriefResponse, Development, KnowledgeResponse, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
@@ -9,6 +9,7 @@ import { Sheet } from "@/components/Sheet";
 import { T } from "@/components/Text";
 import { Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
+import { useProfile } from "@/lib/profile";
 import {
   fmt2,
   improved,
@@ -35,6 +36,7 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 const VISIBLE_ROWS = 3;
 
 export default function Today() {
+  const profile = useProfile();
   const { data, error, loading, reload } = useApi(
     async () => {
       const [today, knowledge] = await Promise.all([api.getTodayBrief(), api.getKnowledge()]);
@@ -44,7 +46,9 @@ export default function Today() {
     { refetchOnFocus: true },
   );
 
-  if (loading && !data) {
+  // First run: set up the learner profile before the first brief.
+  if (profile === null) return <Redirect href="/onboarding" />;
+  if ((loading && !data) || profile === undefined) {
     return (
       <Screen scroll={false}>
         <LoadingState message="Comparing today's developments against what you already understand…" />
@@ -58,10 +62,10 @@ export default function Today() {
       </Screen>
     );
   }
-  return <TodayContent today={data.today} knowledge={data.knowledge} />;
+  return <TodayContent today={data.today} knowledge={data.knowledge} following={profile.interests} />;
 }
 
-function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: KnowledgeResponse }) {
+function TodayContent({ today, knowledge, following }: { today: BriefResponse; knowledge: KnowledgeResponse; following: string[] }) {
   const { brief, developments } = today;
   const sources = today.sources ?? [];
   const concepts = today.concepts ?? knowledge.items.map((i) => i.concept);
@@ -123,6 +127,13 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <T variant="label" style={{ marginTop: space.xxl }}>
           {longDate(brief.date)}
         </T>
+        {following.length ? (
+          <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Learning profile" hitSlop={6}>
+            <T variant="meta" style={{ marginTop: space.xs }} numberOfLines={1}>
+              Following {following.join(" · ")}
+            </T>
+          </Pressable>
+        ) : null}
         <T variant="display" style={{ marginTop: space.m }} accessibilityRole="header">
           You missed {brief.meaningfulCount} things worth knowing.
         </T>

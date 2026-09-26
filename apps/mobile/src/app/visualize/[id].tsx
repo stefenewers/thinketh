@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/api";
 import { DiagramView } from "@/components/DiagramView";
 import { T } from "@/components/Text";
-import { ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
+import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { color, space } from "@/theme/tokens";
 
@@ -33,6 +33,14 @@ export default function VisualizeScreen() {
             <T variant="statement" style={{ marginTop: space.xxl, fontSize: 19, lineHeight: 28 }}>
               {spec.caption}
             </T>
+            {/* Seeing the new model is not the same as having it: close the loop. */}
+            <Button
+              kind="decisive"
+              label="Check my understanding"
+              icon="arrow"
+              style={{ marginTop: space.xxl }}
+              onPress={() => router.replace({ pathname: "/diagnostic", params: { developmentId: id } })}
+            />
           </Gutter>
         </Screen>
       )}

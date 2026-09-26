@@ -168,6 +168,14 @@ describe("circuit breaker", () => {
     expect(circuitOpen("mongo", true)).toBe(false);
   });
 
+  it("a slow Claude generation falls back without skipping Claude for later requests", async () => {
+    markConfigured("claude", true);
+    const slow = () => new Promise<never>(() => {});
+    expect((await guarded("claude", "visualize", slow, () => "fallback", 20)).source).toBe("fallback");
+    expect(circuitOpen("claude")).toBe(false);
+    expect((await guarded("claude", "ask", async () => "live", () => "fallback", 100)).source).toBe("live");
+  });
+
   it("keeps the circuit open for the instance on a TLS certificate failure, and a success closes it", async () => {
     markConfigured("tiger", true);
     await guarded("tiger", "q", () => Promise.reject(new Error("invalid peer certificate: Other(OtherError(CaUsedAsEndEntity))")), () => [], 50);

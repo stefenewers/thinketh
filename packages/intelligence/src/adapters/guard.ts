@@ -88,7 +88,7 @@ export function resetCircuits(): void {
 }
 
 /** Record one call outcome for an adapter (used by guarded calls and health probes). */
-export function recordCall(name: AdapterName, ok: boolean, error?: string): void {
+export function recordCall(name: AdapterName, ok: boolean, error?: string, opts: { trip?: boolean } = {}): void {
   const h = health.get(name) ?? { configured: true, calls: 0, fallbacks: 0 };
   h.calls++;
   const now = new Date().toISOString();
@@ -100,6 +100,10 @@ export function recordCall(name: AdapterName, ok: boolean, error?: string): void
     h.lastErrorAt = now;
     if (error) h.lastError = error.slice(0, 300);
     const permanent = !!error && PERMANENT_FAILURE.test(error);
+    if (opts.trip === false) {
+      health.set(name, h);
+      return;
+    }
     if (!isOpen(h)) logEvent("adapter.circuit_open", { adapter: name, permanent, error: h.lastError }, "warn");
     h.openUntil = permanent ? Infinity : Date.now() + CIRCUIT_COOLDOWN_MS;
   }
@@ -141,7 +145,8 @@ export async function guarded<T>(
     return { value, source: "live" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    recordCall(adapter, false, message);
+    // A slow Claude generation is a per-task miss, not an outage: fall back without skipping Claude for everyone.
+    recordCall(adapter, false, message, { trip: !(adapter === "claude" && err instanceof AdapterTimeoutError) });
     logEvent("adapter.fallback", { adapter, op, ms: Date.now() - started, error: message }, "warn");
     return { value: await fallback(), source: "fallback" };
   }

@@ -33,9 +33,14 @@ export function loadConfig() {
     claudeDeltaPhrasing: flag("THINKETH_CLAUDE_DELTA", true),
     anthropic: {
       apiKey: env("ANTHROPIC_API_KEY"),
+      /** Required when the key isn't scoped to a workspace (sent as anthropic-workspace-id). */
+      workspaceId: env("ANTHROPIC_WORKSPACE_ID"),
       model: env("THINKETH_CLAUDE_MODEL") ?? "claude-opus-5",
-      effort: (env("THINKETH_CLAUDE_EFFORT") ?? "medium") as "low" | "medium" | "high",
+      // Measured live: "low" keeps Ask/Visualize/Make it stick at ~4-8s (medium: Visualize >12s).
+      effort: (env("THINKETH_CLAUDE_EFFORT") ?? "low") as "low" | "medium" | "high",
       timeoutMs: Number(env("THINKETH_CLAUDE_TIMEOUT_MS") ?? 20000),
+      /** Cap for Claude calls a request waits on; the mobile client gives generative calls 15s. */
+      requestTimeoutMs: Number(env("THINKETH_CLAUDE_REQUEST_TIMEOUT_MS") ?? 12000),
     },
     backboard: {
       apiKey: env("BACKBOARD_API_KEY"),

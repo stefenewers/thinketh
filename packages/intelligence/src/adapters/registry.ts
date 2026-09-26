@@ -43,6 +43,7 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
         model: config.anthropic.model,
         effort: config.anthropic.effort,
         timeoutMs: config.anthropic.timeoutMs,
+        ...(config.anthropic.workspaceId ? { workspaceId: config.anthropic.workspaceId } : {}),
       })
     : undefined;
 

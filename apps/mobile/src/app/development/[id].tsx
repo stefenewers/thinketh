@@ -171,6 +171,14 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           </T>
           <T variant="support">Ask Thinketh, grounded in what you know.</T>
         </Row>
+        {d.storylineIds.length > 0 ? (
+          <Row onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: "agent-memory" } })}>
+            <T variant="body" style={{ fontFamily: font.sansMedium }}>
+              See how this idea changed
+            </T>
+            <T variant="support">The storyline behind this development, and where you are in it.</T>
+          </Row>
+        ) : null}
       </View>
 
       <Gutter style={{ marginTop: space.xl }}>

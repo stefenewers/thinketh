@@ -15,6 +15,8 @@ import {
 import { DEMO_USER_ID, type ThinkethApi } from "./client";
 
 const TIMEOUT_MS = 8000;
+/** Ask, Visualize and Make it stick may be written by Claude; the server falls back well before this. */
+const GENERATIVE_TIMEOUT_MS = 15000;
 
 export class ApiError extends Error {}
 
@@ -31,9 +33,10 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     path: string,
     body: unknown,
     fallbackCall: (api: ThinkethApi) => Promise<z.infer<S>>,
+    timeoutMs = TIMEOUT_MS,
   ): Promise<z.infer<S>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(`${base}${path}`, {
         method,
@@ -79,9 +82,9 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
       call(ConceptHistoryResponseSchema, "GET", `/knowledge/${id(conceptId)}/history`, undefined, (a) =>
         a.getConceptHistory(conceptId),
       ),
-    ask: (req) => call(AskResponseSchema, "POST", "/ask", req, (a) => a.ask(req)),
-    visualize: (req) => call(DiagramSpecSchema, "POST", "/visualize", req, (a) => a.visualize(req)),
-    makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req)),
+    ask: (req) => call(AskResponseSchema, "POST", "/ask", req, (a) => a.ask(req), GENERATIVE_TIMEOUT_MS),
+    visualize: (req) => call(DiagramSpecSchema, "POST", "/visualize", req, (a) => a.visualize(req), GENERATIVE_TIMEOUT_MS),
+    makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req), GENERATIVE_TIMEOUT_MS),
     createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
     resetDemo: async () => {
       const res = await fetch(`${base}/demo/reset`, {

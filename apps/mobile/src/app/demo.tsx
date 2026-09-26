@@ -7,6 +7,7 @@ import { T } from "@/components/Text";
 import { Button, Divider, Gutter, ModalHeader, Screen, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { fmt2 } from "@/lib/knowledge";
+import { clearProfile } from "@/lib/profile";
 import { color, font, radius, space } from "@/theme/tokens";
 
 // Dev-only demo controls, opened by long-pressing the Thinketh mark on Today.
@@ -63,6 +64,18 @@ export default function DemoPanel() {
               {resetResult}
             </T>
           ) : null}
+          <Button
+            kind="secondary"
+            label="Replay onboarding"
+            style={{ marginTop: space.m }}
+            onPress={async () => {
+              await clearProfile();
+              router.dismissAll();
+            }}
+          />
+          <T variant="support" style={{ marginTop: space.s }}>
+            Clears the saved learner profile. Today shows onboarding again. Knowledge state is untouched.
+          </T>
         </Gutter>
 
         <View style={{ marginTop: space.xxl }}>
