@@ -8,7 +8,12 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.thinketh.app"
+      "bundleIdentifier": "com.thinketh.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Thinketh uses the microphone so you can talk with Catch Me Up.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +23,17 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.thinketh.app"
+      "package": "com.thinketh.app",
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -38,7 +53,16 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 120
         }
-      ]
-    ]
+      ],
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9bd7d531-aae4-404f-8fdf-c015ecf63aab"
+      }
+    },
+    "owner": "p237"
   }
 }
