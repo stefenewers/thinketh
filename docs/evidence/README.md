@@ -116,6 +116,6 @@ Screenshots to capture: Backboard dashboard → the assistant's Memories, plus t
 
 ## To do
 
-- Remote deploy: see `docs/DEPLOY.md` (function verified under Deno locally; the public deploy is pending)
+- Remote deploy: the public API is deployed (see `docs/DEPLOY.md` and `docs/NADANI-ACTION-ITEMS.md`). Remote Mongo needs the Atlas IP allowlist, and remote Tiger needs the TLS flag verified.
 - ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
 - Claude: `x-thinketh-delta-source: claude` on `/developments/:id`

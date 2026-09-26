@@ -1,35 +1,28 @@
 # Deploy the Thinketh API (Supabase Edge Function)
 
-Project: `thinketh` (ref `mbfogczuvxqkrykwlrcp`). The migration is already applied.
+**Public API:** `https://mbfogczuvxqkrykwlrcp.supabase.co/functions/v1/api` (project `thinketh`, ref `mbfogczuvxqkrykwlrcp`). It's already deployed. Stefen's `docs/NADANI-ACTION-ITEMS.md` has the current remote status.
 
-The function (`supabase/functions/api`) has been run locally under Deno 2.9 with the live `.env`. `/health?probe=1` reported Tiger, Mongo, Backboard and Supabase live, and the full mobile golden check passed against it (`API_URL=http://localhost:8000/api`). Dependencies are pinned in `supabase/functions/api/deno.lock`.
-
-## 1. Secrets
+## Redeploy
 
 ```sh
-npm run secrets:remote --workspace @thinketh/intelligence   # writes supabase/functions/.env.remote (gitignored)
-npx supabase secrets set --env-file supabase/functions/.env.remote --project-ref mbfogczuvxqkrykwlrcp
+npm run secrets:remote --workspace @thinketh/intelligence   # writes supabase/.env.remote (gitignored) from the repo-root .env
+./supabase/deploy-remote.sh                                # sets secrets, deploys with --no-verify-jwt, verifies
 ```
 
-Don't pass the repo-root `.env` directly: the CLI rejects names starting with `SUPABASE_`. The Edge runtime injects `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` itself. The script also sets the judging defaults `THINKETH_REQUIRE_AUTH=false`, `THINKETH_ALLOW_RESET=true` and `THINKETH_DEMO_USER_ID=demo-user`.
+`secrets:remote` copies only the keys the API needs, plus the judging defaults: `THINKETH_REQUIRE_AUTH=false`, `THINKETH_ALLOW_RESET=true`, `THINKETH_DEMO_USER_ID=demo-user` and `TIGER_TLS_INSECURE=true`. It leaves out `SUPABASE_*`, because the Edge runtime injects those and the CLI rejects secret names with that prefix. It prints key names only.
 
-## 2. Deploy
+## Known remote blockers
+
+- **MongoDB Atlas:** Edge Functions have no fixed outgoing IPs, so Atlas → Network Access needs `0.0.0.0/0` for the event. This is on the post-hackathon cleanup list.
+- **Tiger Data:** Timescale's certificate is marked `CA:TRUE`, which the Edge runtime rejects (`CaUsedAsEndEntity`). `TIGER_TLS_INSECURE=true` works around it for Tiger only. It isn't yet proven on Supabase Edge.
+
+## Local check under Deno
+
+The function has also been served locally under Deno 2.9 with the live `.env`:
 
 ```sh
-npx supabase functions deploy api --project-ref mbfogczuvxqkrykwlrcp --no-verify-jwt
+~/.local/deno/bin/deno run --allow-all --env-file=.env --config supabase/functions/api/deno.json supabase/functions/api/index.ts
+API_URL=http://localhost:8000/api npm run check:golden -w mobile
 ```
 
-`--no-verify-jwt` lets the app call the API without a Supabase session, matching `THINKETH_REQUIRE_AUTH=false` for judging.
-
-**Not yet verified:** whether Supabase's bundler accepts the function importing `packages/intelligence` and `packages/contracts` from outside `supabase/functions`. Deno resolves those imports fine locally. If the deploy rejects them, tell Nadani and the backend will be bundled into the function folder at deploy time.
-
-## 3. Verify
-
-```sh
-BASE=https://mbfogczuvxqkrykwlrcp.supabase.co/functions/v1/api
-curl "$BASE/health?probe=1"       # expect tiger / mongo / backboard / supabase: live
-curl "$BASE/brief/today" | head -c 300
-API_URL=$BASE npm run check:golden -w mobile
-```
-
-Then point the app at `$BASE` with mock fallback off, run the golden path on a physical phone, and turn fallback back on for the final build.
+That run passed, with Tiger, Mongo, Backboard and Supabase live. Local Deno accepted Tiger's certificate, so that failure only shows up on Supabase's Edge runtime.
