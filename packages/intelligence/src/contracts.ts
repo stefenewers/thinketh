@@ -13,6 +13,7 @@ import {
   type UserProfile,
 } from "@thinketh/contracts";
 
+// Envelopes moved to packages/contracts/src/api.ts; see docs/INTEGRATION-NOTES.md.
 export * from "@thinketh/contracts";
 
 // ---------------------------------------------------------------------------
