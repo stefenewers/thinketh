@@ -5,8 +5,6 @@ node_modules/
 *.env
 *credentials*
 !.env.example
-thinketh-stefen-claude-code-pack.zip
-thinketh-nadani-claude-code-pack.zip
 .Rhistory
 
 # Supabase CLI local link state
