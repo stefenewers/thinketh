@@ -19,7 +19,7 @@ export const levelLabel: Record<KnowledgeLevel, string> = {
 // Qualitative language for the numeric model, so no score is shown without meaning.
 export const masteryLabel = (mastery: number) => levelLabel[levelOf(mastery)];
 
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+export const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
 
 // The backend records knock-on effects on related concepts as their own
 // transitions, tagged sourceRef "propagated:<id>".

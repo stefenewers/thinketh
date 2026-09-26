@@ -79,7 +79,10 @@ async function main() {
 
   // Today progress
   const today2 = await api.getTodayBrief();
-  check(understoodDevelopmentIds(today2.developments, k.items).has(hero.id), "Today: hero counts as understood");
+  check(understoodDevelopmentIds(today2.developments, k.items).has(hero.id), "Today: hero counts as understood (derived)");
+  if (today2.understoodDevelopmentIds) {
+    check(today2.understoodDevelopmentIds.includes(hero.id), "Today: server agrees the hero is understood");
+  }
 
   // Secondary endpoints validate
   for (const d of today.developments) {

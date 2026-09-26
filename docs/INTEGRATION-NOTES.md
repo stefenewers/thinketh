@@ -26,6 +26,18 @@ This follows JOINT-INTEGRATION-CHECKLIST.md step 2: "Move response envelopes int
 - **Don't redefine envelopes in `packages/intelligence`.** Change them in `packages/contracts/src/api.ts` through the shared-contract process (SHARED-INTEGRATION-RULES.md): make an isolated commit and tell Stefen.
 - **Additive, optional fields are safe.** Renaming, removing, or making a field required will break the mobile app's validation. Every response is Zod-parsed on the phone.
 
+## 2026-09-25: mobile follow-ups after `98b5e28` (optional brief fields)
+
+- **Today prefers your new fields:**
+  - It uses `understoodDevelopmentIds` and `recentTransitions` from `GET /brief/today` when present. It still filters them to today, and it still counts only real mastery gains of 0.01 or more.
+  - If those fields are missing, it derives the same values from `/knowledge`.
+  - The golden check now also asserts that your server's `understoodDevelopmentIds` includes the hero after the correct answer. The check passes 23/23 against the local API.
+- **New dev-only demo panel:**
+  - It opens with a long press on the Thinketh mark on Today, and calls `POST /demo/reset` and `GET /health`.
+  - `/health` is parsed leniently in `apps/mobile/src/api/devtools.ts`, since it isn't part of the product contract. The app relies on each adapter having `configured`, `calls`, and `fallbacks`, plus the optional `lastOkAt`, `lastErrorAt`, and `lastError`.
+  - Status is shown as FALLBACK (not configured), LIVE · untested (no calls yet), DEGRADED (the last call fell back), or LIVE.
+- **Reset contract used by the panel:** after `POST /demo/reset`, `GET /knowledge/agent-memory/history` → `current` should be about 0.42 mastery and 0.44 uncertainty, with the `memory-equals-context-window` misconception flag. That's verified against the local API.
+
 ## Backend behaviours the mobile app now relies on
 
 If you change any of these, the app needs a matching change:

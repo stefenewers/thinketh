@@ -43,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="visualize/[id]" options={{ presentation: "modal" }} />
         <Stack.Screen name="make-it-stick/[id]" options={{ presentation: "modal" }} />
         <Stack.Screen name="voice" options={{ presentation: "fullScreenModal" }} />
+        <Stack.Screen name="demo" options={{ presentation: "modal" }} />
       </Stack>
     </SafeAreaProvider>
   );

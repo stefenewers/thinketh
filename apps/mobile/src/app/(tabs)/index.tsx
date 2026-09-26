@@ -12,6 +12,7 @@ import { useApi } from "@/lib/hooks";
 import {
   fmt2,
   improved,
+  isToday,
   isMajor,
   longDate,
   masteryLabel,
@@ -63,7 +64,7 @@ export default function Today() {
 function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: KnowledgeResponse }) {
   const { brief, developments } = today;
   const sources = today.sources ?? [];
-  const concepts = knowledge.items.map((i) => i.concept);
+  const concepts = today.concepts ?? knowledge.items.map((i) => i.concept);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
@@ -71,14 +72,17 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   const ordered = brief.developmentIds.map((id) => byId.get(id)).filter((d): d is Development => !!d);
   const hero = byId.get(brief.heroDevelopmentId) ?? ordered[0];
   const rest = ordered.filter((d) => d.id !== hero?.id);
-  const understood = understoodDevelopmentIds(developments, knowledge.items);
+  // Prefer the server's answer; derive the same rule locally if it isn't sent.
+  const understood = today.understoodDevelopmentIds
+    ? new Set(today.understoodDevelopmentIds)
+    : understoodDevelopmentIds(developments, knowledge.items);
   const next = ordered.find((d) => !understood.has(d.id)) ?? hero;
   const remainingMinutes = Math.max(
     0,
     Math.round(brief.estimatedMinutes * (1 - understood.size / Math.max(brief.meaningfulCount, 1))),
   );
   const sourceFor = (d: Development): Source | undefined => sources.find((s) => d.sourceIds.includes(s.id));
-  const latest = todaysTransitions(knowledge.items).find(improved);
+  const latest = (today.recentTransitions ?? todaysTransitions(knowledge.items)).find((t) => isToday(t.createdAt) && improved(t));
   const latestConcept = latest ? concepts.find((c) => c.id === latest.conceptId) : undefined;
 
   if (!hero) {
@@ -98,7 +102,10 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
     <Screen>
       <Gutter>
         <View style={styles.topBar}>
-          <Mark size={22} />
+          {/* Long-press opens dev-only demo controls (reset, adapter health). */}
+          <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false}>
+            <Mark size={22} />
+          </Pressable>
           <Pressable
             onPress={() => router.push("/mind")}
             accessibilityRole="button"
