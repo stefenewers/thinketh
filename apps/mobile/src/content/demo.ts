@@ -39,12 +39,22 @@ export const agentMemoryStoryline = {
   ],
 };
 
-export type Recommendation = { title: string; why: string; conceptId?: string; developmentId?: string };
+export type Recommendation = { title: string; why: string; conceptId?: string; developmentId?: string; storylineId?: string };
 
+/**
+ * Each group lists alternatives in preference order; Explore shows the ones that
+ * resolve against the current brief and knowledge state (the real API and the
+ * on-device seed use different ids), and hides a group with none.
+ */
 export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
   {
     reason: "Builds on what you learned today",
     items: [
+      {
+        title: "How agents decide what to remember",
+        why: "The natural next step after persistent memory: what to keep, what to consolidate, what to forget.",
+        conceptId: "memory-consolidation",
+      },
       {
         title: "How agents decide what to remember",
         why: "The natural next step after persistent memory: write policies and forgetting.",
@@ -56,6 +66,11 @@ export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
     reason: "Strengthens a weak area",
     items: [
       {
+        title: "Evaluators as a separate layer",
+        why: "Evaluator Architectures is one of your weakest areas, and this development is changing it.",
+        developmentId: "dev-evaluator-layer",
+      },
+      {
         title: "Evaluators vs. reward models",
         why: "Evaluator Architectures is your weakest concept, with one open confusion.",
         developmentId: "dev-evaluators",
@@ -65,6 +80,11 @@ export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
   {
     reason: "Connects two of your interests",
     items: [
+      {
+        title: "When a tool server pauses to ask you",
+        why: "Links the Model Context Protocol with Agent Tool Use, which you already know well.",
+        developmentId: "dev-mcp-elicitation",
+      },
       {
         title: "Why multimodal models make computer use work",
         why: "Links Multimodal Reasoning and Computer Use, which you follow separately.",
@@ -76,9 +96,9 @@ export const exploreGroups: { reason: string; items: Recommendation[] }[] = [
     reason: "An emerging storyline",
     items: [
       {
-        title: "MCP moves to production",
-        why: "Streaming and remote auth suggest MCP is leaving the local-dev phase.",
-        developmentId: "dev-mcp",
+        title: "From bigger context windows to a memory layer",
+        why: "How the idea of agent memory changed this year, and where your understanding sits in it.",
+        storylineId: "agent-memory",
       },
     ],
   },

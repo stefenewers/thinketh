@@ -62,10 +62,10 @@ export default function Today() {
       </Screen>
     );
   }
-  return <TodayContent today={data.today} knowledge={data.knowledge} />;
+  return <TodayContent today={data.today} knowledge={data.knowledge} following={profile.interests} />;
 }
 
-function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: KnowledgeResponse }) {
+function TodayContent({ today, knowledge, following }: { today: BriefResponse; knowledge: KnowledgeResponse; following: string[] }) {
   const { brief, developments } = today;
   const sources = today.sources ?? [];
   const concepts = today.concepts ?? knowledge.items.map((i) => i.concept);
@@ -127,6 +127,13 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <T variant="label" style={{ marginTop: space.xxl }}>
           {longDate(brief.date)}
         </T>
+        {following.length ? (
+          <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Learning profile" hitSlop={6}>
+            <T variant="meta" style={{ marginTop: space.xs }} numberOfLines={1}>
+              Following {following.join(" · ")}
+            </T>
+          </Pressable>
+        ) : null}
         <T variant="display" style={{ marginTop: space.m }} accessibilityRole="header">
           You missed {brief.meaningfulCount} things worth knowing.
         </T>
