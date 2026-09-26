@@ -3,7 +3,7 @@
  * observations through the real update rule, so the baseline state and its
  * history are always consistent with the engine.
  */
-import type { Concept, KnowledgeState, KnowledgeStateTransition, ObservationKind } from "@thinketh/contracts";
+import type { Concept, KnowledgeState, KnowledgeStateTransition, ObservationKind } from "../contracts.ts";
 import { applyObservation, explainUpdate, type UpdateOptions } from "../engine/knowledgeState.ts";
 import { makeObservation } from "../engine/observations.ts";
 import { DAY_MS, newId } from "../util.ts";

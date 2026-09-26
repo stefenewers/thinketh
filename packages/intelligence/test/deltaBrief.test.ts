@@ -1,4 +1,4 @@
-import { DeltaExplanationSchema } from "@thinketh/contracts";
+import { DeltaExplanationSchema } from "../src/contracts.ts";
 import { describe, expect, it } from "vitest";
 import { buildBrief, isAlreadyUnderstood } from "../src/engine/brief.ts";
 import { computeDelta, type DeltaInput } from "../src/engine/delta.ts";

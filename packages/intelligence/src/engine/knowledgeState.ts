@@ -21,7 +21,7 @@ import type {
   KnowledgeState,
   KnowledgeStateTransition,
   PropagatedChange,
-} from "@thinketh/contracts";
+} from "../contracts.ts";
 import { MISCONCEPTIONS } from "../seed/misconceptions.ts";
 import { clamp01, daysBetween, newId, round } from "../util.ts";
 import { OBSERVATION_RULES, makeObservation } from "./observations.ts";

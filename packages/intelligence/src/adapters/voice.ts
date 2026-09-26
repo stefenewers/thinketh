@@ -3,7 +3,7 @@
  * here; the app receives a short-lived WebRTC conversation token and passes it
  * to `startSession({ conversationToken, dynamicVariables })`.
  */
-import type { VoiceSession } from "@thinketh/contracts";
+import type { VoiceSession } from "../contracts.ts";
 import { ensureOk } from "./guard.ts";
 import type { VoiceContext, VoiceProvider } from "./types.ts";
 

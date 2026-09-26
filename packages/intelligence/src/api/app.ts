@@ -23,7 +23,7 @@ import {
   MemoryAidSchema,
   SourceSchema,
   VoiceSessionSchema,
-} from "@thinketh/contracts";
+} from "../contracts.ts";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
@@ -57,7 +57,9 @@ async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
     }
   }
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) throw new BadRequestError(z.prettifyError(parsed.error));
+  if (!parsed.success) {
+    throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
+  }
   return parsed.data;
 }
 

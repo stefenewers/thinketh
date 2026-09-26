@@ -7,7 +7,7 @@
  * app can show why a question was chosen. This is a heuristic ranking, not
  * expected-information-gain or Bayesian inference.
  */
-import type { Concept, ConceptEdge, Development, DiagnosticQuestion, KnowledgeState, SelectionDebug, UserProfile } from "@thinketh/contracts";
+import type { Concept, ConceptEdge, Development, DiagnosticQuestion, KnowledgeState, SelectionDebug, PersonaProfile } from "../contracts.ts";
 import type { DiagnosticItem } from "../seed/types.ts";
 import { daysBetween, round } from "../util.ts";
 import { effectiveUncertainty } from "./knowledgeState.ts";
@@ -18,7 +18,7 @@ export const FRESHNESS_HALF_LIFE_DAYS = 7;
 
 export type ScoredConcept = SelectionDebug & { conceptId: string; conceptName: string };
 
-export function interestFor(conceptId: string, profile: UserProfile): number {
+export function interestFor(conceptId: string, profile: PersonaProfile): number {
   let best = DEFAULT_INTEREST;
   for (const i of profile.interests) if (i.conceptIds.includes(conceptId)) best = Math.max(best, i.weight);
   return best;
@@ -57,7 +57,7 @@ export function scoreConcepts(input: {
   concepts: Concept[];
   edges: ConceptEdge[];
   states: Map<string, KnowledgeState>;
-  profile: UserProfile;
+  profile: PersonaProfile;
   developments: Development[];
   contextDevelopment?: Development;
   now: Date;

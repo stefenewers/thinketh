@@ -9,10 +9,10 @@ import type {
   KnowledgeStateTransition,
   MemoryAid,
   MemoryItem,
+  PersonaProfile,
   Source,
   Storyline,
-  UserProfile,
-} from "@thinketh/contracts";
+} from "../contracts.ts";
 
 /** Server-only development metadata that the public Development contract does not carry. */
 export type DevelopmentMeta = {
@@ -50,7 +50,7 @@ export type IngestionStats = {
 };
 
 export type SeedCorpus = {
-  profile: UserProfile;
+  profile: PersonaProfile;
   concepts: Concept[];
   edges: ConceptEdge[];
   sources: Source[];

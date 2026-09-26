@@ -26,9 +26,9 @@ import type {
   MemoryItem,
   Source,
   Storyline,
-  UserProfile,
+  PersonaProfile,
   VoiceSession,
-} from "@thinketh/contracts";
+} from "./contracts.ts";
 import { guarded, runInBackground } from "./adapters/guard.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import type { LearningContext, RawSourceBundle } from "./adapters/types.ts";
@@ -90,7 +90,7 @@ export class ThinkethService {
     return { concepts: this.concepts, edges: this.seed.edges };
   }
 
-  profileFor(userId: string): UserProfile {
+  profileFor(userId: string): PersonaProfile {
     return { ...this.seed.profile, id: userId };
   }
 

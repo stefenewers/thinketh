@@ -5,7 +5,7 @@
  * no new claims, or when it is low-novelty and the user is already strong on
  * every concept it touches. The rest are ranked by personal relevance.
  */
-import type { DailyBrief, Development, KnowledgeState, UserProfile } from "@thinketh/contracts";
+import type { DailyBrief, Development, KnowledgeState, PersonaProfile } from "../contracts.ts";
 import type { DevelopmentMeta, IngestionStats } from "../seed/types.ts";
 import { round } from "../util.ts";
 import { interestFor } from "./selection.ts";
@@ -20,7 +20,7 @@ export function isAlreadyUnderstood(dev: Development, meta: DevelopmentMeta | un
 }
 
 /** significance × novelty factor × personal gap (0.6 × max + 0.4 × mean over its concepts). */
-export function personalRelevance(dev: Development, states: Map<string, KnowledgeState>, profile: UserProfile): number {
+export function personalRelevance(dev: Development, states: Map<string, KnowledgeState>, profile: PersonaProfile): number {
   const gaps = dev.conceptIds.map((id) => interestFor(id, profile) * (1 - 0.6 * (states.get(id)?.mastery ?? 0)));
   if (gaps.length === 0) return 0;
   const gap = 0.6 * Math.max(...gaps) + 0.4 * (gaps.reduce((a, b) => a + b, 0) / gaps.length);
@@ -31,7 +31,7 @@ export function buildBrief(input: {
   developments: Development[];
   meta: Record<string, DevelopmentMeta>;
   states: Map<string, KnowledgeState>;
-  profile: UserProfile;
+  profile: PersonaProfile;
   ingestion: IngestionStats;
   now: Date;
   timeZone?: string;

@@ -5,8 +5,8 @@
  * Backboard is NOT the source of truth for numeric mastery. That lives in the
  * knowledge-state engine and the temporal store.
  */
-import type { MemoryItem } from "@thinketh/contracts";
-import { MemoryItemSchema } from "@thinketh/contracts";
+import type { MemoryItem } from "../contracts.ts";
+import { MemoryItemSchema } from "../contracts.ts";
 import { lexicalScore } from "./model/deterministic.ts";
 import { ensureOk } from "./guard.ts";
 import type { MemoryProvider } from "./types.ts";

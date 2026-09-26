@@ -1,4 +1,4 @@
-import type { KnowledgeState } from "@thinketh/contracts";
+import type { KnowledgeState } from "../src/contracts.ts";
 import { loadConfig, type ThinkethConfig } from "../src/config.ts";
 import type { Graph } from "../src/engine/knowledgeState.ts";
 import { buildSeed } from "../src/seed/corpus.ts";

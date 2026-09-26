@@ -9,7 +9,7 @@ import {
   DiagnosticAnswerResponseSchema,
   DiagnosticSelectResponseSchema,
   KnowledgeResponseSchema,
-} from "@thinketh/contracts";
+} from "../src/contracts.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createThinketh } from "../src/index.ts";
 import { NOW, offlineConfig } from "./helpers.ts";

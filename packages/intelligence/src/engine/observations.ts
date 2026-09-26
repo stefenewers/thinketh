@@ -1,4 +1,4 @@
-import type { KnowledgeObservation, ObservationKind } from "@thinketh/contracts";
+import type { KnowledgeObservation, ObservationKind } from "../contracts.ts";
 import { clamp01, newId } from "../util.ts";
 
 /**

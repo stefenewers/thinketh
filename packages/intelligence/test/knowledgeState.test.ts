@@ -1,4 +1,4 @@
-import { KnowledgeStateTransitionSchema } from "@thinketh/contracts";
+import { KnowledgeStateTransitionSchema } from "../src/contracts.ts";
 import { describe, expect, it } from "vitest";
 import {
   applyObservation,

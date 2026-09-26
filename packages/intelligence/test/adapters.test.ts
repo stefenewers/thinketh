@@ -1,4 +1,4 @@
-import type { Development, KnowledgeStateTransition } from "@thinketh/contracts";
+import type { Development, KnowledgeStateTransition } from "../src/contracts.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adapterHealth, AdapterTimeoutError, guarded, withTimeout } from "../src/adapters/guard.ts";
 import { BackboardMemory } from "../src/adapters/memory.ts";

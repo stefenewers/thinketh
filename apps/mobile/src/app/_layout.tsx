@@ -1,0 +1,46 @@
+import { useEffect } from "react";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, useFonts } from "@expo-google-fonts/inter";
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_600SemiBold,
+} from "@expo-google-fonts/playfair-display";
+import { color } from "@/theme/tokens";
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_400Regular_Italic,
+    PlayfairDisplay_600SemiBold,
+  });
+
+  useEffect(() => {
+    if (loaded || error) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded, error]);
+
+  if (!loaded && !error) return null;
+
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="development/[id]" />
+        <Stack.Screen name="mind" />
+        <Stack.Screen name="diagnostic" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
+        <Stack.Screen name="visualize/[id]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="make-it-stick/[id]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="voice" options={{ presentation: "fullScreenModal" }} />
+      </Stack>
+    </SafeAreaProvider>
+  );
+}

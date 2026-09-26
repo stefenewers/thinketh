@@ -1,4 +1,4 @@
-import type { DiagramSpec, MemoryAid } from "@thinketh/contracts";
+import type { DiagramSpec, MemoryAid } from "../contracts.ts";
 
 /** Deterministic Visualize This specs, keyed by concept id. */
 export const DIAGRAMS: Record<string, DiagramSpec> = {

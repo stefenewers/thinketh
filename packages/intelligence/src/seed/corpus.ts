@@ -5,7 +5,7 @@
  * not real announcements. Timestamps are relative to `now` so the brief always
  * reads as "today".
  */
-import type { Claim, Concept, ConceptEdge, Development, KnowledgeState, Source, Storyline } from "@thinketh/contracts";
+import type { Claim, Concept, ConceptEdge, Development, KnowledgeState, Source, Storyline } from "../contracts.ts";
 import { DAY_MS } from "../util.ts";
 import { DIAGNOSTICS } from "./diagnostics.ts";
 import { replayHistory } from "./history.ts";
@@ -577,15 +577,13 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       displayName: "Jordan",
       interests: [
         {
-          id: "interest-agents",
-          label: "AI agents",
+          topic: "AI agents",
           conceptIds: ["agent-memory", "long-horizon-agents", "agent-tool-use", "mcp"],
           weight: 1,
         },
-        { id: "interest-evals", label: "Evaluation", conceptIds: ["evaluator-architectures"], weight: 0.8 },
+        { topic: "Evaluation", conceptIds: ["evaluator-architectures"], weight: 0.8 },
         {
-          id: "interest-llm-infra",
-          label: "LLM infrastructure",
+          topic: "LLM infrastructure",
           conceptIds: ["context-windows", "retrieval-augmented-generation", "context-compaction", "memory-consolidation"],
           weight: 0.6,
         },

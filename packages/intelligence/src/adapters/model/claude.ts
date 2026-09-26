@@ -16,8 +16,9 @@ import {
   type DeltaExplanation,
   type DiagramSpec,
   type MemoryAid,
-} from "@thinketh/contracts";
-import { z } from "zod";
+} from "../../contracts.ts";
+// Wire schemas use zod/v4, which the SDK's structured-output helper requires.
+import { z } from "zod/v4";
 import type { DiagnosticItem } from "../../seed/types.ts";
 import { clamp01, newId } from "../../util.ts";
 import type {

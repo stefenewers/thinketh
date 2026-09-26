@@ -2,7 +2,7 @@
  * Deterministic IntelligenceModel: the always-available fallback. It returns
  * seeded content where it exists and simple, honest templates otherwise.
  */
-import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source } from "@thinketh/contracts";
+import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source } from "../../contracts.ts";
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
 import { newId } from "../../util.ts";

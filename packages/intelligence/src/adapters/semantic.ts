@@ -7,8 +7,8 @@
  *     - Atlas Vector Search index on `embedding` (filter: kind)  -> used when VOYAGE_API_KEY is set
  *     - Atlas Search index on `text`                             -> used otherwise
  */
-import type { Claim, Concept, Development, Source, Storyline } from "@thinketh/contracts";
-import { DevelopmentSchema } from "@thinketh/contracts";
+import type { Claim, Concept, Development, Source, Storyline } from "../contracts.ts";
+import { DevelopmentSchema } from "../contracts.ts";
 import { ensureOk } from "./guard.ts";
 import { lexicalScore } from "./model/deterministic.ts";
 import type { SearchKind, SemanticSearchQuery, SemanticSearchResult, SemanticStore } from "./types.ts";

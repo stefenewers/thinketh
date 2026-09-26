@@ -6,7 +6,7 @@
  * the text fields, but the structure, the selected claims and the affected
  * concepts come from here.
  */
-import type { Claim, Concept, ConceptEdge, DeltaExplanation, Development, KnowledgeState, UserProfile } from "@thinketh/contracts";
+import type { Claim, Concept, ConceptEdge, DeltaExplanation, Development, KnowledgeState, PersonaProfile } from "../contracts.ts";
 import { MISCONCEPTIONS } from "../seed/misconceptions.ts";
 import type { DevelopmentMeta } from "../seed/types.ts";
 import { knowledgeLevel } from "./knowledgeState.ts";
@@ -19,7 +19,7 @@ export type DeltaInput = {
   userId: string;
   development: Development;
   meta: DevelopmentMeta | undefined;
-  profile: UserProfile;
+  profile: PersonaProfile;
   states: Map<string, KnowledgeState>;
   concepts: Map<string, Concept>;
   edges: ConceptEdge[];
@@ -96,7 +96,7 @@ export function computeDelta(input: DeltaInput): DeltaExplanation {
   if (focus && focusState) {
     const interest = profile.interests.find((i) => i.conceptIds.includes(focus.id));
     const gap = `${focus.name} is one of your least certain areas (mastery ${fmt(focusState.mastery)}, uncertainty ${fmt(focusState.uncertainty)}).`;
-    const sentences = [interest ? `You follow ${interest.label}, and ${gap}` : gap];
+    const sentences = [interest ? `You follow ${interest.topic}, and ${gap}` : gap];
     const goal = profile.goals[0];
     if (goal) sentences.push(`It bears directly on your goal: “${goal}”.`);
     const flag = focusState.misconceptionFlags.find((f) => MISCONCEPTIONS[f]);

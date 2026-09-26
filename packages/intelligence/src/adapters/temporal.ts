@@ -4,8 +4,8 @@
  *
  * Tiger Data (TimescaleDB) schema: infra/tiger.sql.
  */
-import type { KnowledgeObservation, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
-import { KnowledgeStateTransitionSchema } from "@thinketh/contracts";
+import type { KnowledgeObservation, KnowledgeState, KnowledgeStateTransition } from "../contracts.ts";
+import { KnowledgeStateTransitionSchema } from "../contracts.ts";
 import { guarded } from "./guard.ts";
 import type { TemporalStore } from "./types.ts";
 

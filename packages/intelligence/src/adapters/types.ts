@@ -15,9 +15,9 @@ import type {
   MemoryAid,
   MemoryItem,
   Source,
-  UserProfile,
+  PersonaProfile,
   VoiceSession,
-} from "@thinketh/contracts";
+} from "../contracts.ts";
 import type { DiagnosticItem } from "../seed/types.ts";
 
 export type AdapterName = "claude" | "backboard" | "mongo" | "tiger" | "supabase" | "elevenlabs";
@@ -73,7 +73,7 @@ export type NormalizedDevelopment = {
 export type LearningContext = {
   concept: Concept;
   state: KnowledgeState | undefined;
-  profile: UserProfile;
+  profile: PersonaProfile;
   relatedConcepts: Concept[];
   claims: Claim[];
   development?: Development;
@@ -83,13 +83,13 @@ export type LearningContext = {
 export type DeltaPhrasingContext = {
   delta: DeltaExplanation;
   development: Development;
-  profile: UserProfile;
+  profile: PersonaProfile;
   memories: MemoryItem[];
 };
 
 export type AskContext = {
   question: string;
-  profile: UserProfile;
+  profile: PersonaProfile;
   memories: MemoryItem[];
   claims: Claim[];
   sources: Source[];

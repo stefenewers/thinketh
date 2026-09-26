@@ -2,15 +2,15 @@
   "name": "@thinketh/contracts",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "description": "Shared Thinketh domain contracts (Zod schemas + inferred types). Shared file: coordinate changes.",
-  "exports": {
-    ".": "./src/index.ts"
-  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^4.1.0"
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
   }
 }

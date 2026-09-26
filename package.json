@@ -1,17 +1,22 @@
 {
   "name": "thinketh",
   "private": true,
-  "type": "module",
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
+    "mobile": "npm --workspace mobile run start",
     "dev:api": "npm run dev --workspace @thinketh/intelligence",
     "test": "npm test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm --workspaces --if-present run typecheck",
+    "lint": "npm --workspaces --if-present run lint"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   }
 }
