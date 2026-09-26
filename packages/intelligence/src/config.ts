@@ -42,6 +42,9 @@ export function loadConfig() {
       baseUrl: env("BACKBOARD_BASE_URL") ?? "https://app.backboard.io/api",
       /** Optional: reuse one assistant for the demo persona so memory persists across threads. */
       assistantId: env("BACKBOARD_ASSISTANT_ID"),
+      /** Optional model for thread messages; Backboard's default when unset. */
+      llmProvider: env("BACKBOARD_LLM_PROVIDER"),
+      modelName: env("BACKBOARD_MODEL"),
     },
     mongo: {
       uri: env("MONGODB_URI"),

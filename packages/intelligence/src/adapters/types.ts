@@ -27,6 +27,10 @@ export interface MemoryProvider {
   recall(userId: string, query: string): Promise<MemoryItem[]>;
   remember(userId: string, item: MemoryItem): Promise<void>;
   reset?(userId: string): Promise<void>;
+  /** Let the provider extract its own memories from free text (Backboard memory "Auto"). */
+  observe?(userId: string, text: string): Promise<void>;
+  /** Authenticated no-op to confirm the integration is live. */
+  probe?(userId: string): Promise<void>;
 }
 
 export type SearchKind = "development" | "concept" | "claim" | "source";

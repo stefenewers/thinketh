@@ -24,8 +24,22 @@ export function markConfigured(name: AdapterName, configured: boolean): void {
   health.set(name, h);
 }
 
-export function adapterHealth(): Record<string, AdapterHealth> {
-  return Object.fromEntries(health);
+/**
+ * live: configured and the most recent call succeeded. degraded: the most
+ * recent call failed (serving fallback). unverified: configured, no calls yet.
+ * fallback: not configured.
+ */
+export type AdapterStatus = "live" | "degraded" | "unverified" | "fallback";
+
+function statusOf(h: AdapterHealth): AdapterStatus {
+  if (!h.configured) return "fallback";
+  if (!h.lastOkAt && !h.lastErrorAt) return "unverified";
+  if (h.lastOkAt && (!h.lastErrorAt || h.lastOkAt >= h.lastErrorAt)) return "live";
+  return "degraded";
+}
+
+export function adapterHealth(): Record<string, AdapterHealth & { status: AdapterStatus }> {
+  return Object.fromEntries([...health].map(([name, h]) => [name, { status: statusOf(h), ...h }]));
 }
 
 function record(name: AdapterName, ok: boolean, error?: string): void {

@@ -51,6 +51,8 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
         apiKey: config.backboard.apiKey,
         baseUrl: config.backboard.baseUrl,
         ...(config.backboard.assistantId ? { assistantId: config.backboard.assistantId } : {}),
+        ...(config.backboard.llmProvider ? { llmProvider: config.backboard.llmProvider } : {}),
+        ...(config.backboard.modelName ? { modelName: config.backboard.modelName } : {}),
         ...(supabase
           ? {
               lookupAssistant: (userId: string) => supabase.getIntegrationId(userId, "backboard_assistant"),

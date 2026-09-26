@@ -52,6 +52,8 @@ export { InvalidAnswerError };
 const MEMORY_TIMEOUT_MS = 2000;
 const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
+/** Backboard "Auto" extraction runs an LLM turn, so it only ever runs in the background. */
+const MEMORY_OBSERVE_TIMEOUT_MS = 45_000;
 
 export class ThinkethService {
   private readonly concepts = new Map<string, Concept>();
@@ -183,6 +185,22 @@ export class ThinkethService {
     const { memory, localMemory } = this.adapters;
     await localMemory.remember(userId, item);
     await guarded("backboard", "remember", memory ? () => memory.remember(userId, item) : undefined, () => undefined, MEMORY_TIMEOUT_MS);
+  }
+
+  /** Hand free text to Backboard (memory "Auto") so it extracts preferences and topics. Never awaited by the UI. */
+  private observeInBackground(userId: string, text: string): void {
+    const { memory } = this.adapters;
+    if (!memory?.observe) return;
+    runInBackground(
+      "backboard.observe",
+      guarded("backboard", "observe", () => memory.observe!(userId, text), () => undefined, MEMORY_OBSERVE_TIMEOUT_MS),
+    );
+  }
+
+  /** Actively check configured adapters so `/health` reflects reality before the first user call. */
+  async probeAdapters(): Promise<void> {
+    const { memory } = this.adapters;
+    if (memory?.probe) await guarded("backboard", "probe", () => memory.probe!(this.config.demoUserId), () => undefined, MEMORY_TIMEOUT_MS);
   }
 
   private async getDevelopment(id: string): Promise<Development> {
@@ -665,6 +683,7 @@ export class ThinkethService {
       content: `Asked: “${input.question.slice(0, 200)}”`,
       createdAt: this.now().toISOString(),
     });
+    this.observeInBackground(userId, input.question);
     if (input.developmentId) {
       await this.withUserLock(userId, async () => {
         for (const conceptId of citedConceptIds.slice(0, 2)) {
