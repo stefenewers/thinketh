@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import Svg, { Circle, Ellipse, G, Path } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon, type IconName } from "@/components/Icon";
@@ -13,7 +13,7 @@ import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
-import { color, font, radius, shadow, space } from "@/theme/tokens";
+import { color, font, glow, radius, shadow, space } from "@/theme/tokens";
 
 const SKIP_DEFINITIONS: Record<string, string> = {
   duplicate: "Several sources covering the same event. You see the strongest version once.",
@@ -137,16 +137,16 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <View style={styles.tiles}>
           <ContinueTile
             icon="mind"
-            tint={color.surfaceMuted}
-            ink={color.ink}
+            tint={glow.tileCoral}
+            ink={color.coral}
             title="Your Mind"
             // What changed today is the reason to open it.
             subtitle={latest ? `${conceptById.get(latest.conceptId)?.name ?? "A concept"} changed today` : "Explore your thinking"}
             accent={!!latest}
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId } } : "/mind")}
           />
-          <ContinueTile icon="ask" tint={color.surfaceMuted} ink={color.ink} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ContinueTile icon="people" tint={color.surfaceMuted} ink={color.ink} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
+          <ContinueTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
+          <ContinueTile icon="people" tint={glow.tilePeach} ink={glow.tilePeachInk} title="Playground" subtitle="Learn together with Muse" onPress={() => router.push("/playground")} />
         </View>
 
         {rest.length ? (
@@ -317,35 +317,26 @@ function MetricStrip({ metrics }: { metrics: Metric[] }) {
 }
 
 function LeadDevelopmentCard({ development, understood, concepts }: { development: Development; understood: boolean; concepts: Concept[] }) {
+  const { width } = useWindowDimensions();
+  const w = width - space.xl * 2;
+  const h = 340;
   const sources = development.sourceIds.length;
   return (
     <Pressable
       onPress={() => router.push({ pathname: "/development/[id]", params: { id: development.id } })}
       accessibilityRole="button"
       accessibilityLabel={`Lead development. ${development.title}. ${significanceLabel(development)}.`}
-      style={({ pressed }) => [styles.lead, pressed && { transform: [{ scale: 0.99 }] }]}
+      style={({ pressed }) => [styles.lead, { height: h }, pressed && { transform: [{ scale: 0.99 }] }]}
     >
-      <View style={styles.leadTexture} pointerEvents="none">
-        <LineField />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <DuskArt width={w} height={h} />
       </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-        <View style={styles.leadPill}>
-          <View style={styles.dot} />
-          <T style={styles.leadPillText}>Lead development</T>
-        </View>
-        {understood ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Icon name="check" size={13} color={color.ink} />
-            <T variant="meta" style={{ color: color.ink }}>
-              Understood
-            </T>
-          </View>
-        ) : (
-          <T variant="meta" style={{ color: color.ink3 }}>
-            {significanceLabel(development)}
-          </T>
-        )}
+      <View style={styles.leadPill}>
+        <Icon name="sparkle" size={13} color={glow.sun} />
+        <T style={styles.leadPillText}>Lead development</T>
+        {understood ? <Icon name="check" size={13} color={color.onInk} /> : null}
       </View>
+      <View style={{ flex: 1 }} />
       <T style={styles.leadTitle} numberOfLines={3}>
         {development.title}
       </T>
@@ -358,7 +349,7 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
         <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
           <View style={{ flexDirection: "row", marginRight: space.s }}>
             {concepts.slice(0, 3).map((c, i) => (
-              <View key={c.id} style={[styles.conceptDot, i > 0 && { marginLeft: -7 }]}>
+              <View key={c.id} style={[styles.conceptDot, i > 0 && { marginLeft: -8 }]}>
                 <T style={styles.conceptInitial}>{c.name.slice(0, 1)}</T>
               </View>
             ))}
@@ -368,27 +359,44 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
           </T>
         </View>
         <View style={styles.leadArrow}>
-          <Icon name="arrow" size={18} color={color.onInk} />
+          <Icon name="arrow" size={20} color={color.onInk} />
         </View>
       </View>
     </Pressable>
   );
 }
 
-/** A faint line field with a few nodes on it: texture that belongs to a knowledge product, not a stock image. */
-function LineField() {
-  const rows = [18, 34, 50, 66, 82, 98, 114];
+/** A dusk landscape in layered haze: cinematic, and dark enough to read white type over. */
+function DuskArt({ width, height }: { width: number; height: number }) {
   return (
-    <Svg width={190} height={140} viewBox="0 0 190 140">
-      {rows.map((y, i) => (
-        <Path key={y} d={`M0 ${y + 10} C 50 ${y - 8 + i}, 120 ${y + 14 - i}, 190 ${y - 6}`} stroke={color.ink} strokeOpacity={0.07} strokeWidth={0.9} fill="none" />
-      ))}
-      <Circle cx={128} cy={46} r={2.6} fill={color.ink} fillOpacity={0.35} />
-      <Circle cx={160} cy={76} r={2.6} fill="none" stroke={color.ink} strokeOpacity={0.35} strokeWidth={1} />
-      <Circle cx={96} cy={92} r={2.2} fill={color.ink} fillOpacity={0.25} />
+    <Svg width={width} height={height} viewBox="0 0 350 340" preserveAspectRatio="xMidYMid slice">
+      <Defs>
+        <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={glow.duskTop} />
+          <Stop offset="0.55" stopColor={glow.duskMid} />
+          <Stop offset="1" stopColor={glow.duskLow} />
+        </LinearGradient>
+        <LinearGradient id="read" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0" stopColor="#000" stopOpacity={0.42} />
+          <Stop offset="0.75" stopColor="#000" stopOpacity={0} />
+        </LinearGradient>
+        <LinearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0.45" stopColor="#000" stopOpacity={0} />
+          <Stop offset="1" stopColor="#000" stopOpacity={0.4} />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={350} height={340} fill="url(#sky)" />
+      <Circle cx={292} cy={88} r={6} fill={glow.sun} />
+      <Path d="M0 150 C 90 118, 180 108, 350 52 L350 340 L0 340 Z" fill={glow.ridgeFar} fillOpacity={0.55} />
+      <Path d="M0 214 C 100 176, 210 150, 350 112 L350 340 L0 340 Z" fill={glow.ridgeMid} fillOpacity={0.7} />
+      <Path d="M110 340 C 180 262, 250 226, 350 206 L350 340 Z" fill={glow.ridgeNear} fillOpacity={0.9} />
+      <Ellipse cx={120} cy={196} rx={170} ry={26} fill="#FFFFFF" fillOpacity={0.07} />
+      <Rect x={0} y={0} width={350} height={340} fill="url(#read)" />
+      <Rect x={0} y={0} width={350} height={340} fill="url(#floor)" />
     </Svg>
   );
 }
+
 
 
 function SectionHeader({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
@@ -521,17 +529,27 @@ const styles = StyleSheet.create({
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
   listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
-  lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", padding: space.xl, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised, shadowOpacity: 0.07, shadowRadius: 18 },
-  leadTexture: { position: "absolute", right: 0, top: 0 },
-  leadPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: color.coralTint },
-  leadPillText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1, textTransform: "uppercase", color: color.coral },
-  leadTitle: { fontFamily: font.sansSemibold, fontSize: 23, lineHeight: 29, letterSpacing: -0.6, color: color.ink, marginTop: space.xl, maxWidth: "92%" },
-  leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2, marginTop: space.s },
-  leadFooter: { flexDirection: "row", alignItems: "center", marginTop: space.xl, gap: space.m },
-  leadMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.ink2, flexShrink: 1 },
-  leadArrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
-  conceptDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: color.surfaceMuted, borderWidth: 1.5, borderColor: color.canvas, alignItems: "center", justifyContent: "center" },
-  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, color: color.ink2 },
+  lead: { marginTop: space.xl, borderRadius: 22, overflow: "hidden", padding: space.xl, backgroundColor: glow.duskMid, ...shadow.raised, shadowOpacity: 0.16, shadowRadius: 20 },
+  leadPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: space.m,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  leadPillText: { fontFamily: font.sansMedium, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: "uppercase", color: color.onInk },
+  leadTitle: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 31, letterSpacing: -0.7, color: color.onInk },
+  leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: "rgba(255,255,255,0.8)", marginTop: space.s },
+  leadFooter: { flexDirection: "row", alignItems: "center", marginTop: space.l, gap: space.m },
+  leadMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: "rgba(255,255,255,0.88)", flexShrink: 1 },
+  leadArrow: { width: 52, height: 52, borderRadius: 26, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
+  conceptDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: glow.orbLight, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" },
+  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 11, lineHeight: 13, color: glow.orbDeep },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.xxl, marginBottom: space.s },
   sectionTitle: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 23, letterSpacing: -0.3, color: color.ink },
   tiles: { flexDirection: "row", gap: 10 },
