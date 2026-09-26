@@ -74,13 +74,15 @@ describe("adapter fallbacks keep the golden loop alive", () => {
   it("Ask, Visualize, Make It Stick and Voice degrade to deterministic output", async () => {
     const service = serviceWithBrokenSponsors();
     const ask = await service.ask("demo-user", { question: "How does agent memory persist across sessions?" });
-    expect(ask.answer).toMatch(/From your sources/);
-    expect(ask.memoryUsed.length).toBeGreaterThan(0); // local memory stood in for Backboard
+    expect(ask.sourcesSay.length).toBeGreaterThan(0);
+    expect(ask.thinkethInfers.length).toBeGreaterThan(0); // deterministic inference stood in for Claude
+    expect(ask.memoryUsed?.length).toBeGreaterThan(0); // local memory stood in for Backboard
     expect((await service.visualize("demo-user", { conceptId: "mcp" })).nodes.length).toBeGreaterThan(0);
     expect((await service.makeItStick("demo-user", { conceptId: "mcp" })).threeStepModel).toHaveLength(3);
     const voice = await service.voiceSession("demo-user");
     expect(voice.mode).toBe("transcript_fallback");
-    expect(voice.fallbackTranscript.length).toBeGreaterThan(2);
+    expect(voice.conversationToken).toBeNull();
+    expect(voice.fallbackScript.length).toBeGreaterThan(2);
   });
 });
 

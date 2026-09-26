@@ -223,3 +223,181 @@ export const MemoryAidSchema = z.object({
   optionalDiagram: DiagramSpecSchema.optional(),
 });
 export type MemoryAid = z.infer<typeof MemoryAidSchema>;
+
+// ===========================================================================
+// Canonical API envelopes (JOINT-INTEGRATION-CHECKLIST step 2)
+//
+// Request/response shapes for the Thinketh HTTP API, agreed from
+// docs/MOBILE-API-EXPECTATIONS.md and NEXT-STEPS-NADANI.md. Every field inside
+// them is a domain contract above. POST bodies may include `userId`; the
+// server identifies the user from the auth token or `X-Thinketh-User` header.
+// ===========================================================================
+
+export const SelectionDebugSchema = DiagnosticQuestionSchema.shape.selectionDebug.unwrap();
+export type SelectionDebug = z.infer<typeof SelectionDebugSchema>;
+
+export const StorylineSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  developmentIds: z.array(z.string()),
+  conceptIds: z.array(z.string()),
+});
+export type Storyline = z.infer<typeof StorylineSchema>;
+
+export const MemoryItemSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["preference", "misconception", "learning_topic", "conversation"]),
+  content: z.string(),
+  createdAt: z.string(),
+});
+export type MemoryItem = z.infer<typeof MemoryItemSchema>;
+
+export const KnowledgeLevelSchema = z.enum(["strong", "intermediate", "developing", "weak"]);
+export type KnowledgeLevel = z.infer<typeof KnowledgeLevelSchema>;
+
+const withUser = { userId: z.string().optional() };
+
+// GET /brief/today
+export const TodayResponseSchema = z.object({
+  brief: DailyBriefSchema,
+  /** Everything referenced by brief.developmentIds, in brief order. */
+  developments: z.array(DevelopmentSchema),
+  sources: z.array(SourceSchema),
+  concepts: z.array(ConceptSchema),
+  /** Developments whose understanding check the user passed today. */
+  understoodDevelopmentIds: z.array(z.string()),
+  /** Newest first. Primary transitions only (no propagated side effects). */
+  recentTransitions: z.array(KnowledgeStateTransitionSchema),
+});
+export type TodayResponse = z.infer<typeof TodayResponseSchema>;
+
+// GET /developments/:id
+export const DevelopmentDetailResponseSchema = z.object({
+  development: DevelopmentSchema,
+  /** delta.affectedConcepts[0] is the primary concept. */
+  delta: DeltaExplanationSchema,
+  sources: z.array(SourceSchema),
+  concepts: z.array(ConceptSchema),
+  claims: z.array(ClaimSchema),
+  storylines: z.array(StorylineSchema).optional(),
+});
+export type DevelopmentDetailResponse = z.infer<typeof DevelopmentDetailResponseSchema>;
+
+// POST /developments/:id/feedback
+export const FeedbackKindSchema = z.enum(["got_it", "already_knew", "viewed", "saved", "explained", "revisited", "asked_followup"]);
+export type FeedbackKind = z.infer<typeof FeedbackKindSchema>;
+export const FeedbackRequestSchema = z.object({ ...withUser, kind: FeedbackKindSchema });
+export type FeedbackRequest = z.infer<typeof FeedbackRequestSchema>;
+export const FeedbackResponseSchema = z.object({
+  /** transitions[0].reason is shown inline. */
+  transitions: z.array(KnowledgeStateTransitionSchema),
+});
+export type FeedbackResponse = z.infer<typeof FeedbackResponseSchema>;
+
+// POST /diagnostics/select
+export const DiagnosticSelectRequestSchema = z.object({
+  ...withUser,
+  developmentId: z.string().optional(),
+  conceptId: z.string().optional(),
+});
+export type DiagnosticSelectRequest = z.infer<typeof DiagnosticSelectRequestSchema>;
+export const DiagnosticSelectResponseSchema = z.object({
+  question: DiagnosticQuestionSchema,
+  selection: z.object({
+    /** "Chosen because …" line for the explainability affordance. */
+    explanation: z.string(),
+    /** Top candidates, highest priority first. */
+    candidates: z.array(SelectionDebugSchema.extend({ conceptId: z.string(), conceptName: z.string() })),
+  }),
+});
+export type DiagnosticSelectResponse = z.infer<typeof DiagnosticSelectResponseSchema>;
+
+// POST /diagnostics/:id/answer
+export const DiagnosticAnswerRequestSchema = z.object({
+  ...withUser,
+  /** Multiple choice: exact choice text (or 0-based index). Short answer: free text. */
+  answer: z.string().min(1),
+});
+export type DiagnosticAnswerRequest = z.infer<typeof DiagnosticAnswerRequestSchema>;
+export const DiagnosticAnswerResponseSchema = z.object({
+  answer: DiagnosticAnswerSchema,
+  transition: KnowledgeStateTransitionSchema,
+});
+export type DiagnosticAnswerResponse = z.infer<typeof DiagnosticAnswerResponseSchema>;
+
+// GET /knowledge
+export const KnowledgeItemSchema = z.object({
+  concept: ConceptSchema,
+  state: KnowledgeStateSchema,
+  level: KnowledgeLevelSchema,
+  lastTransition: KnowledgeStateTransitionSchema.optional(),
+});
+export type KnowledgeItem = z.infer<typeof KnowledgeItemSchema>;
+export const KnowledgeResponseSchema = z.object({
+  userId: z.string(),
+  /** One per concept, sorted by mastery (highest first). */
+  items: z.array(KnowledgeItemSchema),
+  edges: z.array(ConceptEdgeSchema),
+  /** Newest first. Primary transitions only. */
+  recentTransitions: z.array(KnowledgeStateTransitionSchema),
+});
+export type KnowledgeResponse = z.infer<typeof KnowledgeResponseSchema>;
+
+// GET /knowledge/:conceptId/history
+export const ConceptHistoryResponseSchema = z.object({
+  concept: ConceptSchema,
+  current: KnowledgeStateSchema,
+  level: KnowledgeLevelSchema,
+  /** Oldest first. */
+  transitions: z.array(KnowledgeStateTransitionSchema),
+});
+export type ConceptHistoryResponse = z.infer<typeof ConceptHistoryResponseSchema>;
+
+// POST /ask
+export const AskRequestSchema = z.object({
+  ...withUser,
+  question: z.string().min(1),
+  developmentId: z.string().optional(),
+});
+export type AskRequest = z.infer<typeof AskRequestSchema>;
+/** Trust layers: what sources say vs what Thinketh infers vs what you know vs what's unknown. Empty arrays hide their section. */
+export const AskResponseSchema = z.object({
+  question: z.string(),
+  sourcesSay: z.array(z.string()),
+  thinkethInfers: z.array(z.string()),
+  youAlreadyUnderstand: z.array(z.string()),
+  stillUncertain: z.array(z.string()),
+  citedDevelopmentIds: z.array(z.string()),
+  citedConceptIds: z.array(z.string()),
+  memoryUsed: z.array(MemoryItemSchema).optional(),
+});
+export type AskResponse = z.infer<typeof AskResponseSchema>;
+
+// POST /visualize -> DiagramSpec, POST /make-it-stick -> MemoryAid
+export const LearningRequestSchema = z.object({
+  ...withUser,
+  conceptId: z.string().optional(),
+  developmentId: z.string().optional(),
+});
+export type LearningRequest = z.infer<typeof LearningRequestSchema>;
+
+// POST /voice/session
+export const VoiceSessionRequestSchema = z.object({ ...withUser, briefDate: z.string().optional() });
+export type VoiceSessionRequest = z.infer<typeof VoiceSessionRequestSchema>;
+export const VoiceSessionSchema = z.object({
+  sessionId: z.string(),
+  mode: z.enum(["elevenlabs", "transcript_fallback"]),
+  /** Pass to `startSession({ conversationToken, dynamicVariables })`. Null = voice unavailable, play fallbackScript. */
+  conversationToken: z.string().nullable(),
+  agentId: z.string().nullable(),
+  expiresAt: z.string(),
+  dynamicVariables: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  /** Always present so Catch Me Up works without voice. */
+  fallbackScript: z.array(z.string()),
+});
+export type VoiceSession = z.infer<typeof VoiceSessionSchema>;
+
+// GET /config
+export const AppConfigResponseSchema = z.object({ flags: z.record(z.string(), z.boolean()) });
+export type AppConfigResponse = z.infer<typeof AppConfigResponseSchema>;

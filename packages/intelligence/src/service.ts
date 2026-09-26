@@ -7,7 +7,7 @@
  */
 import type {
   AskResponse,
-  BriefResponse,
+  TodayResponse,
   Claim,
   Concept,
   ConceptHistoryResponse,
@@ -31,7 +31,8 @@ import type {
 } from "./contracts.ts";
 import { guarded, runInBackground } from "./adapters/guard.ts";
 import type { Adapters } from "./adapters/registry.ts";
-import type { LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import { lexicalScore } from "./adapters/model/deterministic.ts";
+import type { AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
@@ -47,6 +48,15 @@ import { newId, round } from "./util.ts";
 export class NotFoundError extends Error {}
 export class BadRequestError extends Error {}
 export { InvalidAnswerError };
+
+const QUESTION_DEV_SEPARATOR = "::";
+
+/** Parse an observation sourceRef of the form `diagnostic:<itemId>[@<developmentId>]`. */
+export function parseDiagnosticRef(ref: string | undefined): { itemId: string; developmentId?: string } | undefined {
+  if (!ref?.startsWith("diagnostic:")) return undefined;
+  const [itemId = "", developmentId] = ref.slice("diagnostic:".length).split("@");
+  return developmentId ? { itemId, developmentId } : { itemId };
+}
 
 const MEMORY_TIMEOUT_MS = 2000;
 const SEMANTIC_TIMEOUT_MS = 3000;
@@ -206,7 +216,18 @@ export class ThinkethService {
   // Today
   // -------------------------------------------------------------------------
 
-  async brief(userId: string): Promise<BriefResponse> {
+  /** Calendar day (in the configured time zone) of an ISO timestamp. */
+  private localDay(iso: string | Date): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: this.config.timeZone }).format(new Date(iso));
+  }
+
+  /** Newest first, primary transitions only (propagated side effects excluded). */
+  private async recentPrimaryTransitions(userId: string, limit = 20): Promise<KnowledgeStateTransition[]> {
+    const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
+    return recent.filter((t) => !t.observation.sourceRef?.startsWith("propagated:")).slice(0, limit);
+  }
+
+  async brief(userId: string): Promise<TodayResponse> {
     const states = await this.statesFor(userId);
     const { brief, ordered } = buildBrief({
       developments: [...this.developments.values()],
@@ -221,7 +242,23 @@ export class ThinkethService {
     // Warm the Claude phrasing of the hero card so the first tap is already personalized.
     const hero = ordered[0];
     if (hero) runInBackground("warm-delta", this.phrasedDelta(userId, hero, states));
-    return { brief, developments: ordered };
+
+    const recentTransitions = await this.recentPrimaryTransitions(userId);
+    const today = this.localDay(this.now());
+    const understood = new Set<string>();
+    for (const t of recentTransitions) {
+      const ref = parseDiagnosticRef(t.observation.sourceRef);
+      if (t.observation.kind === "diagnostic_correct" && ref?.developmentId && this.localDay(t.createdAt) === today) understood.add(ref.developmentId);
+    }
+    const sourceIds = new Set(ordered.flatMap((d) => d.sourceIds));
+    return {
+      brief,
+      developments: ordered,
+      sources: [...this.sources.values()].filter((s) => sourceIds.has(s.id)),
+      concepts: [...this.concepts.values()],
+      understoodDevelopmentIds: ordered.filter((d) => understood.has(d.id)).map((d) => d.id),
+      recentTransitions,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -319,9 +356,7 @@ export class ThinkethService {
 
   private async answeredQuestionIds(userId: string): Promise<Set<string>> {
     const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
-    return new Set(
-      recent.flatMap((t) => (t.observation.sourceRef?.startsWith("diagnostic:") ? [t.observation.sourceRef.slice("diagnostic:".length)] : [])),
-    );
+    return new Set(recent.flatMap((t) => parseDiagnosticRef(t.observation.sourceRef)?.itemId ?? []));
   }
 
   async selectDiagnostic(userId: string, input: { developmentId?: string; conceptId?: string }): Promise<DiagnosticSelectResponse> {
@@ -350,7 +385,11 @@ export class ThinkethService {
 
     const explanation = explainSelection(top, states.get(conceptId));
     logEvent("diagnostic.selected", { userId, questionId: item.id, conceptId, priority: top.priority, explanation, ranked: ranked.slice(0, 5) });
-    return { question: toPublicQuestion(item, debug), selection: { explanation, candidates: ranked.slice(0, 5) } };
+    const question = toPublicQuestion(item, debug);
+    // Question ids are opaque to the app. Carrying the development in the id lets
+    // the answer be attributed to it ("1 of 6 understood") without an extra field.
+    if (contextDevelopment) question.id = `${item.id}${QUESTION_DEV_SEPARATOR}${contextDevelopment.id}`;
+    return { question, selection: { explanation, candidates: ranked.slice(0, 5) } };
   }
 
   private async generateDiagnostic(
@@ -373,7 +412,8 @@ export class ThinkethService {
   }
 
   async answerDiagnostic(userId: string, questionId: string, answer: string): Promise<DiagnosticAnswerResponse> {
-    const item = this.diagnostics.get(questionId);
+    const [itemId = questionId, developmentId] = questionId.split(QUESTION_DEV_SEPARATOR);
+    const item = this.diagnostics.get(itemId);
     if (!item) throw new NotFoundError(`Diagnostic not found: ${questionId}`);
     const evaluation = await this.evaluate(item, answer);
 
@@ -387,7 +427,7 @@ export class ThinkethService {
       };
       const result = await this.observe(userId, item.conceptId, kind, {
         correctness: evaluation.correctness,
-        sourceRef: `diagnostic:${item.id}`,
+        sourceRef: `diagnostic:${item.id}${developmentId ? `@${developmentId}` : ""}`,
         options,
         states,
       });
@@ -452,7 +492,7 @@ export class ThinkethService {
       return [{ concept, state, level: knowledgeLevel(state), ...(last ? { lastTransition: last } : {}) }];
     });
     items.sort((a, b) => b.state.mastery - a.state.mastery);
-    return { userId, items, edges: this.seed.edges };
+    return { userId, items, edges: this.seed.edges, recentTransitions: await this.recentPrimaryTransitions(userId) };
   }
 
   async conceptHistory(userId: string, conceptId: string): Promise<ConceptHistoryResponse> {
@@ -553,29 +593,83 @@ export class ThinkethService {
       ).then((r) => r.value),
     ]);
 
-    // Expand search hits into claims: claims directly, developments/concepts via their claims.
-    const claimIds = new Set<string>();
-    if (input.developmentId) for (const id of (await this.getDevelopment(input.developmentId)).claimIds) claimIds.add(id);
+    // Expand search hits into candidate claims: claims directly, developments/concepts via their claims.
+    const devClaimIds = new Set(input.developmentId ? (await this.getDevelopment(input.developmentId)).claimIds : []);
+    const candidateIds = new Set(devClaimIds);
     for (const h of hits) {
-      if (h.kind === "claim") claimIds.add(h.id);
-      if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) claimIds.add(id);
-      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) claimIds.add(c.id);
+      if (h.kind === "claim") candidateIds.add(h.id);
+      if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) candidateIds.add(id);
+      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
     }
-    const claims = [...claimIds].flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : [])).slice(0, 12);
-    const sources = [...new Set(claims.flatMap((c) => c.sourceIds))].flatMap((id) => (this.sources.has(id) ? [this.sources.get(id)!] : []));
+    const ranked = [...candidateIds]
+      .flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : []))
+      .map((c) => ({ c, score: lexicalScore(input.question, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.c);
+
+    // Layer 1: what sources say (verbatim claims).
+    const said = ranked.filter((c) => c.stance !== "challenges").slice(0, 3);
+    const citedConceptIds = [...new Set(said.flatMap((c) => c.conceptIds))].slice(0, 5);
+    const citedDevelopmentIds = [
+      ...new Set([
+        ...(input.developmentId ? [input.developmentId] : []),
+        ...[...this.developments.values()].filter((d) => said.some((c) => d.claimIds.includes(c.id))).map((d) => d.id),
+      ]),
+    ];
+
+    // Layer 3: what you already understand (from the knowledge state, never from the model).
     const states = await this.statesFor(userId);
-    const conceptIds = new Set(claims.flatMap((c) => c.conceptIds));
-    const ctx = {
-      question: input.question,
-      profile: this.profileFor(userId),
-      memories,
-      claims,
-      sources,
-      concepts: [...this.concepts.values()],
-      states: [...conceptIds].flatMap((id) => (states.has(id) ? [states.get(id)!] : [])),
-    };
-    const model = this.model();
-    const { value } = await guarded("claude", "ask", model ? () => model.ask(ctx) : undefined, () => this.adapters.fallbackModel.ask(ctx), this.claudeTimeout());
+    const background = new Set(citedConceptIds);
+    for (const e of this.seed.edges) if (e.type === "prerequisite" && background.has(e.toConceptId)) background.add(e.fromConceptId);
+    const youAlreadyUnderstand = [...background]
+      .flatMap((id) => {
+        const s = states.get(id);
+        return s && s.mastery >= 0.6 ? [{ id, s }] : [];
+      })
+      .sort((a, b) => b.s.mastery - a.s.mastery)
+      .slice(0, 3)
+      .map(({ id, s }) => {
+        const claim = this.claims.get(this.seed.baselineClaimIds[id]?.[0] ?? "");
+        return `${claim?.text ?? this.concepts.get(id)?.description ?? id} (${knowledgeLevel(s)})`;
+      });
+
+    // Layer 4: still uncertain (contested claims, and concepts Thinketh has little evidence on).
+    const stillUncertain = [
+      ...ranked.filter((c) => c.stance === "challenges").map((c) => `Sources push back: ${c.text}`),
+      ...citedConceptIds.flatMap((id) => {
+        const s = states.get(id);
+        const name = this.concepts.get(id)?.name ?? id;
+        return s && s.uncertainty >= 0.4 ? [`Thinketh has little evidence yet on how well you know ${name} (uncertainty ${s.uncertainty.toFixed(2)}).`] : [];
+      }),
+    ].slice(0, 3);
+
+    let thinkethInfers: string[] = [];
+    if (said.length === 0) {
+      stillUncertain.splice(0, stillUncertain.length, "Thinketh doesn't have enough evidence in your sources to answer this well yet. Try asking about one of today's developments.");
+    } else {
+      const weakest = citedConceptIds
+        .flatMap((id) => (states.has(id) ? [states.get(id)!] : []))
+        .sort((a, b) => a.mastery - b.mastery)[0];
+      const flag = weakest?.misconceptionFlags.find((f) => MISCONCEPTIONS[f]);
+      const shiftDev = citedDevelopmentIds.map((id) => this.meta[id]?.mentalModelShift).find((m) => m?.after);
+      const ctx: AskContext = {
+        question: input.question,
+        profile: this.profileFor(userId),
+        memories,
+        sourcesSay: said.map((c) => c.text),
+        youAlreadyUnderstand,
+        stillUncertain,
+        ...(shiftDev ? { shift: shiftDev } : {}),
+        ...(weakest
+          ? { focus: { name: this.concepts.get(weakest.conceptId)?.name ?? weakest.conceptId, mastery: weakest.mastery, ...(flag ? { misconception: MISCONCEPTIONS[flag] } : {}) } }
+          : {}),
+      };
+      const model = this.model();
+      thinkethInfers = (
+        await guarded("claude", "ask", model ? () => model.ask(ctx) : undefined, () => this.adapters.fallbackModel.ask(ctx), this.claudeTimeout())
+      ).value.thinkethInfers;
+    }
 
     await this.remember(userId, {
       id: newId("mem"),
@@ -585,15 +679,19 @@ export class ThinkethService {
     });
     if (input.developmentId) {
       await this.withUserLock(userId, async () => {
-        for (const conceptId of value.relatedConceptIds.slice(0, 2)) {
+        for (const conceptId of citedConceptIds.slice(0, 2)) {
           await this.observe(userId, conceptId, "asked_followup", { sourceRef: `ask:${input.developmentId}` });
         }
       });
     }
     return {
-      answer: value.answer,
-      citations: value.citedSourceIds.flatMap((id) => (this.sources.has(id) ? [{ sourceId: id, title: this.sources.get(id)!.title }] : [])),
-      relatedConceptIds: value.relatedConceptIds,
+      question: input.question,
+      sourcesSay: said.map((c) => c.text),
+      thinkethInfers,
+      youAlreadyUnderstand,
+      stillUncertain,
+      citedDevelopmentIds,
+      citedConceptIds,
       memoryUsed: memories,
     };
   }

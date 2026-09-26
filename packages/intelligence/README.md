@@ -31,11 +31,12 @@ Paths are identical on both.
 **Auth**
 - Send `Authorization: Bearer <supabase access token>` when signed in.
 - With no token, requests act as the seeded demo persona (`demo-user`).
-- For local testing, `x-thinketh-user-id: <any id>` picks a separate user. Every new user starts from the demo persona.
+- `X-Thinketh-User: <any id>` picks a separate user (what the mobile client sends). Every new user starts from the demo persona. A `userId` in POST bodies is accepted and ignored.
 
-**Types**: import request and response types from `@thinketh/contracts`
-(`packages/contracts/src/index.ts`). Every response below is validated against
-those schemas on the server before it is sent.
+**Types**: the canonical request/response envelopes live in `@thinketh/contracts`
+(`packages/contracts/src/index.ts`, section "Canonical API envelopes"). Every
+response is validated against those schemas on the server before it is sent,
+and `test/api.test.ts` parses every endpoint through them.
 
 **Errors**: `{ "error": { "code": "not_found" | "bad_request" | "unauthorized" | "internal", "message": "…" } }`.
 No stack traces are ever returned.
@@ -44,7 +45,7 @@ No stack traces are ever returned.
 
 | # | Endpoint | Response type |
 |---|---|---|
-| 1 | `GET /brief/today` | `BriefResponse` |
+| 1 | `GET /brief/today` | `TodayResponse` |
 | 2 | `GET /developments/:id` | `DevelopmentDetailResponse` |
 | 3 | `POST /diagnostics/select` | `DiagnosticSelectResponse` |
 | 4 | `POST /diagnostics/:id/answer` | `DiagnosticAnswerResponse` |
@@ -61,7 +62,7 @@ No stack traces are ever returned.
 
 ### Examples (real responses from the seeded demo, trimmed with …)
 
-**`GET /brief/today`**
+**`GET /brief/today`** returns `{ brief, developments, sources, concepts, understoodDevelopmentIds, recentTransitions }`:
 ```json
 {
   "brief": {
@@ -82,12 +83,17 @@ No stack traces are ever returned.
       "conceptIds": ["agent-memory", "memory-consolidation", "long-horizon-agents", "context-windows", "retrieval-augmented-generation"],
       "claimIds": ["…"], "sourceIds": ["…"], "storylineIds": ["story-context-to-persistent-agents"]
     }
-  ]
+  ],
+  "sources": ["…every source referenced by the developments…"],
+  "concepts": ["…all concepts…"],
+  "understoodDevelopmentIds": [],
+  "recentTransitions": []
 }
 ```
+After the diagnostic in the golden loop, `understoodDevelopmentIds` becomes `["dev-persistent-agent-memory"]` and `recentTransitions[0]` is that transition (newest first, primary transitions only).
 
 **`GET /developments/dev-persistent-agent-memory`** returns `{ development, delta, concepts, claims, sources, storylines }`.
-The `delta` maps one-to-one onto the Development Detail sections:
+`delta.affectedConcepts[0]` is the primary concept. The `delta` maps one-to-one onto the Development Detail sections:
 ```json
 {
   "whatHappened": ["Agents can now write distilled facts to a memory store and recall them in later sessions.", "…"],
@@ -106,7 +112,7 @@ immediately; the Claude phrasing is prepared in the background.
 ```json
 {
   "question": {
-    "id": "dq-agent-memory-persistence",
+    "id": "dq-agent-memory-persistence::dev-persistent-agent-memory",
     "conceptId": "agent-memory",
     "prompt": "An agent finishes a coding session on Monday. On Tuesday a new session starts with an empty context window. …",
     "type": "multiple_choice",
@@ -122,7 +128,9 @@ immediately; the Claude phrasing is prepared in the background.
 }
 ```
 
-**`POST /diagnostics/dq-agent-memory-persistence/answer`**, body `{ "answer": "1" }`.
+Treat `question.id` as opaque and send it back unchanged (URL-encoded). When selected from a development it carries that development, which is how Today knows what's "understood".
+
+**`POST /diagnostics/:id/answer`**, body `{ "answer": "<exact choice text>" }`.
 The answer can be the 0-based choice index, a letter (`"B"`), or the exact choice text. Short answers take free text.
 ```json
 {
@@ -141,35 +149,43 @@ The answer can be the 0-based choice index, a letter (`"B"`), or the exact choic
 ```
 Show values with 2 decimals (`toFixed(2)`) to match the runbook (0.42 → 0.51).
 
-**`GET /knowledge`** returns `{ userId, items: [{ concept, state, level, lastTransition? }], edges }`, sorted by mastery.
+**`GET /knowledge`** returns `{ userId, items: [{ concept, state, level, lastTransition? }], edges, recentTransitions }`. Items are sorted by mastery; `recentTransitions` is newest first ("Just improved" = `after.mastery > before.mastery`).
 `level` is `strong | intermediate | developing | weak`. The seeded persona is
 strong on Agent Tool Use, intermediate on MCP, developing on Agent Memory and
 weak on Evaluator Architectures.
 
 **`GET /knowledge/agent-memory/history`** returns `{ concept, current, level, transitions }`, oldest first. The seeded persona has prior history (a missed question 18 days ago, then reading), so the timeline isn't empty before the demo.
 
-**`POST /ask`**, body `{ "question": "How is agent memory different from RAG?", "developmentId"?: "…" }`:
+**`POST /ask`**, body `{ "question": "How does agent memory persist across sessions?", "developmentId"?: "…" }`. The answer is layered for trust; empty arrays hide their section:
 ```json
-{ "answer": "…", "citations": [{ "sourceId": "src-memory-engineering-post", "title": "Giving long-running agents a memory that survives the session" }],
-  "relatedConceptIds": ["agent-memory", "…"], "memoryUsed": [{ "id": "mem-pref-analogies", "kind": "preference", "content": "Prefers systems analogies …", "createdAt": "…" }] }
+{
+  "question": "How does agent memory persist across sessions?",
+  "sourcesSay": ["Agents can now write distilled facts to a persistent memory store and recall them in later sessions, …", "…"],
+  "thinkethInfers": ["The practical shift: An agent's memory is a curated store it writes to and selectively reads from, …"],
+  "youAlreadyUnderstand": ["A model only sees what is inside its context window; … (strong)"],
+  "stillUncertain": ["Sources push back: Persistent memory can entrench mistakes: …"],
+  "citedDevelopmentIds": ["dev-persistent-agent-memory"],
+  "citedConceptIds": ["agent-memory", "long-running-agents", "retrieval", "context-windows"],
+  "memoryUsed": [{ "id": "mem-pref-analogies", "kind": "preference", "content": "Prefers systems analogies …", "createdAt": "…" }]
+}
 ```
+`sourcesSay`, `youAlreadyUnderstand` and `stillUncertain` are assembled deterministically (verbatim claims and the knowledge state). Claude only writes `thinkethInfers`.
 
 **`POST /visualize`** and **`POST /make-it-stick`**, body `{ "conceptId"?: "…", "developmentId"?: "…" }`
 return a `DiagramSpec` (nodes grouped `before | after | shared`, edges, caption) and a `MemoryAid`.
 Agent Memory has hand-authored seeded versions, so the demo path is deterministic.
 
-**`POST /voice/session`** returns a `VoiceSession`:
+**`POST /voice/session`**, body `{ "briefDate"?: "…" }`, returns a `VoiceSession`:
 ```json
-{ "mode": "elevenlabs" | "transcript_fallback",
-  "conversationToken": "…", "agentId": "…",
+{ "sessionId": "voice_…", "mode": "elevenlabs" | "transcript_fallback",
+  "conversationToken": "…" | null, "agentId": "…" | null, "expiresAt": "…",
   "dynamicVariables": { "user_name": "Jordan", "brief_date": "2026-09-25", "brief_minutes": 11, "brief_script": "Good morning, Jordan. …" },
-  "fallbackTranscript": ["Good morning, Jordan. You have about 11 minutes. …", "First: …", "…"] }
+  "fallbackScript": ["Good morning, Jordan. You have about 11 minutes. …", "First: …", "…"] }
 ```
-With `mode: "elevenlabs"`, call `startSession({ conversationToken, dynamicVariables })`
+When `conversationToken` is set, call `startSession({ conversationToken, dynamicVariables })`
 from `@elevenlabs/react-native`. This needs an Expo **development build**; it
-won't run in Expo Go. Otherwise render `fallbackTranscript`. The agent's
-prompt/first message in the ElevenLabs dashboard should reference
-`{{brief_script}}` and `{{user_name}}`.
+won't run in Expo Go. Otherwise play `fallbackScript`. The agent's prompt/first
+message in the ElevenLabs dashboard should reference `{{brief_script}}` and `{{user_name}}`.
 
 ## What's real vs fallback
 
@@ -232,7 +248,7 @@ ids (enforced), and it never sees or sets numbers it could change.
 
 ## Seed data
 
-`src/seed/`: persona "Jordan", 9 concepts, 10 edges, 13 sources, 13 claims, 7
+`src/seed/`: persona "Jordan", 9 concepts (ids aligned with the mobile Mind layout where they overlap), 10 edges, 13 sources, 13 claims, 7
 candidate developments (6 shown, 1 filtered out), 1 storyline, 10 diagnostics,
 and seeded memories. All sources and publishers are **illustrative demo data**,
 not real announcements. Timestamps are relative to server start, so the brief

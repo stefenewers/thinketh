@@ -87,17 +87,25 @@ export type DeltaPhrasingContext = {
   memories: MemoryItem[];
 };
 
+/**
+ * Ask is layered for trust. The service assembles the verbatim layers
+ * (sourcesSay, youAlreadyUnderstand, stillUncertain) deterministically; the
+ * model only writes `thinkethInfers`, grounded in those layers.
+ */
 export type AskContext = {
   question: string;
   profile: PersonaProfile;
   memories: MemoryItem[];
-  claims: Claim[];
-  sources: Source[];
-  concepts: Concept[];
-  states: KnowledgeState[];
+  sourcesSay: string[];
+  youAlreadyUnderstand: string[];
+  stillUncertain: string[];
+  /** Mental-model shift of the most relevant development, if any. */
+  shift?: { before: string; after: string };
+  /** Weakest cited concept, for a personal note. */
+  focus?: { name: string; mastery: number; misconception?: string };
 };
 
-export type AskResult = { answer: string; citedSourceIds: string[]; relatedConceptIds: string[] };
+export type AskResult = { thinkethInfers: string[] };
 
 export type ShortAnswerGrade = { coveredIdeaIndices: number[]; misconception?: string; feedback: string };
 
