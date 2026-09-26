@@ -290,7 +290,7 @@ export function eventToVisualCue(e: RoomEvent, room: PlaygroundRoom, me: string)
     case "transfer_verified":
       return { ...base, kind: "verified", actor: { kind: "thinketh", name: "Thinketh" }, label: `Verified: ${whose(room.transfer?.learnerId)} Mind changed`, celebrate: true };
     case "transfer_not_verified":
-      return { ...base, kind: "not_verified", actor: { kind: "thinketh", name: "Thinketh" }, label: "Not verified: recorded, nothing moved" };
+      return { ...base, kind: "not_verified", actor: { kind: "thinketh", name: "Thinketh" }, label: "Not verified: the answer is recorded as evidence" };
     case "shared_gap_taught": {
       const c = conductorOf(e);
       return { ...base, kind: "gap", actor: c, label: `${c.name} teaches both of you · ${topic(concept)}` };

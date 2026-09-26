@@ -317,7 +317,7 @@ function StageCaption({ room, me, stage }: { room: PlaygroundRoom; me: string; s
             checkpoint: `Checkpoint at ${stage.learnerId === me ? "your" : `${nameOf(room, stage.learnerId)}'s`} Mind: apply it somewhere new.`,
             grading: "Thinketh is grading the answer…",
             verified: tn ? `Verified. ${who(stage.learnerId)}: ${fmt2(tn.before.mastery)} → ${fmt2(tn.after.mastery)}.` : "Verified.",
-            not_yet: "Not verified yet. The path stops at the checkpoint; nothing moved.",
+            not_yet: "Not verified yet. The path stops at the checkpoint; Thinketh recorded what the answer did show.",
             gap: "Neither Mind has strong evidence here, so Muse teaches it to both.",
             source: "",
             idle: "",

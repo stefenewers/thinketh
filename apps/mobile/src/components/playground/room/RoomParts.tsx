@@ -185,7 +185,7 @@ export function EvidenceSheet({ room, world, me, selection, cue, onClose }: { ro
           {item ? row(name(room.delta!.aId), `mastery ${fmt2(item.a.mastery)} · uncertainty ${fmt2(item.a.uncertainty)} · ${item.a.evidenceCount} signals${item.a.verified ? " · verified" : ""}`) : null}
           {item ? row(name(room.delta!.bId), `mastery ${fmt2(item.b.mastery)} · uncertainty ${fmt2(item.b.uncertainty)} · ${item.b.evidenceCount} signals${item.b.verified ? " · verified" : ""}`) : null}
           {item ? row("Rule", `${item.rule.replace(/_/g, " ")} (computed by Thinketh)`) : null}
-          {row("State", { possible: "possible: nothing has travelled", traveling: "the teacher is explaining (a perspective, not proof)", checkpoint: "stopped at Thinketh's checkpoint", grading: "Thinketh is grading", verified: "verified: the learner's Mind changed", not_yet: "not verified: nothing moved" }[world.path.state])}
+          {row("State", { possible: "possible: nothing has travelled", traveling: "the teacher is explaining (a perspective, not proof)", checkpoint: "stopped at Thinketh's checkpoint", grading: "Thinketh is grading", verified: "verified: the learner's Mind changed", not_yet: "not verified: nothing travelled; the answer was still recorded as evidence" }[world.path.state])}
           {tr?.prompt ? row("Checkpoint", tr.prompt) : null}
           {tr?.feedback ? row("Grader", tr.feedback) : null}
         </>
