@@ -71,7 +71,7 @@ describe("'What just happened' is the recorded sequence", () => {
       "done:Muse:Assigned Nadani",
       "current:Nadani:Explains",
       "pending:Thinketh:Transfer check",
-      "pending:Thinketh:Stefen answers",
+      "pending:Stefen:Answers",
       "pending:Thinketh:Mind updates",
     ]);
     expect(labels(rooms.verified).slice(-3)).toEqual(["done:Thinketh:Asked for transfer", "done:Thinketh:Answer verified", "done:Thinketh:Mind updated"]);

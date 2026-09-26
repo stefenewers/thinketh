@@ -40,6 +40,7 @@ export function DuoMind({
   changed,
   trace,
   muse,
+  settled,
   keyConcepts,
 }: {
   left: MindSnapshot;
@@ -53,6 +54,8 @@ export function DuoMind({
   trace?: DuoTrace | null;
   /** Show Muse's presence between the Minds. */
   muse?: boolean;
+  /** The trace already happened: draw it complete, without replaying the animation. */
+  settled?: boolean;
   /** Concepts whose names must show (what the room is about). */
   keyConcepts?: string[];
 }) {
@@ -88,9 +91,9 @@ export function DuoMind({
             { layout: duo.left, nodes: regionNodes(left, "a"), focusId: focus("a"), dim: !!focusConceptId, stubs: true, fontSize: DUO_FONT },
             { layout: duo.right, nodes: regionNodes(right, "b"), focusId: focus("b"), dim: !!focusConceptId, stubs: true, fontSize: DUO_FONT },
           ]}
-          underlay={route && trace ? <Trace route={route} mode={trace.mode} layer="line" /> : null}
+          underlay={route && trace ? <Trace route={route} mode={trace.mode} layer="line" still={settled} /> : null}
         >
-          {route && trace ? <Trace route={route} mode={trace.mode} layer="marks" /> : null}
+          {route && trace ? <Trace route={route} mode={trace.mode} layer="marks" still={settled} /> : null}
           {muse ? <MuseMark x={duo.band.x + duo.band.w / 2} y={graphH - 18} /> : null}
         </Mindprint>
       </View>
@@ -113,13 +116,15 @@ function Trace({
   route,
   mode,
   layer,
+  still,
 }: {
   route: { a: { x: number; y: number }; c1: { x: number; y: number }; c2: { x: number; y: number }; b: { x: number; y: number } };
   mode: DuoTrace["mode"];
   /** The line goes under labels; the travelling dot and the ring go over them. */
   layer: "line" | "marks";
+  still?: boolean;
 }) {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotion() || !!still;
   const t = useSharedValue(reduced ? 1 : 0);
   const ring = useSharedValue(reduced ? 1 : 0);
   const { a, c1, c2, b } = route;
@@ -151,7 +156,19 @@ function Trace({
   const ringProps = useAnimatedProps(() => ({ r: 4 + ring.get() * 10, opacity: ring.get() }));
 
   if (layer === "line") {
-    return <AnimatedPath d={d} stroke={color.coral} strokeWidth={2} fill="none" strokeLinecap="round" strokeDasharray={mode === "moved" ? [len, len] : undefined} animatedProps={lineProps} />;
+    // Teaching: a dashed, lighter route (in motion, not arrived). Moved: drawn solid, once.
+    return (
+      <AnimatedPath
+        d={d}
+        stroke={color.coral}
+        strokeOpacity={mode === "moved" ? 1 : 0.55}
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray={mode === "moved" ? [len, len] : [4, 6]}
+        animatedProps={lineProps}
+      />
+    );
   }
   return (
     <G>

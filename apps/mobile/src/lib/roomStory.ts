@@ -23,10 +23,10 @@ export type StageState = {
 /** How far the coral path has travelled from teacher to learner, per beat. Only a verified answer reaches 1. */
 export const PATH_PROGRESS: Record<Beat, number> = {
   found: 0,
-  teaching: 0.5,
-  checkpoint: 0.8,
-  grading: 0.8,
-  not_yet: 0.8,
+  teaching: 0.42,
+  checkpoint: 0.64,
+  grading: 0.64,
+  not_yet: 0.64,
   verified: 1,
   gap: 0,
   source: 0,
@@ -145,8 +145,9 @@ export function railSteps(room: PlaygroundRoom, pending: Pending): RailStep[] {
     },
     {
       key: "verdict",
-      actor: "Thinketh",
-      label: verdict ? (verdict.type === "transfer_verified" ? "Answer verified" : "Not verified yet") : pending === "answer" ? "Grading the answer…" : `${learner} answers`,
+      // Before a verdict the learner is the one acting; grading and the verdict are Thinketh's.
+      actor: verdict || pending === "answer" ? "Thinketh" : learner,
+      label: verdict ? (verdict.type === "transfer_verified" ? "Answer verified" : "Not verified yet") : pending === "answer" ? "Grading the answer…" : asked ? "Answering" : "Answers",
       state: verdict ? "done" : asked ? "current" : "pending",
       detail: verdict && tr?.feedback ? tr.feedback : undefined,
     },
