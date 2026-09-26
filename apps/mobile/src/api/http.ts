@@ -10,6 +10,9 @@ import {
   FeedbackResponseSchema,
   KnowledgeResponseSchema,
   MemoryAidSchema,
+  ResourceListResponseSchema,
+  ResourceSchema,
+  TeachDeltaResponseSchema,
   VoiceSessionSchema,
 } from "@thinketh/contracts";
 import { DEMO_USER_ID, type ThinkethApi } from "./client";
@@ -94,6 +97,12 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     visualize: (req) => call(DiagramSpecSchema, "POST", "/visualize", req, (a) => a.visualize(req), GENERATIVE_TIMEOUT_MS),
     makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req), GENERATIVE_TIMEOUT_MS),
     createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
+    listResources: async () =>
+      (await call(ResourceListResponseSchema, "GET", "/resources", undefined, async (a) => ({ resources: await a.listResources() }))).resources,
+    addResource: (url) => call(ResourceSchema, "POST", "/resources", { url }, (a) => a.addResource(url)),
+    getResource: (resId) => call(ResourceSchema, "GET", `/resources/${id(resId)}`, undefined, (a) => a.getResource(resId)),
+    teachResource: (resId) =>
+      call(TeachDeltaResponseSchema, "POST", `/resources/${id(resId)}/teach`, {}, (a) => a.teachResource(resId), GENERATIVE_TIMEOUT_MS),
     resetDemo: async () => {
       const res = await fetch(`${base}/demo/reset`, {
         method: "POST",

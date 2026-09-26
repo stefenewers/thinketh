@@ -13,6 +13,8 @@ import type {
   KnowledgeResponse,
   LearningRequest,
   MemoryAid,
+  Resource,
+  TeachDeltaResponse,
   VoiceSession,
 } from "@thinketh/contracts";
 
@@ -31,6 +33,10 @@ export interface ThinkethApi {
   makeItStick(req: LearningRequest): Promise<MemoryAid>; // POST /make-it-stick
   createVoiceSession(): Promise<VoiceSession>; // POST /voice/session
   resetDemo(): Promise<void>; // POST /demo/reset
+  listResources(): Promise<Resource[]>; // GET  /resources
+  addResource(url: string): Promise<Resource>; // POST /resources
+  getResource(id: string): Promise<Resource>; // GET  /resources/:id
+  teachResource(id: string): Promise<TeachDeltaResponse>; // POST /resources/:id/teach
 }
 
 export const DEMO_USER_ID = "demo-user";

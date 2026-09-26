@@ -12,6 +12,7 @@ import type {
   KnowledgeState,
   KnowledgeStateTransition,
   MemoryItem,
+  Resource,
 } from "@thinketh/contracts";
 import { levelOf } from "@/lib/knowledge";
 import { DEMO_USER_ID, type ThinkethApi } from "./client";
@@ -273,6 +274,44 @@ function createMockApi(): ThinkethApi {
       return fx.memoryAidFor(id);
     },
 
+    // Reading real pages needs the live API; offline, say so rather than invent an analysis.
+    async listResources() {
+      await delay(150);
+      return [...mockResources.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async addResource(url) {
+      await delay(300);
+      const r: Resource = {
+        id: `res-${mockResources.size + 1}`,
+        url,
+        title: hostOf(url),
+        sourceType: "article",
+        createdAt: new Date().toISOString(),
+        status: "failed",
+        stage: "done",
+        error: "Reading new sources needs the live Thinketh API. Connect it and try again.",
+        extractedConcepts: [],
+        matchedConceptIds: [],
+        alreadyUnderstood: [],
+        newToYou: [],
+        relevantConnections: [],
+      };
+      mockResources.set(r.id, r);
+      return r;
+    },
+
+    async getResource(resId) {
+      await delay(100);
+      const r = mockResources.get(resId);
+      if (!r) throw new Error(`No resource ${resId}`);
+      return r;
+    },
+
+    async teachResource() {
+      throw new Error("Teaching a saved source needs the live Thinketh API.");
+    },
+
     async createVoiceSession() {
       await delay(300);
       return {
@@ -283,6 +322,16 @@ function createMockApi(): ThinkethApi {
       };
     },
   };
+}
+
+const mockResources = new Map<string, Resource>();
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function citationsFor(developmentIds: string[]) {
