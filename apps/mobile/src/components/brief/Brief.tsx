@@ -13,19 +13,23 @@ import { color, font, space } from "@/theme/tokens";
 const BAND_H = 196;
 
 /** A subtle photographic band at the top of a briefing, fading into the white page, with a back control. */
-export function TextureHeader({ source, onBack }: { source: ImageSourcePropType; onBack: () => void }) {
+/**
+ * A photographic header. "band" is a faded strip; "hero" (storyboard 06) is a tall, nearly
+ * full-strength image that only fades into white at its bottom edge.
+ */
+export function TextureHeader({ source, onBack, hero }: { source: ImageSourcePropType; onBack: () => void; hero?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const h = BAND_H + insets.top;
+  const { width, height } = useWindowDimensions();
+  const h = hero ? Math.round(height * 0.36) + insets.top : BAND_H + insets.top;
   return (
     <View style={{ height: h }}>
-      <Texture source={source} style={[StyleSheet.absoluteFill, { opacity: 0.55 }]} />
+      <Texture source={source} style={[StyleSheet.absoluteFill, { opacity: hero ? 0.92 : 0.55 }]} />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg width={width} height={h}>
           <Defs>
             <LinearGradient id="briefFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color.canvas} stopOpacity={0.1} />
-              <Stop offset="0.6" stopColor={color.canvas} stopOpacity={0.35} />
+              <Stop offset="0" stopColor={color.canvas} stopOpacity={hero ? 0 : 0.1} />
+              <Stop offset={hero ? "0.72" : "0.6"} stopColor={color.canvas} stopOpacity={hero ? 0 : 0.35} />
               <Stop offset="1" stopColor={color.canvas} stopOpacity={1} />
             </LinearGradient>
           </Defs>

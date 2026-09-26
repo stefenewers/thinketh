@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Resource, ResourceIdea, TeachDeltaResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { BriefRow, BriefSection, DotLine, TextureHeader } from "@/components/brief/Brief";
+import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { AppTopBar, ListCard, SegmentedTabs } from "@/components/system";
@@ -14,6 +15,20 @@ import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL,
 import { color, font, space } from "@/theme/tokens";
 
 const POLL_MS = 1200;
+
+const SOURCE_NOUN: Partial<Record<Resource["sourceType"], string>> = {
+  research: "paper",
+  preprint: "paper",
+  video: "video",
+  documentation: "docs",
+  repository: "repository",
+  document: "document",
+};
+/** Storyboard 06: "Read full paper" / "Watch full video" / "Read full article". */
+const fullLabel = (r: Resource) => {
+  const verb = consumeVerb(r);
+  return `${verb[0]!.toUpperCase()}${verb.slice(1)} full ${SOURCE_NOUN[r.sourceType] ?? "article"}`;
+};
 
 type Tab = "summary" | "new" | "delta" | "sources";
 const TABS: { key: Tab; label: string }[] = [
@@ -154,8 +169,20 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
       </T>
     ) : !lesson ? (
       <>
-        <Button label={teaching ? "Finding the actual delta…" : "Teach me the delta"} icon="arrow" loading={teaching} onPress={teach} />
-        <T variant="support" style={{ marginTop: space.s, textAlign: "center" }}>
+        <T variant="meta" style={{ color: color.ink3, marginTop: space.xs }}>
+          Or explore what matters for you
+        </T>
+        <Pressable
+          onPress={teach}
+          disabled={teaching}
+          accessibilityRole="button"
+          accessibilityState={{ busy: teaching }}
+          style={({ pressed }) => [styles.deltaRow, pressed && { backgroundColor: color.surfaceMuted }]}
+        >
+          <T style={styles.deltaLabel}>{teaching ? "Finding the actual delta…" : "Show my personalized delta"}</T>
+          {teaching ? <ActivityIndicator color={color.ink2} /> : <Icon name="arrow" size={16} color={color.ink} />}
+        </Pressable>
+        <T variant="support" style={{ marginTop: space.xs }}>
           {teachError ? "Couldn't prepare the lesson just now. Try again." : "Skips what you already know. About as long as the useful part."}
         </T>
       </>
@@ -168,8 +195,8 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
 
   return (
     <Screen topInset={false} contentStyle={{ paddingTop: 0 }}>
-      <TextureHeader source={imageFor(r.matchedConceptIds)} onBack={goBack} />
-      <Gutter style={{ marginTop: -space.x4 }}>
+      <TextureHeader hero source={imageFor(r.matchedConceptIds)} onBack={goBack} />
+      <Gutter style={{ marginTop: -space.l }}>
         <T style={styles.typeLabel}>{SOURCE_TYPE_LABEL[r.sourceType]}</T>
         <T style={styles.title} accessibilityRole="header">
           {r.title}
@@ -216,9 +243,9 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
             ) : null}
 
             <View style={{ marginTop: space.xxl, gap: space.s }}>
+              <Button label={fullLabel(r)} icon="arrow" accessibilityRole="link" accessibilityHint="Opens the original source" onPress={openOriginal} />
               {teachBlock}
-              {lesson ? <Button label="Read your delta" icon="arrow" onPress={() => setTab("delta")} /> : null}
-              <Button kind="secondary" label="Open original source" icon="external" accessibilityRole="link" onPress={openOriginal} />
+              {lesson ? <Button kind="secondary" label="Read your delta" icon="arrow" onPress={() => setTab("delta")} /> : null}
             </View>
           </View>
         ) : null}
@@ -343,6 +370,8 @@ function Lesson({ lesson }: { lesson: TeachDeltaResponse }) {
 }
 
 const styles = StyleSheet.create({
+  deltaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 48, paddingHorizontal: space.l, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas },
+  deltaLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.ink },
   typeLabel: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.3, textTransform: "uppercase", color: color.ink3 },
   title: { fontFamily: font.sansSemibold, fontSize: 25, lineHeight: 31, letterSpacing: -0.6, color: color.ink, marginTop: space.s },
   smallCaps: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1, textTransform: "uppercase", color: color.ink3 },
