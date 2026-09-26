@@ -189,10 +189,10 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     });
     app.post("/playground/join", async (c) => {
       const { code, displayName } = await body(c, JoinRoomRequestSchema);
-      return c.json(room(playground.join(c.get("userId"), code, displayName)));
+      return c.json(room(await playground.join(c.get("userId"), code, displayName)));
     });
     app.get("/playground/rooms/:id", async (c) => c.json(room(await playground.get(c.req.param("id"), c.get("userId")))));
-    app.post("/playground/rooms/:id/demo-guest", (c) => c.json(room(playground.addDemoGuest(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/demo-guest", async (c) => c.json(room(await playground.addDemoGuest(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/compare", async (c) => c.json(room(await playground.compare(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/conduct", async (c) => {
       const { intent } = await body(c, RoomConductRequestSchema);

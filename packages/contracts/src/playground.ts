@@ -13,6 +13,8 @@ export const MindSnapshotConceptSchema = z.object({
   name: z.string(),
   /** Compact on-canvas label ("MCP", "Tool Use"). */
   short: z.string(),
+  /** How central the concept is in the field (layout only). */
+  importance: z.number(),
   level: KnowledgeLevelSchema,
   mastery: z.number(),
   uncertainty: z.number(),
@@ -189,6 +191,8 @@ export const RoomResourceSideSchema = z.object({
   userId: z.string(),
   resourceId: z.string(),
   status: z.enum(["processing", "ready", "failed", "learned"]),
+  /** The step actually running (reading, mapping, comparing, done). */
+  stage: z.enum(["reading", "mapping", "comparing", "done"]).optional(),
   usefulMinutes: z.number().optional(),
   newIdeas: z.number(),
   /** The new idea most worth this person's time. */

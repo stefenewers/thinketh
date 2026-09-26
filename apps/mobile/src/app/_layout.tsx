@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, useFonts } from "@expo-google-fonts/inter";
 import {
   PlayfairDisplay_400Regular,
@@ -34,6 +35,7 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }}>
@@ -50,7 +52,9 @@ export default function RootLayout() {
         <Stack.Screen name="storyline/[id]" />
         <Stack.Screen name="resource/[id]" />
         <Stack.Screen name="resource/add" options={{ presentation: "modal" }} />
+        <Stack.Screen name="playground" />
       </Stack>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -46,6 +46,21 @@ const SNAPSHOT_EXCLUDES = ["Ask history", "Saved memories and preferences", "Whi
 
 type Room = Omit<PlaygroundRoom, "conductor" | "realtime">;
 
+/** "Evaluator Architectures" -> "evaluator architectures", keeping acronyms ("MCP"). */
+const lowerName = (s: string) => s.split(" ").map((w) => (/^[A-Z0-9]{2,}/.test(w) ? w : w.toLowerCase())).join(" ");
+
+const SOURCE_LABEL: Record<string, string> = {
+  primary: "Technical article",
+  documentation: "Documentation",
+  research: "Research",
+  preprint: "Preprint",
+  repository: "Repository",
+  reporting: "Reporting",
+  article: "Article",
+  video: "Video",
+  document: "Document",
+};
+
 export class PlaygroundService {
   private readonly rooms = new Map<string, Room>();
   private readonly svc: ThinkethService;
@@ -85,24 +100,24 @@ export class PlaygroundService {
     return this.view(room);
   }
 
-  join(userId: string, code: string, displayName: string): PlaygroundRoom {
+  async join(userId: string, code: string, displayName: string): Promise<PlaygroundRoom> {
     const room = [...this.rooms.values()].find((r) => r.code === code.toUpperCase());
     if (!room) throw new NotFoundError("No Playground with that code.");
     if (!room.participants.some((p) => p.userId === userId)) {
       if (room.participants.length >= 2) throw new BadRequestError("This Playground already has two Minds.");
       room.participants.push(this.participant(userId, displayName, "guest", false));
-      this.onArrival(room, userId);
+      await this.onArrival(room, userId);
     }
     return this.view(room);
   }
 
   /** One-device demo: the seeded persona joins, and the host's device acts for her. */
-  addDemoGuest(roomId: string, userId: string): PlaygroundRoom {
+  async addDemoGuest(roomId: string, userId: string): Promise<PlaygroundRoom> {
     const room = this.forHost(roomId, userId);
     if (!room.participants.some((p) => p.userId === NADANI_ID)) {
       if (room.participants.length >= 2) throw new BadRequestError("This Playground already has two Minds.");
       room.participants.push(this.participant(NADANI_ID, this.svc.profileFor(NADANI_ID).displayName, "guest", true));
-      this.onArrival(room, NADANI_ID);
+      await this.onArrival(room, NADANI_ID);
     }
     return this.view(room);
   }
@@ -154,6 +169,7 @@ export class PlaygroundService {
           conceptId: c.id,
           name: c.name,
           short: SHORT_LABELS[c.id] ?? c.name,
+          importance: c.importance,
           level: knowledgeLevel(s),
           mastery: r2(s.mastery),
           uncertainty: r2(s.uncertainty),
@@ -333,7 +349,7 @@ export class PlaygroundService {
     const sides = await Promise.all(
       room.participants.map(async (p) => {
         const r = await this.svc.addResource(p.userId, url);
-        return { userId: p.userId, resourceId: r.id, status: r.status, newIdeas: r.newToYou.length };
+        return { userId: p.userId, resourceId: r.id, status: r.status, stage: r.stage, newIdeas: r.newToYou.length };
       }),
     );
     const first = this.svc.getResource(sides[0]!.userId, sides[0]!.resourceId);
@@ -355,16 +371,17 @@ export class PlaygroundService {
         continue;
       }
       side.status = r.status;
+      side.stage = r.stage;
       side.newIdeas = r.newToYou.length;
       if (r.estimatedUsefulMinutes !== undefined) side.usefulMinutes = r.estimatedUsefulMinutes;
       const focus = r.newToYou[0];
       const skip = r.alreadyUnderstood[0];
-      if (focus) side.focus = focus.conceptId ? this.conceptName(focus.conceptId) : focus.idea;
-      if (skip) side.skip = skip.conceptId ? this.conceptName(skip.conceptId) : skip.idea;
+      if (focus) side.focus = focus.conceptId ? lowerName(this.conceptName(focus.conceptId)) : focus.idea;
+      if (skip) side.skip = skip.conceptId ? lowerName(this.conceptName(skip.conceptId)) : skip.idea;
       res.title = r.title;
       if (r.publisher) res.publisher = r.publisher;
       if (r.estimatedReadMinutes !== undefined) res.readMinutes = r.estimatedReadMinutes;
-      res.sourceLabel = [r.publisher, r.sourceType === "article" ? "Technical article" : r.sourceType === "video" ? "Video" : r.sourceType === "research" ? "Research" : undefined].filter(Boolean).join(" · ");
+      res.sourceLabel = [r.publisher, SOURCE_LABEL[r.sourceType]].filter(Boolean).join(" · ");
     }
     const done = res.sides.every((s) => s.status === "ready" || s.status === "learned" || s.status === "failed");
     if (done && !res.note) {
@@ -381,13 +398,13 @@ export class PlaygroundService {
       const name = this.name(room, s.userId);
       if (s.status === "failed") return `${name}: I couldn't read it for you.`;
       if (s.newIdeas === 0) return `${name}: nothing new here for you, so skip it.`;
-      if (s.focus) return `${name}: focus on ${s.focus.charAt(0).toLowerCase()}${s.focus.slice(1)}.`;
+      if (s.focus) return `${name}: focus on ${s.focus}.`;
       return `${name}: ${s.newIdeas} new idea${s.newIdeas === 1 ? "" : "s"} for you.`;
     });
     const skipper = [...res.sides].sort((x, y) => x.newIdeas - y.newIdeas)[0];
     if (skipper?.skip && skipper.newIdeas > 0) {
       const i = res.sides.indexOf(skipper);
-      parts[i] = `${parts[i]!.replace(/\.$/, "")}, and skip ${skipper.skip.charAt(0).toLowerCase()}${skipper.skip.slice(1)}.`;
+      parts[i] = `${parts[i]!.replace(/\.$/, "")}, and skip ${skipper.skip}.`;
     }
     if (room.sharedGap) parts.push(`I'll teach the shared gap separately.`);
     return parts.join(" ");
@@ -396,7 +413,9 @@ export class PlaygroundService {
   // -------------------------------------------------------------------------
   // Helpers
 
-  private onArrival(room: Room, userId: string): void {
+  /** Joining is the consent: both Minds' knowledge-state snapshots become visible to the room. */
+  private async onArrival(room: Room, userId: string): Promise<void> {
+    room.snapshots = await Promise.all(room.participants.map((p) => this.snapshot(p)));
     room.scene = "arrival";
     this.emit(room, "participant_joined", userId, `${this.name(room, userId)} joined`);
   }

@@ -21,6 +21,7 @@ const snap = (userId: string, rows: Array<[string, number, number, number, boole
     conceptId,
     name: conceptId,
     short: conceptId,
+    importance: 0.5,
     level: mastery >= 0.75 ? "strong" : mastery >= 0.55 ? "intermediate" : mastery >= 0.4 ? "developing" : "weak",
     mastery,
     uncertainty,
