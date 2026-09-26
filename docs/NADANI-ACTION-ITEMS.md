@@ -4,6 +4,7 @@ This covers the Supabase Edge Function work. It's what you need to do, review, o
 
 ## Do now
 
+0. **Send Stefen the full `TIGER_DATABASE_URL` with the password**, privately. The deployed one has none (see the FYI at the bottom).
 1. **Open MongoDB Atlas Network Access to `0.0.0.0/0`**, temporarily. Supabase Edge Functions don't use fixed outgoing IPs, so Atlas rejects them now. The error looks like `received fatal alert: InternalError`. Mongo can't go `live` on the deployed API until this is done. It's on the cleanup list for after HackGT.
 2. **Review and merge the branch `stefen-edge-tiger`.** It changes backend files you own. Details are below.
 3. **After you merge, tell Stefen**, so he can redeploy and run `./supabase/deploy-remote.sh`. That script sets the secrets, deploys, and verifies everything.
@@ -55,4 +56,6 @@ Typecheck and lint pass, and 80/80 tests pass. The files touched are `adapters/g
 
 ## FYI: Stefen's local creds
 
-Stefen's local `MONGODB_URI` and `TIGER_DATABASE_URL` don't work: his IP isn't on the Atlas allowlist, and his Tiger URL has no password. The remote secrets use your working values. Share credentials privately, never in git.
+Stefen's `MONGODB_URI` is the same one you use. It only fails because of the Atlas allowlist, which item 1 fixes.
+
+**Correction (needs you): the `TIGER_DATABASE_URL` in Stefen's `.env`, and in the deployed secrets, has no password** (`postgres://tsdbadmin@…`). Once the TLS bypass gets past the certificate error, Tiger will fail its login on Edge. Please send Stefen the full URL privately, with the password (`postgres://tsdbadmin:<password>@…`). He'll put it in his root `.env`, because `npm run secrets:remote` rebuilds `supabase/.env.remote` from that file, then redeploy. Never commit it.
