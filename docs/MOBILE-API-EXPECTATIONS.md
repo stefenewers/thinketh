@@ -42,7 +42,7 @@ The app sends the header `x-thinketh-user-id: demo-user`.
 
 1. **Optional:** add `sources` to `GET /brief/today` for the listed developments. Without it, Today rows show only the time, with no publisher.
 2. **Optional:** add `sections` to `POST /ask` (sources say / Thinketh infers / you already understand / still uncertain). Without it, the app renders `answer` plus memory and citations. That works, but it loses the trust layering from the design spec.
-3. **FYI:** the backend brief filters 39 items, while the runbook script says "143". Either the seed or the talk track should change.
+3. **Resolved: 143 filtered.** The backend seed now uses the same breakdown as the mobile fixtures (68 duplicate, 31 low signal, 22 already understood, 15 minor, 7 low confidence), so a fallback never changes the number.
 4. **FYI:** `GET /config` flags (`voice: false`, etc.) aren't used by mobile yet. That's next with the demo controls.
 
 ## Running it

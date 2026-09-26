@@ -47,7 +47,11 @@ export function buildBrief(input: {
     .sort((a, b) => b.score - a.score)
     .map((x) => x.d);
 
-  const skippedBreakdown = { ...input.ingestion.skipped, already_understood: alreadyUnderstood };
+  // Upstream counts plus what this brief filtered itself ("no new information = no card").
+  const skippedBreakdown = {
+    ...input.ingestion.skipped,
+    already_understood: (input.ingestion.skipped.already_understood ?? 0) + alreadyUnderstood,
+  };
   const skippedCount = Object.values(skippedBreakdown).reduce((a, b) => a + b, 0);
   const minutes = ordered.reduce((sum, d) => sum + (input.meta[d.id]?.readMinutes ?? 2), 0);
 
