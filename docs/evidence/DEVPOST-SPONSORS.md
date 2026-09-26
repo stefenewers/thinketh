@@ -11,11 +11,14 @@ Developments, sources, claims, concepts and the concept graph live in Atlas. Ask
 ## Backboard: persistent learner memory
 One stable Backboard assistant holds the learner's qualitative context: explanation preferences, recurring misconceptions, and current topics. Memory lives at the assistant level, so a brand-new thread recalls it. Thinketh reads it on every Ask and writes back what it learns, such as a misconception revealed by a wrong answer. Backboard never holds the numbers: mastery and uncertainty stay in Thinketh's own transparent model.
 
-## Supabase: app state and API
-Supabase holds profiles, feature flags and the mapping from users to sponsor ids, with row-level security on user data. The API reads its feature flags from Supabase, so we can hide an unstable feature (like voice) without shipping a new build.
+## Supabase: app state, API and the Playground's realtime layer
+Supabase holds profiles, feature flags and the mapping from users to sponsor ids, with row-level security on user data. The API reads its feature flags from Supabase, so we can hide an unstable feature (like voice) without shipping a new build. In the Playground, Supabase Realtime connects two phones in one room: Broadcast carries semantic room events (a teacher was assigned, an answer was verified), and Presence carries who's here and whether they're following Muse. The channel carries only event types and sequence numbers; each phone refetches the room from the Thinketh API, which stays the source of truth.
 
-## Not live at the time of writing
-- ElevenLabs (Catch Me Up voice): the server side is built, but no API key or agent is configured yet. The screen plays its transcript fallback.
-- Claude (phrasing, Ask inferences, diagrams, memory aids): the adapter is built and validated with Zod, but no API key is configured. Deterministic fallbacks are used.
+## Claude: the intelligence model
+Claude grades short answers against a rubric (Thinketh scores the covered ideas deterministically), phrases each development's delta, writes Ask's inferences, and reads any link you save to find what's new to you. In the Playground, Claude grades the learner's transfer answer, and that grade is the only thing that can change their Mind.
 
-Update these two sections if the keys are added before submission.
+## ElevenLabs: Catch Me Up
+A conversational voice agent briefs you on what changed today, seeded with your own delta.
+
+## Muse (Playground conductor)
+Muse decides what the room looks at next through a strict, server-validated tool surface (spotlight, assign a peer teacher, ask a transfer question, teach a shared gap, introduce a resource, advance, end). It has no tool that can change anyone's knowledge. At the time of writing no Muse API key is configured, so the deterministic conductor makes the same decisions; the app says which one conducted.
