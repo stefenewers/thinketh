@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { Development } from "@thinketh/contracts";
-import { api, type DevelopmentDetailResponse, type FeedbackKind } from "@/api";
+import type { Development, DevelopmentDetailResponse, FeedbackKind } from "@thinketh/contracts";
+import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
@@ -159,7 +159,10 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           onPress={() =>
             router.push({
               pathname: "/ask",
-              params: { q: `Explain what changed in ${(primaryConcept?.name ?? d.title).toLowerCase()}, based on what I already know.` },
+              params: {
+                q: `Explain what changed in ${(primaryConcept?.name ?? d.title).toLowerCase()}, based on what I already know.`,
+                dev: d.id,
+              },
             })
           }
         >

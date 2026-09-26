@@ -7,13 +7,12 @@ import { T } from "@/components/Text";
 import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
+import { improvedTodayIds } from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
 
 export default function Library() {
   const { data } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
-  const updatedIds = new Set(
-    (data?.recentTransitions ?? []).filter((t) => t.after.mastery > t.before.mastery).map((t) => t.conceptId),
-  );
+  const updatedIds = improvedTodayIds(data?.items ?? []);
 
   return (
     <Screen>
@@ -35,8 +34,8 @@ export default function Library() {
         >
           {data ? (
             <MindGraph
-              concepts={data.concepts}
-              states={data.states}
+              concepts={data.items.map((i) => i.concept)}
+              states={data.items.map((i) => i.state)}
               edges={data.edges}
               selectedId={null}
               updatedIds={updatedIds}

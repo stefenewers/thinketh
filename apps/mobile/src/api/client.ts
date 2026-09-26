@@ -1,34 +1,36 @@
-import type { DiagnosticQuestion, DiagramSpec, KnowledgeStateTransition, MemoryAid } from "@thinketh/contracts";
 import type {
   AskRequest,
   AskResponse,
+  BriefResponse,
+  ConceptHistoryResponse,
   DevelopmentDetailResponse,
-  DiagnosticAnswerRequest,
   DiagnosticAnswerResponse,
   DiagnosticSelectRequest,
+  DiagnosticSelectResponse,
+  DiagramSpec,
   FeedbackKind,
   FeedbackResponse,
   KnowledgeResponse,
-  MakeItStickRequest,
-  TodayResponse,
-  VisualizeRequest,
+  LearningRequest,
+  MemoryAid,
   VoiceSession,
-  VoiceSessionRequest,
-} from "./types";
+} from "@thinketh/contracts";
 
-// One method per Thinketh endpoint. The UI only ever talks to this interface.
+// One method per Thinketh endpoint. Shapes are the canonical envelopes in
+// packages/contracts; the UI only ever talks to this interface.
 export interface ThinkethApi {
-  getTodayBrief(): Promise<TodayResponse>; // GET  /brief/today
+  getTodayBrief(): Promise<BriefResponse>; // GET  /brief/today
   getDevelopment(id: string): Promise<DevelopmentDetailResponse>; // GET  /developments/:id
   sendFeedback(developmentId: string, kind: FeedbackKind): Promise<FeedbackResponse>; // POST /developments/:id/feedback
-  selectDiagnostic(req: Omit<DiagnosticSelectRequest, "userId">): Promise<DiagnosticQuestion>; // POST /diagnostics/select
-  answerDiagnostic(questionId: string, req: Omit<DiagnosticAnswerRequest, "userId">): Promise<DiagnosticAnswerResponse>; // POST /diagnostics/:id/answer
+  selectDiagnostic(req: DiagnosticSelectRequest): Promise<DiagnosticSelectResponse>; // POST /diagnostics/select
+  answerDiagnostic(questionId: string, answer: string): Promise<DiagnosticAnswerResponse>; // POST /diagnostics/:id/answer
   getKnowledge(): Promise<KnowledgeResponse>; // GET  /knowledge
-  getConceptHistory(conceptId: string): Promise<KnowledgeStateTransition[]>; // GET  /knowledge/:conceptId/history
-  ask(req: Omit<AskRequest, "userId">): Promise<AskResponse>; // POST /ask
-  visualize(req: Omit<VisualizeRequest, "userId">): Promise<DiagramSpec>; // POST /visualize
-  makeItStick(req: Omit<MakeItStickRequest, "userId">): Promise<MemoryAid>; // POST /make-it-stick
-  createVoiceSession(req: Omit<VoiceSessionRequest, "userId">): Promise<VoiceSession>; // POST /voice/session
+  getConceptHistory(conceptId: string): Promise<ConceptHistoryResponse>; // GET  /knowledge/:conceptId/history
+  ask(req: AskRequest): Promise<AskResponse>; // POST /ask
+  visualize(req: LearningRequest): Promise<DiagramSpec>; // POST /visualize
+  makeItStick(req: LearningRequest): Promise<MemoryAid>; // POST /make-it-stick
+  createVoiceSession(): Promise<VoiceSession>; // POST /voice/session
+  resetDemo(): Promise<void>; // POST /demo/reset
 }
 
 export const DEMO_USER_ID = "demo-user";

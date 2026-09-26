@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api, type AskResponse } from "@/api";
+import type { AskResponse } from "@thinketh/contracts";
+import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Divider, Gutter, LoadingState, Row, SectionLabel } from "@/components/ui";
@@ -16,20 +17,17 @@ const SUGGESTED = [
 ];
 
 export default function Ask() {
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const { q, dev } = useLocalSearchParams<{ q?: string; dev?: string }>();
   const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<AskResponse | null>(null);
+  const [answer, setAnswer] = useState<(AskResponse & { question: string }) | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  // Titles for cited developments and concepts.
-  const lookup = useApi(async () => {
-    const [today, knowledge] = await Promise.all([api.getTodayBrief(), api.getKnowledge()]);
-    return { developments: today.developments, concepts: knowledge.concepts };
-  }, []);
+  // Names for related concepts.
+  const lookup = useApi(async () => (await api.getKnowledge()).items.map((i) => i.concept), []);
 
-  const ask = async (question: string) => {
+  const ask = async (question: string, developmentId?: string) => {
     const text = question.trim();
     if (!text || asking) return;
     setInput("");
@@ -37,7 +35,7 @@ export default function Ask() {
     setFailed(null);
     setAnswer(null);
     try {
-      setAnswer(await api.ask({ question: text }));
+      setAnswer({ ...(await api.ask({ question: text, developmentId })), question: text });
     } catch {
       setFailed(text);
     } finally {
@@ -50,14 +48,13 @@ export default function Ask() {
   useEffect(() => {
     if (q) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- responding to a navigation param, once
-      ask(q);
-      router.setParams({ q: undefined });
+      ask(q, dev);
+      router.setParams({ q: undefined, dev: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const devTitle = (id: string) => lookup.data?.developments.find((d) => d.id === id)?.title;
-  const conceptName = (id: string) => lookup.data?.concepts.find((c) => c.id === id)?.name;
+  const conceptName = (id: string) => lookup.data?.find((c) => c.id === id)?.name;
 
   return (
     <KeyboardAvoidingView
@@ -86,31 +83,57 @@ export default function Ask() {
             <Gutter>
               <T variant="section">{answer.question}</T>
             </Gutter>
-            <AnswerBlock label="What the sources say" lines={answer.sourcesSay} rule={color.ink} />
-            <AnswerBlock label="What Thinketh infers" lines={answer.thinkethInfers} rule={color.ink3} />
-            <AnswerBlock label="What you already understand" lines={answer.youAlreadyUnderstand} rule={color.edge} />
-            <AnswerBlock label="Still uncertain" lines={answer.stillUncertain} rule={color.edge} muted />
+            {answer.sections ? (
+              <>
+                <AnswerBlock label="What the sources say" lines={answer.sections.sourcesSay} rule={color.ink} />
+                <AnswerBlock label="What Thinketh infers" lines={answer.sections.thinkethInfers} rule={color.ink3} />
+                <AnswerBlock label="What you already understand" lines={answer.sections.youAlreadyUnderstand} rule={color.edge} />
+                <AnswerBlock label="Still uncertain" lines={answer.sections.stillUncertain} rule={color.edge} muted />
+              </>
+            ) : (
+              <Gutter style={{ marginTop: space.xl }}>
+                <T variant="body">{answer.answer}</T>
+              </Gutter>
+            )}
 
-            {answer.citedDevelopmentIds.length || answer.citedConceptIds.length ? (
+            {answer.memoryUsed.length ? (
+              <Gutter style={{ marginTop: space.xxl }}>
+                <View style={styles.memory}>
+                  <T variant="label" style={{ marginBottom: space.s }}>
+                    What Thinketh remembered about you
+                  </T>
+                  {answer.memoryUsed.map((m) => (
+                    <T key={m.id} variant="support" style={{ marginBottom: space.xs }}>
+                      {m.content}
+                    </T>
+                  ))}
+                </View>
+              </Gutter>
+            ) : null}
+
+            {answer.citations.length ? (
               <View style={{ marginTop: space.x3 }}>
                 <Gutter>
-                  <SectionLabel>Supported by</SectionLabel>
+                  <SectionLabel>Sources</SectionLabel>
                 </Gutter>
                 <Divider />
-                {answer.citedDevelopmentIds.map((id) => (
-                  <Row key={id} onPress={() => router.push({ pathname: "/development/[id]", params: { id } })}>
-                    <T variant="meta">Development</T>
-                    <T variant="body" style={{ marginTop: 2 }}>
-                      {devTitle(id) ?? id}
-                    </T>
+                {answer.citations.map((c) => (
+                  <Row key={c.sourceId}>
+                    <T variant="body">{c.title}</T>
                   </Row>
                 ))}
-                {answer.citedConceptIds.map((id) => (
+              </View>
+            ) : null}
+
+            {answer.relatedConceptIds.length ? (
+              <View style={{ marginTop: space.x3 }}>
+                <Gutter>
+                  <SectionLabel>In your Mind</SectionLabel>
+                </Gutter>
+                <Divider />
+                {answer.relatedConceptIds.map((id) => (
                   <Row key={id} onPress={() => router.push({ pathname: "/mind", params: { concept: id } })}>
-                    <T variant="meta">Concept in your Mind</T>
-                    <T variant="body" style={{ marginTop: 2 }}>
-                      {conceptName(id) ?? id}
-                    </T>
+                    <T variant="body">{conceptName(id) ?? id}</T>
                   </Row>
                 ))}
               </View>
@@ -194,6 +217,7 @@ function AnswerBlock({ label, lines, rule, muted }: { label: string; lines: stri
 }
 
 const styles = StyleSheet.create({
+  memory: { padding: space.l, backgroundColor: color.fog, borderRadius: radius.surface },
   inlineLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   composer: {
     flexDirection: "row",

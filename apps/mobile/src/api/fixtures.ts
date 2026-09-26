@@ -248,12 +248,13 @@ export const claims: Claim[] = [
   { id: "cl-am-2", text: "Cross-session memory improves completion rates on multi-day tasks.", confidence: 0.7, sourceIds: ["src-am-3"], conceptIds: ["long-running-agents"], stance: "supports" },
 ];
 
+// Keys match the backend's snake_case categories; the app maps them to labels.
 export const skippedBreakdown: Record<string, number> = {
-  "Duplicate reports": 68,
-  "Low-signal opinions": 31,
-  "Already understood": 22,
-  "Minor updates": 15,
-  "Low-confidence claims": 7,
+  duplicate: 68,
+  low_signal: 31,
+  already_understood: 22,
+  minor_update: 15,
+  low_confidence: 7,
 };
 
 type DeltaSeed = Omit<DeltaExplanation, "developmentId" | "userId">;

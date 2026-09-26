@@ -10,13 +10,20 @@ const H = 66;
 
 // Curated fixed layout for the demo concepts (design spec: no force simulation).
 const LAYOUT: Record<string, [number, number]> = {
-  "agent-memory": [50, 31],
-  "long-running-agents": [71, 21],
-  "context-windows": [30, 16],
-  retrieval: [26, 42],
-  "agent-tool-use": [67, 44],
+  // Shared by the backend corpus and the offline mock.
+  "agent-memory": [50, 32],
+  "context-windows": [26, 12],
+  "agent-tool-use": [68, 48],
   mcp: [88, 59],
-  "evaluator-architectures": [87, 9],
+  "evaluator-architectures": [88, 8],
+  // Backend corpus (packages/intelligence/src/seed).
+  "long-horizon-agents": [76, 26],
+  "memory-consolidation": [52, 8],
+  "context-compaction": [16, 26],
+  "retrieval-augmented-generation": [26, 55],
+  // Offline mock.
+  "long-running-agents": [71, 21],
+  retrieval: [26, 42],
   "reasoning-models": [53, 8],
   "multimodal-reasoning": [16, 58],
   "computer-use": [45, 57],

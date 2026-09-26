@@ -1,116 +1,61 @@
-# Mobile API expectations
+# Mobile ↔ API contract
 
 For: Nadani (backend / intelligence)
-From: Stefen (mobile), `stefen` branch
+From: Stefen (mobile), branch `stefen-integration-mobile`
 
-This is what the mobile app actually sends and expects back. Every field inside these responses is a type from `packages/contracts` (a copy of `05-data-contracts.md`). The **response envelopes** (the outer objects) are the mobile side's proposal. Tell me if you'd prefer different shapes; changing them on my side is cheap.
+## Status
 
-- Response validation: the app checks every response against Zod schemas in `apps/mobile/src/api/types.ts`. If a response doesn't match, the request counts as a failure.
-- Mock backend: `apps/mobile/src/api/mock.ts` and `apps/mobile/src/api/fixtures.ts` hold the seeded demo data. Treat them as reference fixtures.
-- Automated check: `npm run check:golden -w mobile` runs the golden loop against the mock and validates every response.
+**The canonical envelopes now live in `packages/contracts/src/api.ts`.**
+- They're copied unchanged from `packages/intelligence/src/contracts.ts`, and that file now re-exports them under the same names.
+- Two fields were added, both **optional**, so your server doesn't need to change for its validation to keep passing (see below).
+- Backend typecheck is clean, 56/56 tests pass, and the server boots and serves.
 
-## Transport
+**The mobile app consumes these shapes directly.** Its own envelope copies are deleted.
 
-- Base URL: `EXPO_PUBLIC_API_URL`. Set `EXPO_PUBLIC_USE_MOCK_API=false` to use the real backend.
-- Headers: `Content-Type: application/json` and `X-Thinketh-User: demo-user`. POST bodies also include `userId`.
-- Timeout: 8 seconds.
-- Fallback: if a call fails or returns an invalid shape, the app logs a warning and serves the seeded mock instead, so the demo never shows an error. To surface failures while integrating, set `EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false`.
+**Golden loop verified against the real backend with mock fallback off.** Run `API_URL=http://localhost:8787 npm run check:golden -w mobile`. It passes 22/22 checks, including your engine hitting the runbook numbers exactly: 0.419→0.508 mastery and 0.438→0.289 uncertainty.
 
-## Endpoints, in the order we should connect them
+## How mobile uses each endpoint
 
-### 1. `GET /brief/today`
-```ts
-{
-  brief: DailyBrief,
-  developments: Development[],        // everything referenced in brief.developmentIds
-  sources: Source[],                  // for publisher names on Today
-  concepts: Concept[],
-  understoodDevelopmentIds: string[], // developments the user has verified today → "1 of 6 understood"
-  recentTransitions: KnowledgeStateTransition[] // newest first → "Your knowledge changed today"
-}
-```
-The app labels a development "Major" when `significance >= 0.75`, and "Notable" when `>= 0.6`. `skippedBreakdown` keys are shown as written. The app has plain-English definitions for these five keys: `Duplicate reports`, `Low-signal opinions`, `Already understood`, `Minor updates`, `Low-confidence claims`.
+| Endpoint | Mobile uses |
+|---|---|
+| `GET /brief/today` | `brief`, `developments`, optional `sources` (publisher names). `skippedBreakdown` keys are mapped to labels: `duplicate`, `low_signal`, `already_understood`, `minor_update`, `low_confidence`. Any other key is shown as-is. |
+| `GET /developments/:id` | Everything. `delta.affectedConcepts[0]` is the primary concept. |
+| `POST /developments/:id/feedback` | `{ kind: "got_it" \| "already_knew" }`. `transitions[0].reason` is shown inline. |
+| `POST /diagnostics/select` | `question`. "Why this question?" shows `selection.explanation`, then `question.rationale` (if it's different), then `question.selectionDebug` as factor bars, then `selection.candidates` ranked by priority. |
+| `POST /diagnostics/:id/answer` | `{ answer: <choice text> }`. If `feedback` starts with "Right." or "Not quite.", that sentence becomes the heading. `transition` drives the animation. |
+| `GET /knowledge` | `items[].concept/state/level`, `edges`. **Today's changes are derived from `items[].lastTransition`.** Transitions with `sourceRef` starting `propagated:` are ignored, so only the concept actually tested shows "Just improved". |
+| `GET /knowledge/:id/history` | `transitions` (oldest first), shown as a sparkline and a list of reasons. |
+| `POST /ask` | `{ question, developmentId? }`. The app renders `sections` if present, otherwise `answer`. Then it shows `memoryUsed` as "What Thinketh remembered about you", `citations` as Sources, and `relatedConceptIds`, which link to Mind. |
+| `POST /visualize`, `POST /make-it-stick` | `{ developmentId, conceptId }` → `DiagramSpec` / `MemoryAid` |
+| `POST /voice/session` | `{}` → `mode`. When it's `transcript_fallback`, the app steps through `fallbackTranscript`. |
+| `POST /demo/reset` | Used by the golden check. |
 
-### 2. `GET /developments/:id`
-```ts
-{ development: Development, delta: DeltaExplanation, sources: Source[], concepts: Concept[], claims: Claim[] }
-```
-`delta.affectedConcepts[0]` is treated as the **primary concept**. The app uses it for "Check my understanding", Make It Stick, and Explain Deeper.
+The app sends the header `x-thinketh-user-id: demo-user`.
 
-### 2b. `POST /developments/:id/feedback`
-Used by the "Got it" and "I already knew this" buttons. This endpoint is in the architecture doc but not in the first-prompt list.
-```ts
-request:  { userId, kind: "got_it" | "already_knew" }
-response: { transitions: KnowledgeStateTransition[] }  // transitions[0].reason is shown inline
-```
+## "Understood" and "changed today" are derived, not sent
 
-### 3. `POST /diagnostics/select`
-```ts
-request:  { userId, developmentId?: string, conceptId?: string }
-response: DiagnosticQuestion
-```
-The app shows `rationale` and `selectionDebug` under "Why this question?". Please fill in `selectionDebug`, because it's part of the demo.
+**Understood:** a development counts as understood when a *direct* `diagnostic_correct` transition happened today on its `conceptIds[0]`. That's why Today shows "1 of 6 understood" after the hero check.
 
-### 4. `POST /diagnostics/:id/answer`
-```ts
-request:  { userId, answer: string }   // for multiple choice, the exact choice text
-response: { answer: DiagnosticAnswer, transition: KnowledgeStateTransition }
-```
-How the result is shown:
-- The verdict depends on `answer.correctness`: `>= 0.99` shows "Right.", `> 0` shows "Partly there.", and anything else shows "One connection needs clarification."
-- The transition view animates `before` → `after` for mastery and uncertainty.
-- It then shows `reason`, the observation kind and weight, and the evidence count change.
-- Each entry in `propagatedChanges` is listed under "Also updated".
-- The runbook demo expects Agent Memory to go from 0.42 to 0.51 for mastery and from 0.44 to 0.29 for uncertainty.
+**If you want to own this server-side instead,** add `understoodDevelopmentIds: string[]` to the brief. Mobile would switch to it.
 
-### 5. `GET /knowledge`
-```ts
-{ states: KnowledgeState[], concepts: Concept[], edges: ConceptEdge[], recentTransitions: KnowledgeStateTransition[] }
-```
-A concept counts as "Just improved" when it has a transition in `recentTransitions` with `after.mastery > before.mastery`.
+## Asks for Nadani
 
-The Mind graph uses a hand-placed layout for the 10 demo concept IDs in `fixtures.ts`. Any other IDs fall back to a circle layout, so keep the demo concept IDs if you can.
+1. **Optional:** add `sources` to `GET /brief/today` for the listed developments. Without it, Today rows show only the time, with no publisher.
+2. **Optional:** add `sections` to `POST /ask` (sources say / Thinketh infers / you already understand / still uncertain). Without it, the app renders `answer` plus memory and citations. That works, but it loses the trust layering from the design spec.
+3. **FYI:** the backend brief filters 39 items, while the runbook script says "143". Either the seed or the talk track should change.
+4. **FYI:** `GET /config` flags (`voice: false`, etc.) aren't used by mobile yet. That's next with the demo controls.
 
-### 6. `GET /knowledge/:conceptId/history`
-```ts
-KnowledgeStateTransition[]   // oldest first
+## Running it
+
+```sh
+npm run dev:api                                   # backend on :8787
+API_URL=http://localhost:8787 npm run check:golden -w mobile
+
+cd apps/mobile
+EXPO_PUBLIC_USE_MOCK_API=false \
+EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:8787 \
+EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false \
+npx expo start --clear
 ```
 
-### 7. `POST /ask`
-```ts
-request:  { userId, question }
-response: {
-  question: string,
-  sourcesSay: string[], thinkethInfers: string[], youAlreadyUnderstand: string[], stillUncertain: string[],
-  citedDevelopmentIds: string[], citedConceptIds: string[]
-}
-```
-Splitting the answer into sources, inference, what the user knows, and what's uncertain comes from the design spec. Empty arrays hide their section.
-
-### 8. `POST /visualize`
-```ts
-request: { userId, developmentId?, conceptId? }   response: DiagramSpec
-```
-Layout rules:
-- `group: "before"` nodes go in the left column and `"after"` nodes in the right. `"shared"` nodes sit on top.
-- Labels should be 30 characters or fewer, since they're clipped to 2 lines.
-- 3 or 4 nodes per column works best.
-
-### 9. `POST /make-it-stick`
-```ts
-request: { userId, conceptId, developmentId? }   response: MemoryAid
-```
-
-### 10. `POST /voice/session`
-```ts
-request:  { userId, briefDate }
-response: { sessionId, conversationToken: string | null, agentId: string | null, expiresAt, fallbackScript: string[] }
-```
-Until `conversationToken` is set, the app plays `fallbackScript` as text. Real voice will also need an Expo development build, because it doesn't work in Expo Go.
-
-## Open contract questions
-
-1. **`Interest`**: `UserProfile` references this type, but `05-data-contracts.md` never defines it. `packages/contracts` currently uses `{ topic: string; weight: number }`. Does that work for you?
-2. **`packages/contracts`**: I created this package from `05-data-contracts.md`, with no other changes. It lives in its own commit. If you already have one, let's keep yours and I'll rebase onto it.
-3. **Response envelopes**: should they move into `packages/contracts` once we've agreed on them?
-4. **Knowledge-state numbers**: the mock applies fixed demo deltas, `+0.09 / -0.15` for a correct answer. The real update rules are yours. The app only renders whatever `before`, `after`, and `reason` you send.
+On a physical phone, use the laptop's LAN IP, not `localhost`. Env vars are inlined at bundle time, so restart with `--clear` after changing them.
