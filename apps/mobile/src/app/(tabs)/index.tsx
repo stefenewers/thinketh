@@ -11,10 +11,10 @@ import { Button, Divider, ErrorState, Gutter, LoadingState, Row, Screen, Section
 import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
 import {
-  fmt2,
+  evidenceLabel,
   improved,
-  isToday,
   isMajor,
+  isToday,
   longDate,
   masteryLabel,
   relativeTime,
@@ -189,9 +189,9 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
             </T>
             <T variant="support" style={{ marginTop: space.xs }}>
               {masteryLabel(latest.before.mastery) === masteryLabel(latest.after.mastery)
-                ? masteryLabel(latest.after.mastery)
+                ? `${masteryLabel(latest.after.mastery)}, on firmer ground`
                 : `${masteryLabel(latest.before.mastery)} → ${masteryLabel(latest.after.mastery)}`}
-              {` · mastery ${fmt2(latest.before.mastery)} → ${fmt2(latest.after.mastery)}`}
+              {` · ${evidenceLabel(latest.after.uncertainty).toLowerCase()}`}
             </T>
             <View style={styles.inlineLink}>
               <T variant="meta" style={{ color: color.ink }}>
