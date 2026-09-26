@@ -255,6 +255,8 @@ export const RoomResourceSchema = z.object({
   sides: z.array(RoomResourceSideSchema),
   /** The conductor's personalized plan, once both deltas are known. */
   note: z.string().optional(),
+  /** Why this source is in the room, stated truthfully (a measured default, or someone's own link). */
+  chosenBecause: z.string().optional(),
 });
 
 export const PlaygroundRoomSchema = z.object({

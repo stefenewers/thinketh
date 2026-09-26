@@ -227,6 +227,47 @@ describe("sponsor adapters call the documented endpoints", () => {
     expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("k");
   });
 
+  it("Backboard: a failed memory write is verified before any retry (never a blind duplicate)", async () => {
+    const committed = new Set<string>();
+    let posts = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts += 1;
+        // First POST: Backboard stores the memory but still answers 500.
+        committed.add(JSON.parse(String(init.body)).content);
+        return new Response('{"detail":"Something went wrong"}', { status: 500 });
+      }
+      return Response.json({ memories: [...committed].map((content, i) => ({ id: `m${i}`, content })) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    await memory.remember("u", { id: "x", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-26T00:00:00Z", source: "local" });
+    expect(posts).toBe(1); // it was stored, so no second POST
+  });
+
+  it("Backboard: a failed write that really didn't land is retried exactly once", async () => {
+    let posts = 0;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts += 1;
+        return posts === 1 ? new Response("{}", { status: 500 }) : Response.json({ id: "m1" });
+      }
+      return Response.json({ memories: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    await memory.remember("u", { id: "x", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-26T00:00:00Z", source: "local" });
+    expect(posts).toBe(2);
+  });
+
+  it("Backboard: if the one retry also fails, the error surfaces (the caller falls back)", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => (init?.method === "POST" ? new Response("{}", { status: 500 }) : Response.json({ memories: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    await expect(memory.remember("u", { id: "x", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-26T00:00:00Z", source: "local" })).rejects.toThrow(/HTTP 500/);
+    expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toHaveLength(2);
+  });
+
   it("Backboard: recovers memory kinds when search results omit metadata", async () => {
     const fetchMock = vi.fn(async (url: string) =>
       url.endsWith("/memories/search")

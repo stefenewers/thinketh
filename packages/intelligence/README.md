@@ -179,8 +179,8 @@ Agent Memory has hand-authored seeded versions, so the demo path is deterministi
 ```json
 { "sessionId": "voice_…", "mode": "elevenlabs" | "transcript_fallback",
   "conversationToken": "…" | null, "agentId": "…" | null, "expiresAt": "…",
-  "dynamicVariables": { "user_name": "Jordan", "brief_date": "2026-09-25", "brief_minutes": 11, "brief_script": "Good morning, Jordan. …" },
-  "fallbackScript": ["Good morning, Jordan. You have about 11 minutes. …", "First: …", "…"] }
+  "dynamicVariables": { "user_name": "Stefen", "brief_date": "2026-09-25", "brief_minutes": 11, "brief_script": "Good morning, Stefen. …" },
+  "fallbackScript": ["Good morning, Stefen. You have about 11 minutes. …", "First: …", "…"] }
 ```
 When `conversationToken` is set, call `startSession({ conversationToken, dynamicVariables })`
 from `@elevenlabs/react-native`. This needs an Expo **development build**; it
@@ -248,7 +248,7 @@ ids (enforced), and it never sees or sets numbers it could change.
 
 ## Seed data
 
-`src/seed/`: persona "Jordan", 9 concepts (ids aligned with the mobile Mind layout where they overlap), 10 edges, 13 sources, 13 claims, 7
+`src/seed/`: persona "Stefen", 9 concepts (ids aligned with the mobile Mind layout where they overlap), 10 edges, 13 sources, 13 claims, 7
 candidate developments (6 shown, 1 filtered out), 1 storyline, 10 diagnostics,
 and seeded memories. All sources and publishers are **illustrative demo data**,
 not real announcements. Timestamps are relative to server start, so the brief

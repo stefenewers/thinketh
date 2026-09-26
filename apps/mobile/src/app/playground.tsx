@@ -17,11 +17,12 @@ import { deltaClaim } from "@/lib/resourceDelta";
 import { formatMinutes, planSummary } from "@/lib/planSummary";
 import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { CardTitle, Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, TwoMinds, type DotTone } from "@/components/playground/pieces";
-import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
+import { Avatar, ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
 import { useRoomChannel } from "@/lib/roomChannel";
 import { fmt2 } from "@/lib/knowledge";
 import { DuoMind } from "@/mindprint/DuoMind";
+import Svg, { Circle, Path } from "react-native-svg";
 import { MindCanvas } from "@/mindprint/MindCanvas";
 import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
 
@@ -368,11 +369,11 @@ function ArrivalDuo({ room, me }: { room: PlaygroundRoom; me: string }) {
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.l }}>
         {room.participants.map((p) => (
           <View key={p.userId} style={{ flex: 1, alignItems: "center", minWidth: 0 }}>
-            <View style={{ width: 74, height: 74, borderRadius: 37, borderWidth: 1.5, borderColor: p.userId === me ? color.coral : color.partner, backgroundColor: p.userId === me ? color.coralTint : color.partnerTint, alignItems: "center", justifyContent: "center" }}>
-              <T style={{ fontFamily: font.sansSemibold, fontSize: 29, color: p.userId === me ? color.coral : color.partner }}>{p.displayName.charAt(0)}</T>
+            <View style={{ padding: 3, borderRadius: 40, borderWidth: 2, borderColor: p.userId === me ? color.coral : color.partner }}>
+              <Avatar name={p.displayName} size={68} tint={p.userId === me ? color.coralTint : color.partnerTint} ink={p.userId === me ? color.coral : color.partner} />
             </View>
             <T variant="section" numberOfLines={1} style={{ marginTop: space.s }}>{p.userId === me ? "You" : p.displayName}</T>
-            <T variant="meta" style={{ color: color.ink3 }}>Mind ready</T>
+            <T variant="meta" style={{ color: color.ink3 }}>{p.demoPersona ? "Demo persona" : "Joined"}</T>
           </View>
         ))}
       </View>
@@ -953,13 +954,45 @@ function SharedGap({ room, me, busy, sourceBusy, onNext, onCustomSource }: { roo
                 </View>
               ))}
             </RaisedCard>
-            <Pill label="Bring in a shared source" busy={busy} onPress={onNext} />
+            {/* What the next step is, before it happens: the same reading, a different delta for each Mind. */}
+            <T variant="support" style={{ marginTop: space.l }}>
+              Next: one shared source, read against each Mind separately. Same words, a different delta for each of you.
+            </T>
+            <Pill label={busy ? "Reading it for both of you…" : "Bring in a shared source"} busy={busy} onPress={onNext} />
             <SourceEntry busy={sourceBusy} onSubmit={onCustomSource} />
           </View>
         ) : (
           <Pill label="Teach it to both of us" onPress={() => setOpen(true)} />
         )}
       </View>
+    </View>
+  );
+}
+
+/** The fork from one source to two outcomes. Dashed while each Mind's read is still running. */
+function SourceSplit({ tones, ready }: { tones: string[]; ready: boolean }) {
+  const { width } = useWindowDimensions();
+  const w = width - gutter * 2;
+  const h = 44;
+  const mid = w / 2;
+  const ends = [w / 4, (3 * w) / 4];
+  return (
+    <View style={{ height: h, alignItems: "center" }} accessible={false}>
+      <Svg width={w} height={h}>
+        {ends.map((x, i) => (
+          <Path
+            key={x}
+            d={`M${mid},0 C${mid},${h * 0.55} ${x},${h * 0.45} ${x},${h}`}
+            stroke={tones[i] ?? color.ink3}
+            strokeWidth={2}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={ready ? undefined : [4, 5]}
+            strokeOpacity={ready ? 0.9 : 0.5}
+          />
+        ))}
+        <Circle cx={mid} cy={2.5} r={2.5} fill={color.ink} />
+      </Svg>
     </View>
   );
 }
@@ -975,18 +1008,25 @@ function ResourceScene({ room, me, busy, sourceBusy, onEnd, onCustomSource }: { 
   return (
     <View style={{ paddingHorizontal: gutter }}>
       <RaisedCard style={{ marginTop: space.m }}>
-        <T variant="label">Shared source</T>
+        <T variant="label">One source</T>
         <T variant="title" style={{ marginTop: space.s }}>
           {res.title}
         </T>
         <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
           {[res.sourceLabel, res.readMinutes ? `~${Math.round(res.readMinutes)} min full` : undefined].filter(Boolean).join(" · ")}
         </T>
+        {res.chosenBecause ? (
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink2 }}>
+            {res.chosenBecause}
+          </T>
+        ) : null}
       </RaisedCard>
-      <RaisedCard style={{ marginTop: space.m, flexDirection: "row", paddingHorizontal: 0 }}>
+      {/* One source splits into two outcomes: each Mind's own delta. */}
+      <SourceSplit tones={hostFirst.map((x) => (x.userId === me ? color.coral : color.partner))} ready={ready} />
+      <RaisedCard style={{ flexDirection: "row", paddingHorizontal: 0 }}>
         {hostFirst.map((s, i) => (
           <View key={s.userId} style={[{ flex: 1, paddingHorizontal: space.l }, i > 0 && styles.colDivided]}>
-            <T variant="label">{upper(nameOf(room, s.userId))}</T>
+            <T variant="label" style={{ color: s.userId === me ? color.coral : color.partner }}>{s.userId === me ? "YOU" : upper(nameOf(room, s.userId))}</T>
             {s.status === "processing" ? (
               <View style={{ marginTop: space.m }}>
                 <StageSteps stage={s.stage} compact />

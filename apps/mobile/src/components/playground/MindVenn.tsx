@@ -199,7 +199,8 @@ export function MindVenn({
           <G>
             <Line {...gateBar(a, b, gate)} stroke={gateInk} strokeWidth={2} strokeLinecap="round" />
             <Circle cx={gate.x} cy={gate.y} r={4} fill={color.canvas} stroke={gateInk} strokeWidth={1.4} />
-            <SvgText x={gate.x} y={gate.y + 29} fontSize={10} fontFamily={font.sansSemibold} fill={gateInk} textAnchor="middle">CHECK</SvgText>
+            {/* Above the path, clear of the concept rings and their level words below. */}
+            <SvgText x={gate.x} y={gate.y - 14} fontSize={9.5} letterSpacing={0.8} fontFamily={font.sansSemibold} fill={gateInk} textAnchor="middle">CHECK</SvgText>
           </G>
         ) : null}
 
@@ -230,10 +231,11 @@ export function MindVenn({
         {/* The evidence level stays legible as the path moves and after the result. */}
         {hasPath && teacher?.focusConcept && learner?.focusConcept && a && b ? (
           <G>
-            <SvgText x={a.x} y={a.y + 24} fontSize={10.5} fontFamily={font.sansSemibold} fill={teacher.tone.ink} textAnchor="middle">
+            {/* Below the focus rings (radius 19-25), never inside them. */}
+            <SvgText x={a.x} y={a.y + 36} fontSize={10.5} fontFamily={font.sansSemibold} fill={teacher.tone.ink} textAnchor="middle">
               {levelWord(teacher.focusConcept)}
             </SvgText>
-            <SvgText x={b.x} y={b.y + 24} fontSize={10.5} fontFamily={font.sansSemibold} fill={color.ink2} textAnchor="middle">
+            <SvgText x={b.x} y={b.y + (stage.beat === "verified" ? 42 : 36)} fontSize={10.5} fontFamily={font.sansSemibold} fill={stage.beat === "verified" ? learner.tone.ink : color.ink2} textAnchor="middle">
               {stage.beat === "verified" ? "verified" : levelWord(learner.focusConcept)}
             </SvgText>
           </G>
