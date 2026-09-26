@@ -1,24 +1,25 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { Development, DevelopmentDetailResponse, FeedbackKind, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { BriefRow, BriefSection, DotLine } from "@/components/brief/Brief";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
-import { AppTopBar, ConceptChip, ListCard, SignalPill } from "@/components/system";
+import { AppTopBar, ConceptChip, ListCard, SectionHeader, SignalPill } from "@/components/system";
 import { useApi } from "@/lib/hooks";
 import { shortDate, significanceLabel } from "@/lib/knowledge";
+import { lastCheckFor } from "@/lib/lastCheck";
 import { openExternal } from "@/lib/links";
-import { color, font, space } from "@/theme/tokens";
+import { color, depth, font, space, warm } from "@/theme/tokens";
 
 export default function DevelopmentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, error, loading, reload } = useApi(() => api.getDevelopment(id), [id]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+    <View style={{ flex: 1, backgroundColor: warm.ground }}>
       <AppTopBar title="Development" onBack={() => router.back()} />
       {loading && !data ? (
         <LoadingState message="Comparing this with what you already know…" />
@@ -31,21 +32,21 @@ export default function DevelopmentScreen() {
   );
 }
 
-/** Split a paragraph into sentences for a scannable list; the text itself is unchanged. */
-function sentences(text: string): string[] {
-  const parts = text.replace(/([.!?])\s+(?=[A-Z])/g, "$1\n").split("\n").map((p) => p.trim()).filter(Boolean);
-  return parts.length ? parts : [text];
-}
-
 function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   const { development: d, delta, sources, concepts } = data;
-  const [whyOpen, setWhyOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: FeedbackKind; reason: string } | null>(null);
   const [sending, setSending] = useState<FeedbackKind | null>(null);
+  // The check you just completed, as the API returned it (re-read whenever you come back here).
+  const [check, setCheck] = useState(() => lastCheckFor(d.id));
+  useFocusEffect(useCallback(() => setCheck(lastCheckFor(d.id)), [d.id]));
   const primaryConceptId = delta.affectedConcepts[0]?.conceptId ?? d.conceptIds[0];
   const primaryConcept = concepts.find((c) => c.id === primaryConceptId);
   const conceptName = (cid: string) => concepts.find((c) => c.id === cid)?.name ?? cid;
   const significance = significanceLabel(d);
+  // "No new information = no card": if nothing changes what you know, say so instead of pushing a lesson.
+  const nothingNew = delta.whatChanged.length === 0;
+  const publishers = [...new Set(sources.map((x) => x.publisher).filter((x): x is string => !!x))];
 
   const send = async (kind: FeedbackKind) => {
     setSending(kind);
@@ -93,122 +94,113 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
       : []),
   ];
 
+  const checkUnderstanding = () => router.push({ pathname: "/diagnostic", params: { developmentId: d.id, conceptId: primaryConceptId } });
+
   return (
-    <Screen topInset={false} contentStyle={{ paddingTop: space.s }}>
+    <Screen topInset={false} background={warm.ground} contentStyle={{ paddingTop: space.s }}>
       <Gutter>
+        {/* 1. What this is, when, and where it comes from. */}
         <SignalPill label={significance} muted={d.significance < 0.75} />
         <T style={styles.title} accessibilityRole="header">
           {d.title}
         </T>
         <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-          {sources.length} {sources.length === 1 ? "source" : "sources"} · {shortDate(d.happenedAt)}
+          {shortDate(d.happenedAt)} · {sources.length} {sources.length === 1 ? "source" : "sources"}
+          {publishers.length ? ` · ${publishers.slice(0, 2).join(", ")}${publishers.length > 2 ? ` +${publishers.length - 2}` : ""}` : ""}
         </T>
-        {d.summaryBullets[0] ? (
-          <T variant="body" style={{ marginTop: space.l, color: color.ink2 }}>
-            {d.summaryBullets[0]}
-          </T>
-        ) : null}
 
-        <Pressable onPress={() => setWhyOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: whyOpen }} style={styles.why}>
-          <T variant="meta">Why Thinketh considers this {significance.toLowerCase().replace(" development", "")}</T>
-          <View style={{ transform: [{ rotate: whyOpen ? "90deg" : "0deg" }] }}>
-            <Icon name="chevron" size={14} color={color.ink2} />
-          </View>
-        </Pressable>
-        {whyOpen ? <WhyMajor d={d} sourceCount={sources.length} storyline={d.storylineIds.length > 0} /> : null}
-
-        {/* The knowledge delta: what you had, what changed. */}
-        <BriefSection title="What's the shift?" style={{ marginTop: space.xl }}>
-          <View style={styles.shift}>
-            <T style={styles.smallCaps}>You already knew</T>
-            <View style={{ marginTop: space.s }}>
-              {delta.alreadyKnew.map((line) => (
-                <DotLine key={line} tone="muted">
-                  {line}
-                </DotLine>
-              ))}
-            </View>
-            <View style={styles.shiftRule} />
-            <T style={[styles.smallCaps, { color: color.ink }]}>What changed</T>
-            <View style={{ marginTop: space.s }}>
-              {delta.whatChanged.map((line) => (
-                <DotLine key={line} tone="cool">
-                  {line}
-                </DotLine>
-              ))}
-            </View>
-          </View>
-        </BriefSection>
-
-        <BriefSection title="Why this matters to you">
-          {sentences(delta.whyItMattersToYou).map((line) => (
-            <DotLine key={line} tone="signal">
-              {line}
-            </DotLine>
-          ))}
-        </BriefSection>
-
-        <BriefSection title="Why this changes your mental model">
-          <T variant="statement" style={{ fontSize: 19, lineHeight: 27 }}>
-            {delta.mentalModelChange}
-          </T>
-        </BriefSection>
-
-        <BriefSection title="What happened">
-          {delta.whatHappened.map((line) => (
-            <DotLine key={line} tone="muted">
-              {line}
-            </DotLine>
-          ))}
-        </BriefSection>
-
-        {delta.affectedConcepts.length ? (
-          <BriefSection title="Related concepts">
-            <View style={styles.chips}>
-              {delta.affectedConcepts.map((c) => (
-                <ConceptChip
-                  key={c.conceptId}
-                  label={conceptName(c.conceptId)}
-                  active={c.conceptId === primaryConceptId}
-                  onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
-                />
-              ))}
-            </View>
-            {delta.affectedConcepts[0]?.reason ? (
-              <T variant="support" style={{ marginTop: space.m }}>
-                {delta.affectedConcepts[0].reason}
-              </T>
+        {/* 2. The change in a minute: the new idea first, then how it relates to what you knew. */}
+        {nothingNew ? (
+          <View style={[styles.card, { marginTop: space.xl }]}>
+            <T style={styles.kicker}>Nothing new for you</T>
+            <T variant="body" style={{ marginTop: space.s }}>
+              Thinketh compared this with your Mind and didn&apos;t find anything that changes what you already know.
+            </T>
+            {delta.alreadyKnew.length ? (
+              <View style={{ marginTop: space.m }}>
+                {delta.alreadyKnew.map((line) => (
+                  <DotLine key={line} tone="muted">
+                    {line}
+                  </DotLine>
+                ))}
+              </View>
             ) : null}
-          </BriefSection>
+          </View>
+        ) : (
+          <View style={[styles.card, { marginTop: space.xl }]}>
+            <T style={styles.kicker}>The change in a minute</T>
+            <T style={styles.lead}>{delta.whatChanged[0]}</T>
+            {delta.whatChanged.slice(1).map((line) => (
+              <DotLine key={line} tone="cool">
+                {line}
+              </DotLine>
+            ))}
+            {delta.alreadyKnew.length ? (
+              <>
+                <View style={styles.rule} />
+                <T style={styles.smallCaps}>Builds on what you knew</T>
+                <View style={{ marginTop: space.s }}>
+                  {delta.alreadyKnew.map((line) => (
+                    <DotLine key={line} tone="muted">
+                      {line}
+                    </DotLine>
+                  ))}
+                </View>
+              </>
+            ) : null}
+            <View style={styles.rule} />
+            <T style={styles.smallCaps}>Why it matters to you</T>
+            <T variant="support" style={{ marginTop: space.s, color: color.ink }}>
+              {delta.whyItMattersToYou}
+            </T>
+          </View>
+        )}
+
+        {/* 3. One primary action: show you understand it. After a check, the next step is your Mind. */}
+        {!nothingNew ? (
+          check ? (
+            <CheckResult check={check} conceptName={conceptName(check.conceptId)} onAgain={checkUnderstanding} />
+          ) : (
+            <View style={{ marginTop: space.xl }}>
+              <Button label="Check my understanding" icon="arrow" onPress={checkUnderstanding} accessibilityHint="One question about this development" />
+              <T variant="support" style={{ marginTop: space.s, textAlign: "center" }}>
+                One question. It tests the idea, not the wording.
+              </T>
+            </View>
+          )
         ) : null}
 
-        <View style={{ marginTop: space.x3 }}>
-          <Button
-            label="Check my understanding"
-            icon="arrow"
-            onPress={() => router.push({ pathname: "/diagnostic", params: { developmentId: d.id, conceptId: primaryConceptId } })}
-          />
-          <T variant="support" style={{ marginTop: space.s, textAlign: "center" }}>
-            One question. It tests the idea, not the wording.
+        {/* 4. Other ways to understand it. */}
+        {!nothingNew ? (
+          <>
+            <SectionHeader title="Other ways in" />
+            <ListCard style={styles.panel}>
+              {ways.map((w, i) => (
+                <BriefRow key={w.key} title={w.title} subtitle={w.subtitle} last={i === ways.length - 1} onPress={w.onPress} />
+              ))}
+            </ListCard>
+          </>
+        ) : null}
+
+        {/* Explicit feedback: a signal, visibly secondary to showing you understand. */}
+        <View style={styles.feedbackBox}>
+          <T variant="meta" style={{ color: color.ink2 }}>
+            {nothingNew ? "Tell Thinketh" : "Or just tell Thinketh"}
           </T>
-          <View style={{ flexDirection: "row", gap: space.s, marginTop: space.l }}>
+          <View style={{ flexDirection: "row", gap: space.s, marginTop: space.s }}>
+            <Button kind="quiet" label="Got it" style={styles.feedbackButton} disabled={!!feedback} loading={sending === "got_it"} onPress={() => send("got_it")} />
             <Button
-              kind="secondary"
-              label="Got it"
-              style={{ flex: 1, paddingHorizontal: space.m }}
-              disabled={!!feedback}
-              loading={sending === "got_it"}
-              onPress={() => send("got_it")}
-            />
-            <Button
-              kind="secondary"
+              kind="quiet"
               label="I already knew this"
-              style={{ flex: 1.6, paddingHorizontal: space.m }}
+              style={styles.feedbackButton}
               disabled={!!feedback}
               loading={sending === "already_knew"}
               onPress={() => send("already_knew")}
             />
           </View>
+          <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
+            A signal, not a test: only a check shows Thinketh you understand it.
+          </T>
           {feedback ? (
             <View style={styles.feedbackNote} accessibilityLiveRegion="polite">
               <Icon name="check" size={16} color={color.ink} />
@@ -219,33 +211,111 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           ) : null}
         </View>
 
-        <BriefSection title="Other ways in" style={{ marginTop: space.x3 }}>
-          <ListCard>
-            {ways.map((w, i) => (
-              <BriefRow key={w.key} title={w.title} subtitle={w.subtitle} last={i === ways.length - 1} onPress={w.onPress} />
-            ))}
-          </ListCard>
-        </BriefSection>
+        {/* 5. The full brief: every detail, sources included, one tap away. */}
+        <Pressable
+          onPress={() => setBriefOpen((o) => !o)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: briefOpen }}
+          accessibilityLabel={briefOpen ? "Hide the full brief" : "Read the full brief, including sources"}
+          style={styles.briefToggle}
+        >
+          <View style={{ flex: 1 }}>
+            <T style={styles.briefTitle}>{briefOpen ? "Hide the full brief" : "Read the full brief"}</T>
+            <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
+              What happened, the mental-model change, related concepts, why it ranks, and all {sources.length} sources
+            </T>
+          </View>
+          <View style={{ transform: [{ rotate: briefOpen ? "90deg" : "0deg" }] }}>
+            <Icon name="chevron" size={15} color={color.ink2} />
+          </View>
+        </Pressable>
 
-        <BriefSection title="Go deeper">
-          <ListCard>
-            {sources.map((s, i) => (
-              <BriefRow
-                key={s.id}
-                icon={s.url ? "external" : undefined}
-                kicker={sourceClass(s)}
-                title={s.title}
-                meta={[s.publisher, s.publishedAt && !s.publisher?.includes("(demo)") ? shortDate(s.publishedAt) : undefined].filter(Boolean).join(" · ") || undefined}
-                last={i === sources.length - 1}
-                accessibilityRole="link"
-                accessibilityLabel={`${sourceClass(s)}, ${s.publisher ?? ""}: ${s.title}${s.url ? ", opens in browser" : ""}`}
-                onPress={s.url ? () => openExternal(s.url) : undefined}
-              />
-            ))}
-          </ListCard>
-        </BriefSection>
+        {briefOpen ? (
+          <>
+            <BriefSection title="Why this changes your mental model">
+              <T variant="statement" style={{ fontSize: 19, lineHeight: 27 }}>
+                {delta.mentalModelChange}
+              </T>
+            </BriefSection>
+
+            <BriefSection title="What happened">
+              {delta.whatHappened.map((line) => (
+                <DotLine key={line} tone="muted">
+                  {line}
+                </DotLine>
+              ))}
+            </BriefSection>
+
+            {delta.affectedConcepts.length ? (
+              <BriefSection title="Related concepts">
+                <View style={styles.chips}>
+                  {delta.affectedConcepts.map((c) => (
+                    <ConceptChip
+                      key={c.conceptId}
+                      label={conceptName(c.conceptId)}
+                      active={c.conceptId === primaryConceptId}
+                      onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
+                    />
+                  ))}
+                </View>
+                {delta.affectedConcepts[0]?.reason ? (
+                  <T variant="support" style={{ marginTop: space.m }}>
+                    {delta.affectedConcepts[0].reason}
+                  </T>
+                ) : null}
+              </BriefSection>
+            ) : null}
+
+            <BriefSection title={`Why Thinketh considers this ${significance.toLowerCase().replace(" development", "")}`}>
+              <WhyMajor d={d} sourceCount={sources.length} storyline={d.storylineIds.length > 0} />
+            </BriefSection>
+
+            <BriefSection title="Sources">
+              <ListCard style={styles.panel}>
+                {sources.map((x, i) => (
+                  <BriefRow
+                    key={x.id}
+                    icon={x.url ? "external" : undefined}
+                    kicker={sourceClass(x)}
+                    title={x.title}
+                    meta={[x.publisher, x.publishedAt && !x.publisher?.includes("(demo)") ? shortDate(x.publishedAt) : undefined].filter(Boolean).join(" · ") || undefined}
+                    last={i === sources.length - 1}
+                    accessibilityRole="link"
+                    accessibilityLabel={`${sourceClass(x)}, ${x.publisher ?? ""}: ${x.title}${x.url ? ", opens in browser" : ""}`}
+                    onPress={x.url ? () => openExternal(x.url) : undefined}
+                  />
+                ))}
+              </ListCard>
+            </BriefSection>
+          </>
+        ) : null}
       </Gutter>
     </Screen>
+  );
+}
+
+/** Your completed check, straight from the API response, and the obvious next step. */
+function CheckResult({ check, conceptName, onAgain }: { check: NonNullable<ReturnType<typeof lastCheckFor>>; conceptName: string; onAgain: () => void }) {
+  const { transition } = check.result;
+  const kind = transition.observation.kind;
+  const heading = kind === "diagnostic_correct" ? "You showed it." : kind === "diagnostic_partial" ? "Partly there." : "Not yet.";
+  return (
+    <View style={[styles.card, { marginTop: space.xl }]} accessibilityLiveRegion="polite">
+      <T style={styles.kicker}>Your check</T>
+      <T variant="section" style={{ marginTop: space.s }}>
+        {heading}
+      </T>
+      <T variant="support" style={{ marginTop: space.xs }}>
+        Thinketh updated {conceptName} in your Mind from your answer. Mastery {transition.before.mastery.toFixed(2)} → {transition.after.mastery.toFixed(2)}.
+      </T>
+      <Button
+        label="See what changed in my Mind"
+        icon="arrow"
+        style={{ marginTop: space.l }}
+        onPress={() => router.push({ pathname: "/mind", params: { concept: check.conceptId } })}
+      />
+      <Button kind="quiet" label="Check again" style={{ alignSelf: "center", marginTop: space.xs }} onPress={onAgain} />
+    </View>
   );
 }
 
@@ -269,13 +339,19 @@ function WhyMajor({ d, sourceCount, storyline }: { d: Development; sourceCount: 
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 32, letterSpacing: -0.7, color: color.ink, marginTop: space.m },
-  why: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.s, alignSelf: "flex-start" },
+  title: { fontFamily: font.sansBold, fontSize: 26, lineHeight: 31, letterSpacing: -0.8, color: color.ink, marginTop: space.m },
+  card: { padding: space.l, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
+  panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
+  kicker: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.6, textTransform: "uppercase", color: color.coral },
+  lead: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 25, letterSpacing: -0.3, color: color.ink, marginTop: space.s, marginBottom: space.xs },
   smallCaps: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink3 },
-  shift: { paddingTop: space.xs },
-  shiftRule: { height: StyleSheet.hairlineWidth, backgroundColor: color.hairline, marginVertical: space.m },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: color.hairline, marginVertical: space.m },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.s },
-  feedbackNote: { flexDirection: "row", gap: space.s, marginTop: space.l, alignItems: "flex-start" },
+  feedbackBox: { marginTop: space.xl },
+  feedbackButton: { flex: 1, paddingHorizontal: space.s, minHeight: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, borderRadius: 999 },
+  feedbackNote: { flexDirection: "row", gap: space.s, marginTop: space.m, alignItems: "flex-start" },
+  briefToggle: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: 56, marginTop: space.xl, paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
+  briefTitle: { fontFamily: font.sansSemibold, fontSize: 16, lineHeight: 21, color: color.ink },
 });
 
 /** Source class from what the source is, never a claim about peer review or quality. */

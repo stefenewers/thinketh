@@ -33,7 +33,7 @@ export default function AddResource() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.canvas }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ModalHeader title="Add a resource" onClose={() => router.back()} />
       <Gutter style={{ paddingTop: space.xl }}>
         <T style={styles.kicker}>Save to learn</T>

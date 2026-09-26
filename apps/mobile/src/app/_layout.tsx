@@ -54,6 +54,7 @@ export default function RootLayout() {
         <Stack.Screen name="resource/[id]" />
         <Stack.Screen name="resource/add" options={{ presentation: "modal" }} />
         <Stack.Screen name="playground" />
+        <Stack.Screen name="explore" />
       </Stack>
     </SafeAreaProvider>
     </GestureHandlerRootView>

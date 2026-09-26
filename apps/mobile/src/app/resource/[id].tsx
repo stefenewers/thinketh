@@ -34,7 +34,7 @@ type Tab = "summary" | "new" | "delta" | "sources";
 const TABS: { key: Tab; label: string }[] = [
   { key: "summary", label: "Summary" },
   { key: "new", label: "What's new" },
-  { key: "delta", label: "Your delta" },
+  { key: "delta", label: "New for you" },
   { key: "sources", label: "Sources" },
 ];
 
@@ -75,7 +75,7 @@ export default function ResourceScreen() {
 
   const briefing = !!resource && (resource.status === "ready" || resource.status === "learned");
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+    <View style={{ flex: 1, backgroundColor: color.ground }}>
       {!briefing ? <AppTopBar onBack={goBack} /> : null}
       {failed && !resource ? (
         <ErrorState onRetry={() => setAttempt((n) => n + 1)} />
@@ -179,7 +179,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
           accessibilityState={{ busy: teaching }}
           style={({ pressed }) => [styles.deltaRow, pressed && { backgroundColor: color.surfaceMuted }]}
         >
-          <T style={styles.deltaLabel}>{teaching ? "Finding the actual delta…" : "Show my personalized delta"}</T>
+          <T style={styles.deltaLabel}>{teaching ? "Finding what's new for you…" : "Show what's new for me"}</T>
           {teaching ? <ActivityIndicator color={color.ink2} /> : <Icon name="arrow" size={16} color={color.ink} />}
         </Pressable>
         <T variant="support" style={{ marginTop: space.xs }}>
@@ -245,7 +245,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
             <View style={{ marginTop: space.xxl, gap: space.s }}>
               <Button label={fullLabel(r)} icon="arrow" accessibilityRole="link" accessibilityHint="Opens the original source" onPress={openOriginal} />
               {teachBlock}
-              {lesson ? <Button kind="secondary" label="Read your delta" icon="arrow" onPress={() => setTab("delta")} /> : null}
+              {lesson ? <Button kind="secondary" label="Read what's new for you" icon="arrow" onPress={() => setTab("delta")} /> : null}
             </View>
           </View>
         ) : null}
@@ -274,7 +274,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
               </BriefSection>
             ) : null}
             {lesson ? (
-              <BriefSection title="The delta, for you">
+              <BriefSection title="What's new for you">
                 <Lesson lesson={lesson} />
               </BriefSection>
             ) : (

@@ -1,7 +1,7 @@
-# Today photography
+# App photography
 
-The Today screen's story images: the lead development photo, the connected-concept chips and the
-Recent new insights thumbnails. It's one warm, quiet natural family (mountains, dunes, mist, water,
+The app's one photographic family: Today's lead story and insight thumbnails, Learn's queue, Mind's
+changes and concept views, and resource headers. It's one warm, quiet natural family (mountains, dunes, mist, water,
 stone, sky), so the home screen reads as curated. All images are from [Unsplash](https://unsplash.com)
 under the [Unsplash License](https://unsplash.com/license), checked on each photo's page
 (2026-09-26). None are Unsplash+ images, so they're free for commercial use with no permission needed.
@@ -20,4 +20,4 @@ Each was downloaded at 1200 px wide, center-cropped to 4:3 if portrait, and comp
 | `clouds-pink.jpg` | context-compaction | Andrea Ferrario (@andreaferrario) | https://unsplash.com/photos/3WgPZbsDSkE |
 | `sky-pastel.jpg` | default | Atsadawut Chaiseeha (@sadboyhour) | https://unsplash.com/photos/Mv3mEpWDhSM |
 
-Mapping lives in `apps/mobile/src/content/imagery.ts` (`storyImageFor`).
+Mapping lives in `apps/mobile/src/content/imagery.ts` (`imageFor`). This replaced the earlier grey texture set.

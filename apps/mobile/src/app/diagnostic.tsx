@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { KnowledgeStateTransitionView } from "@/components/KnowledgeStateTransitionView";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
+import { recordCheck } from "@/lib/lastCheck";
 import { useApi } from "@/lib/hooks";
 import { fmt2 } from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -40,7 +41,7 @@ export default function DiagnosticScreen() {
       ) : error || !data ? (
         <ErrorState onRetry={reload} />
       ) : (
-        <Diagnostic question={data.picked.question} selection={data.picked.selection} concepts={data.concepts} />
+        <Diagnostic question={data.picked.question} selection={data.picked.selection} concepts={data.concepts} developmentId={developmentId} />
       )}
     </View>
   );
@@ -50,7 +51,9 @@ function Diagnostic({
   question,
   selection,
   concepts,
+  developmentId,
 }: {
+  developmentId?: string;
   question: DiagnosticQuestion;
   selection: DiagnosticSelectResponse["selection"];
   concepts: Concept[];
@@ -75,6 +78,8 @@ function Diagnostic({
         res.answer.correctness >= 0.99 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
       ).catch(() => {});
       setResult(res);
+      // So the development page can point at the change when you come back.
+      if (developmentId) recordCheck(developmentId, question.conceptId, res);
     } catch {
       setSubmitError(true);
     } finally {
@@ -177,7 +182,7 @@ function Diagnostic({
           </Gutter>
           <Gutter style={{ marginTop: space.xxl, gap: space.m, opacity: settled ? 1 : 0.6 }}>
             <Button
-              label="See it in your Mind"
+              label="See what changed in my Mind"
               icon="arrow"
               onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })}
             />

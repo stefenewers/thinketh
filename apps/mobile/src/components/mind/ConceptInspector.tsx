@@ -147,7 +147,7 @@ export function ConceptInspector({
               <T style={styles.primaryLabel}>Ask Thinketh</T>
               <Icon name="arrow" size={15} color={color.onInk} />
             </Pressable>
-            <LinkRow label="Evidence · history · how it changed" onPress={() => setTab("evidence")} />
+            <LinkRow label="Why we think you know this · history" onPress={() => setTab("evidence")} />
             <StorylineLink conceptId={concept.id} />
           </View>
         </View>

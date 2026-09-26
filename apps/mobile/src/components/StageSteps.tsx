@@ -7,7 +7,7 @@ const STEPS: { key: Resource["stage"]; label: string }[] = [
   { key: "reading", label: "Source" },
   { key: "mapping", label: "Concepts" },
   { key: "comparing", label: "Your Mind" },
-  { key: "done", label: "Delta" },
+  { key: "done", label: "New for you" },
 ];
 
 /** SOURCE → CONCEPTS → YOUR MIND → DELTA, driven by the stage the server reports. */

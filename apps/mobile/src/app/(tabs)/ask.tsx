@@ -20,7 +20,7 @@ const SUGGESTED = [
 type AskMode = "quick" | "teach" | "deep";
 const MODES: { key: AskMode; label: string; loading: string }[] = [
   { key: "quick", label: "Quick answer", loading: "Grounding this in your sources…" },
-  { key: "teach", label: "Teach me", loading: "Finding the actual delta for you…" },
+  { key: "teach", label: "Teach me", loading: "Finding what's new for you…" },
   { key: "deep", label: "Go deep", loading: "Comparing sources and what's still uncertain…" },
 ];
 
@@ -81,7 +81,7 @@ export default function Ask() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.canvas }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {why && answer ? (
         <AppTopBar title="Why this answer?" onBack={() => setWhy(null)} />
       ) : (

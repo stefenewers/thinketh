@@ -6,8 +6,7 @@ import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
-import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, RaisedCard, SectionHeader, SegmentedTabs } from "@/components/system";
-import { Texture } from "@/components/Texture";
+import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, SectionHeader, SegmentedTabs } from "@/components/system";
 import { imageFor } from "@/content/imagery";
 import { layoutMind } from "@thinketh/mindprint";
 import { MindCanvas } from "@/mindprint/MindCanvas";
@@ -16,8 +15,8 @@ import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { evidenceLabel, improved, improvedTodayIds, isToday, levelLabel, relativeTime, todaysTransitions } from "@/lib/knowledge";
-import { color, font, space } from "@/theme/tokens";
+import { evidenceLabel, improvedTodayIds, isToday, levelLabel, relativeTime, todaysTransitions } from "@/lib/knowledge";
+import { color, depth, font, space, warm } from "@/theme/tokens";
 
 export default function MindScreen() {
   const { concept } = useLocalSearchParams<{ concept?: string }>();
@@ -27,7 +26,7 @@ export default function MindScreen() {
 
   if ((loading && !data) || error || !data) {
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <View style={{ flex: 1, backgroundColor: warm.ground }}>
         <AppTopBar title="Your Mind" />
         {loading && !data ? <LoadingState message="Loading your knowledge state…" /> : <ErrorState onRetry={reload} />}
       </View>
@@ -59,7 +58,6 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
   const levelOfConcept = new Map(items.map((i) => [i.concept.id, i.level]));
   const updatedIds = improvedTodayIds(items);
   const today = todaysTransitions(items);
-  const changedToday = today.find(improved);
   const recent = recentTransitions(data).filter((t) => conceptById.has(t.conceptId));
 
   // Resting until a concept is tapped; a deep link (?concept=) opens selected.
@@ -68,8 +66,6 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
   const scrollRef = useRef<ScrollView>(null);
   const selected = selectedId ? conceptById.get(selectedId) : undefined;
   const selectedState = selectedId ? stateOf.get(selectedId) : undefined;
-  const previewId = changedToday?.conceptId ?? concepts[0]?.id;
-  const preview = previewId ? conceptById.get(previewId) : undefined;
 
   const select = (id: string | null) => setSelectedId(id);
   /** From a list: back to the map with the concept open. */
@@ -94,7 +90,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
   const sourcesFor = (id: string) => [...new Set(touching(id).flatMap((d) => d.sourceIds))].map((x) => sourceById.get(x)).filter((x): x is Source => !!x);
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+    <View style={{ flex: 1, backgroundColor: warm.ground }}>
       <AppTopBar
         title={selected ? selected.name : "Your Mind"}
         // A selected concept is an object you can put back; the tab itself has no back.
@@ -122,6 +118,11 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
 
       {tab === "map" ? (
         <>
+          {!selected ? (
+            <Gutter>
+              <MindOrientation recent={recent[0]} items={items} conceptById={conceptById} onOpen={select} />
+            </Gutter>
+          ) : null}
           <MindMap items={items} edges={data.edges} changedIds={updatedIds} selectedId={selectedId} onSelect={select} />
 
           <Gutter>
@@ -145,15 +146,6 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
                 <T variant="meta" style={styles.hint}>
                   Pinch to explore · tap a concept
                 </T>
-                {preview ? (
-                  <PreviewCard
-                    concept={preview}
-                    state={stateOf.get(preview.id)}
-                    level={levelOfConcept.get(preview.id) ?? "weak"}
-                    change={changedToday}
-                    onPress={() => select(preview.id)}
-                  />
-                ) : null}
                 <MetricStrip
                   style={{ marginTop: space.xl }}
                   metrics={[
@@ -299,48 +291,89 @@ function MindMap({
   );
 }
 
-/** Storyboard 02: the concept in play, compact. What changed today if anything did. */
-function PreviewCard({
-  concept,
-  state,
-  level,
-  change,
-  onPress,
+/**
+ * The Mind at rest, before you tap anything: what changed recently, the one concept Thinketh is
+ * least sure about (a stated rule, not a judgement), and how to read the map.
+ */
+function MindOrientation({
+  recent,
+  items,
+  conceptById,
+  onOpen,
 }: {
-  concept: Concept;
-  state: KnowledgeState | undefined;
-  level: KnowledgeLevel;
-  change: KnowledgeStateTransition | undefined;
-  onPress: () => void;
+  recent: KnowledgeStateTransition | undefined;
+  items: KnowledgeResponse["items"];
+  conceptById: Map<string, Concept>;
+  onOpen: (conceptId: string) => void;
 }) {
-  const changed = change?.conceptId === concept.id;
+  // Worth strengthening: among developing or weak concepts, the one with the highest uncertainty
+  // (ties: the more important concept). Excludes whatever just changed.
+  const shaky = items
+    .filter((i) => (i.level === "developing" || i.level === "weak") && i.concept.id !== recent?.conceptId)
+    .sort((a, b) => b.state.uncertainty - a.state.uncertainty || b.concept.importance - a.concept.importance)[0];
+  const recentName = recent ? (conceptById.get(recent.conceptId)?.name ?? recent.conceptId) : undefined;
   return (
-    <RaisedCard onPress={onPress} accessibilityLabel={`${concept.name}${changed ? " changed today" : ""}. Explore this concept.`} style={{ marginTop: space.m }}>
-      <View style={{ flexDirection: "row", gap: space.m }}>
-        <Texture source={imageFor([concept.id])} style={styles.thumb} />
-        <View style={{ flex: 1 }}>
-          <T style={styles.previewName} numberOfLines={1}>
-            {concept.name}
-          </T>
-          <View style={styles.signal}>
-            {changed ? <View style={styles.dot} /> : null}
-            <T variant="meta" tone={changed ? "coral" : undefined} style={!changed ? { color: color.ink3 } : undefined}>
-              {changed ? "Changed today" : levelLabel[level]}
-              {state ? ` · ${evidenceLabel(state.uncertainty).toLowerCase()}` : ""}
+    <View style={styles.orient}>
+      {recent && recentName ? (
+        <Pressable onPress={() => onOpen(recent.conceptId)} accessibilityRole="button" accessibilityLabel={`Recently changed: ${recentName}. ${changeSentence(recent)} Open it.`} style={styles.orientRow}>
+          <View style={[styles.legendDot, { backgroundColor: color.coral, borderColor: color.coral }]} />
+          <View style={{ flex: 1 }}>
+            <T variant="meta" style={{ color: color.ink3 }}>
+              Recently changed · {relativeTime(recent.createdAt)}
+            </T>
+            <T style={styles.orientTitle} numberOfLines={1}>
+              {recentName}
+            </T>
+            <T variant="support" numberOfLines={2}>
+              {changeSentence(recent)}
             </T>
           </View>
-          <T variant="support" style={{ marginTop: space.xs }} numberOfLines={2}>
-            {changed && change ? changeSentence(change) : concept.description}
-          </T>
+          <Icon name="chevron" size={13} color={color.ink3} />
+        </Pressable>
+      ) : (
+        <View style={styles.orientRow}>
+          <T variant="support">Nothing has changed recently. Answer a check on Today to update your Mind.</T>
         </View>
+      )}
+      {shaky ? (
+        <Pressable
+          onPress={() => onOpen(shaky.concept.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Worth strengthening: ${shaky.concept.name}. Thinketh is least sure about this one. Open it.`}
+          style={[styles.orientRow, styles.orientDivided]}
+        >
+          <View style={[styles.legendDot, { backgroundColor: color.canvas, borderColor: color.ink }]} />
+          <View style={{ flex: 1 }}>
+            <T variant="meta" style={{ color: color.ink3 }}>
+              Worth strengthening
+            </T>
+            <T style={styles.orientTitle} numberOfLines={1}>
+              {shaky.concept.name}
+            </T>
+            <T variant="support" numberOfLines={2}>
+              Thinketh is least sure about this one: {shaky.state.evidenceCount} {shaky.state.evidenceCount === 1 ? "signal" : "signals"} so far, {evidenceLabel(shaky.state.uncertainty).toLowerCase()}.
+            </T>
+          </View>
+          <Icon name="chevron" size={13} color={color.ink3} />
+        </Pressable>
+      ) : null}
+      <View style={[styles.legend, styles.orientDivided]} accessible accessibilityLabel="How to read the map: filled means you've shown it, hollow means still developing, coral means changed recently.">
+        <Legend fill={color.ink} label="You've shown it" />
+        <Legend fill={color.canvas} ring={color.ink} label="Still developing" />
+        <Legend fill={color.coral} label="Changed" />
       </View>
-      <View style={styles.previewFoot}>
-        <T variant="meta" style={{ color: color.ink }}>
-          Explore this concept
-        </T>
-        <Icon name="arrow" size={14} color={color.ink} />
-      </View>
-    </RaisedCard>
+    </View>
+  );
+}
+
+function Legend({ fill, ring, label }: { fill: string; ring?: string; label: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View style={[styles.legendDot, { backgroundColor: fill, borderColor: ring ?? fill }]} />
+      <T variant="meta" style={{ color: color.ink2 }}>
+        {label}
+      </T>
+    </View>
   );
 }
 
@@ -391,6 +424,12 @@ function Footnote() {
 
 const styles = StyleSheet.create({
   hint: { textAlign: "center", color: color.ink3, marginTop: -space.xs },
+  orient: { marginTop: space.l, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
+  orientRow: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, minHeight: 56 },
+  orientDivided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.hairline },
+  orientTitle: { fontFamily: font.sansSemibold, fontSize: 15.5, lineHeight: 20, letterSpacing: -0.2, color: color.ink, marginTop: 1 },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: space.l, paddingHorizontal: space.l, paddingVertical: space.m },
+  legendDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
   thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: color.surfaceMuted },
   previewName: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, letterSpacing: -0.3, color: color.ink },
   previewFoot: {

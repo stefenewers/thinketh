@@ -3,7 +3,8 @@
 
 export const color = {
   // White-first, neutral system (the storyboard): white ground, true grays, coral as a signal.
-  ground: "#FFFFFF",
+  // The page: a breath warmer than white, so white cards (canvas) lift off it. One ground app-wide.
+  ground: "#FBF9F7",
   panel: "#FFFFFF",
   ink: "#161616",
   ink2: "#5C5C59",
@@ -36,7 +37,7 @@ export const warm = {
   orbMid: "#F7A583",
   orbDeep: "#E8704B",
   orbit: "#E79A7C",
-  /** The page itself: a breath warmer than white, so white cards have something to lift from. */
+  /** The page itself (same as color.ground). */
   ground: "#FBF9F7",
 } as const;
 

@@ -14,9 +14,9 @@ export default function ProfileScreen() {
   const summary = (items: string[]) => (items.length ? items.join(", ") : "Nothing selected");
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+    <View style={{ flex: 1, backgroundColor: color.ground }}>
       <ModalHeader title="Learning profile" onClose={() => router.back()} topInset />
-      <Screen topInset={false} background={color.canvas}>
+      <Screen topInset={false} background={color.ground}>
         <Gutter>
           <SetupHeader title="How you learn" note="This frames what Thinketh shows you. What you actually know is measured separately, from evidence, in your Mind." />
 
