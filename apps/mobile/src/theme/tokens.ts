@@ -23,17 +23,8 @@ export const color = {
   canvas: "#FFFFFF",
 } as const;
 
-// Illustration stops (Today lead card, tiles). Warm, never neon.
+// Tile tints (Today "Continue" tiles, concept initials). Soft, never neon.
 export const glow = {
-  duskTop: "#D6B2A1",
-  duskMid: "#9A7465",
-  duskLow: "#35302E",
-  ridgeFar: "#B8917F",
-  ridgeMid: "#7C6158",
-  ridgeNear: "#2C2725",
-  sun: "#EC7453",
-  orbLight: "#FFE7DC",
-  orbDeep: "#C9583B",
   tileCoral: "#FCE9E2",
   tileCool: "#E9EFF4",
   tileCoolInk: "#3E6784",

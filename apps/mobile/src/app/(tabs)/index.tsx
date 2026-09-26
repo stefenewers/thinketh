@@ -6,6 +6,8 @@ import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@th
 import { api } from "@/api";
 import { Icon, type IconName } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
+import { Texture } from "@/components/Texture";
+import { imageFor } from "@/content/imagery";
 import { Sheet } from "@/components/Sheet";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
@@ -24,7 +26,7 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 };
 
 const VISIBLE_ROWS = 3;
-const LEAD_BAND_H = 116;
+const LEAD_BAND_H = 132;
 
 export default function Today() {
   const profile = useProfile();
@@ -161,7 +163,6 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
                 <RecentInsightRow
                   key={d.id}
                   development={d}
-                  index={i}
                   last={i === shown.length - 1}
                   category={conceptById.get(d.conceptIds[0] ?? "")?.name}
                   understood={understood.has(d.id)}
@@ -327,13 +328,22 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
       accessibilityLabel={`Lead development. ${development.title}. ${significanceLabel(development)}.`}
       style={({ pressed }) => [styles.lead, pressed && { transform: [{ scale: 0.99 }] }]}
     >
-      {/* A short dusk band: the cinematic moment, kept to the top of an otherwise white product card. */}
+      {/* A photographic texture band: real depth at the top of an otherwise white product card. */}
       <View style={styles.leadBand}>
+        <Texture source={imageFor(development.conceptIds)} style={StyleSheet.absoluteFill} />
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <DuskArt width={width - space.xl * 2} height={LEAD_BAND_H} />
+          <Svg width={width - space.xl * 2} height={LEAD_BAND_H}>
+            <Defs>
+              <LinearGradient id="bandFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0.55" stopColor={color.canvas} stopOpacity={0} />
+                <Stop offset="1" stopColor={color.canvas} stopOpacity={0.55} />
+              </LinearGradient>
+            </Defs>
+            <Rect x={0} y={0} width={width} height={LEAD_BAND_H} fill="url(#bandFade)" />
+          </Svg>
         </View>
         <View style={styles.leadPill}>
-          <Icon name="sparkle" size={13} color={glow.sun} />
+          <View style={styles.dot} />
           <T style={styles.leadPillText}>Lead development</T>
         </View>
       </View>
@@ -380,29 +390,6 @@ function LeadDevelopmentCard({ development, understood, concepts }: { developmen
   );
 }
 
-/** Dusk in layered haze, cropped to a band: ridges, a coral sun, and a soft floor. */
-function DuskArt({ width, height }: { width: number; height: number }) {
-  return (
-    <Svg width={width} height={height} viewBox="0 0 350 116" preserveAspectRatio="xMidYMid slice">
-      <Defs>
-        <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={glow.duskTop} />
-          <Stop offset="1" stopColor={glow.duskMid} />
-        </LinearGradient>
-        <LinearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0.5" stopColor="#000" stopOpacity={0} />
-          <Stop offset="1" stopColor="#000" stopOpacity={0.25} />
-        </LinearGradient>
-      </Defs>
-      <Rect x={0} y={0} width={350} height={116} fill="url(#sky)" />
-      <Circle cx={286} cy={36} r={5.5} fill={glow.sun} />
-      <Path d="M0 70 C 90 52, 180 46, 350 18 L350 116 L0 116 Z" fill={glow.ridgeFar} fillOpacity={0.55} />
-      <Path d="M0 100 C 100 80, 210 66, 350 50 L350 116 L0 116 Z" fill={glow.ridgeMid} fillOpacity={0.7} />
-      <Path d="M150 116 C 210 92, 270 82, 350 76 L350 116 Z" fill={glow.ridgeNear} fillOpacity={0.9} />
-      <Rect x={0} y={0} width={350} height={116} fill="url(#floor)" />
-    </Svg>
-  );
-}
 
 
 function SectionHeader({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
@@ -438,7 +425,7 @@ function ContinueTile({ icon, tint, ink, title, subtitle, accent, onPress }: { i
   );
 }
 
-function RecentInsightRow({ development: d, index, last, category, understood }: { development: Development; index: number; last: boolean; category?: string; understood: boolean }) {
+function RecentInsightRow({ development: d, last, category, understood }: { development: Development; last: boolean; category?: string; understood: boolean }) {
   return (
     <Pressable
       onPress={() => router.push({ pathname: "/development/[id]", params: { id: d.id } })}
@@ -446,7 +433,7 @@ function RecentInsightRow({ development: d, index, last, category, understood }:
       accessibilityLabel={`${d.title}. ${significanceLabel(d)}.${understood ? " Understood." : ""}`}
       style={({ pressed }) => [styles.insight, pressed && { backgroundColor: color.surfaceMuted }]}
     >
-      <InsightThumb variant={index % 3} />
+      <Texture source={imageFor(d.conceptIds)} style={styles.thumb} />
       <View style={[styles.insightBody, !last && styles.insightDivided]}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -476,27 +463,6 @@ function RecentInsightRow({ development: d, index, last, category, understood }:
 }
 
 
-/** Neutral thumbnails: a tiny graph, drawn differently per row. No color, no stock imagery. */
-function InsightThumb({ variant }: { variant: number }) {
-  const shapes: [number, number, boolean][][] = [
-    [[14, 36, true], [28, 18, false], [42, 32, true], [30, 44, false]],
-    [[16, 20, false], [36, 16, true], [40, 38, true], [18, 40, false], [28, 28, true]],
-    [[12, 28, true], [28, 14, false], [44, 28, true], [28, 42, false]],
-  ];
-  const pts = shapes[variant % shapes.length];
-  return (
-    <View style={styles.thumb}>
-      <Svg width={56} height={56} viewBox="0 0 56 56">
-        {pts.slice(1).map(([x, y], i) => (
-          <Path key={i} d={`M${pts[0][0]} ${pts[0][1]} L${x} ${y}`} stroke={color.ink3} strokeOpacity={0.45} strokeWidth={0.9} />
-        ))}
-        {pts.map(([x, y, filled], i) =>
-          filled ? <Circle key={i} cx={x} cy={y} r={3} fill={color.ink} /> : <Circle key={i} cx={x} cy={y} r={2.8} fill={color.surfaceMuted} stroke={color.ink2} strokeWidth={1.1} />,
-        )}
-      </Svg>
-    </View>
-  );
-}
 
 function useSafeTop() {
   const insets = useSafeAreaInsets();
@@ -536,7 +502,7 @@ const styles = StyleSheet.create({
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
   listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
   lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised, shadowOpacity: 0.08, shadowRadius: 18 },
-  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: glow.duskMid },
+  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: color.surfaceMuted },
   leadBody: { padding: space.xl, paddingTop: space.l },
   leadPill: {
     flexDirection: "row",
@@ -546,11 +512,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.m,
     paddingVertical: 5,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.86)",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: color.edge,
   },
-  leadPillText: { fontFamily: font.sansMedium, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.onInk },
+  leadPillText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink },
   leadTitle: { fontFamily: font.sansSemibold, fontSize: 23, lineHeight: 29, letterSpacing: -0.6, color: color.ink, marginTop: space.s },
   leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2, marginTop: space.s },
   leadFooter: { flexDirection: "row", alignItems: "center", marginTop: space.l, gap: space.m },
@@ -570,7 +536,7 @@ const styles = StyleSheet.create({
   insight: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },
   insightBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: space.m, paddingRight: space.m, marginLeft: space.m },
   insightDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.lineSoft },
-  thumb: { width: 56, height: 56, borderRadius: 12, overflow: "hidden", alignSelf: "center", backgroundColor: color.surfaceMuted },
+  thumb: { width: 56, height: 56, borderRadius: 12, alignSelf: "center", backgroundColor: color.surfaceMuted },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral },
   insightCategory: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink2, flexShrink: 1 },
   insightTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink, marginTop: 3 },
