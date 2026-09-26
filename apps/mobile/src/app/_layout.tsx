@@ -14,7 +14,8 @@ import { color } from "@/theme/tokens";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // react-native-svg's web build forwards responder props to the DOM; harmless, web-only.
-LogBox.ignoreLogs(["Unknown event handler property"]);
+// LiveKit logs the server's normal close (WS 1001) after a voice session ends as an error.
+LogBox.ignoreLogs(["Unknown event handler property", "error reading from signal stream"]);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({

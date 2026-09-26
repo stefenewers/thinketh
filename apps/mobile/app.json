@@ -13,7 +13,8 @@
         "NSMicrophoneUsageDescription": "Thinketh uses the microphone so you can talk with Catch Me Up.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bitcode": false
+      "bitcode": false,
+      "appleTeamId": "4596J38HHC"
     },
     "android": {
       "adaptiveIcon": {
