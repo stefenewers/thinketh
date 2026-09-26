@@ -132,6 +132,17 @@ describe("sponsor adapters call the documented endpoints", () => {
     expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("k");
   });
 
+  it("Backboard: recovers memory kinds when search results omit metadata", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith("/memories/search")
+        ? Response.json({ memories: [{ id: "m1", content: "Prefers systems analogies", score: 0.7 }] })
+        : Response.json({ memories: [{ id: "m1", content: "Prefers systems analogies", metadata: { kind: "preference", thinkethId: "mem-1" } }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    expect(await memory.recall("u", "how to explain")).toMatchObject([{ id: "mem-1", kind: "preference", content: "Prefers systems analogies" }]);
+  });
+
   it("ElevenLabs: exchanges the server key for a conversation token", async () => {
     const fetchMock = vi.fn(async () => Response.json({ token: "tok", conversation_id: "c1" }));
     vi.stubGlobal("fetch", fetchMock);

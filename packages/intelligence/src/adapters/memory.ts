@@ -12,6 +12,7 @@ import { ensureOk } from "./guard.ts";
 import type { MemoryProvider } from "./types.ts";
 
 const RECALL_LIMIT = 5;
+const METADATA_TTL_MS = 60_000;
 
 export class LocalMemory implements MemoryProvider {
   readonly name = "local" as const;
@@ -72,6 +73,8 @@ type BackboardOptions = {
 export class BackboardMemory implements MemoryProvider {
   readonly name = "backboard" as const;
   private readonly assistants = new Map<string, string>();
+  /** Memory metadata by id. Backboard's search results omit metadata, so kinds are joined from the list endpoint. */
+  private readonly metadataCache = new Map<string, { at: number; byId: Map<string, BackboardMemoryRecord["metadata"]> }>();
   private readonly opts: BackboardOptions;
 
   constructor(opts: BackboardOptions) {
@@ -117,18 +120,29 @@ export class BackboardMemory implements MemoryProvider {
     };
   }
 
+  private async metadataById(assistantId: string): Promise<Map<string, BackboardMemoryRecord["metadata"]>> {
+    const cached = this.metadataCache.get(assistantId);
+    if (cached && Date.now() - cached.at < METADATA_TTL_MS) return cached.byId;
+    const res = await this.call(`/assistants/${assistantId}/memories?page_size=100`);
+    const body = (await res.json()) as { memories?: BackboardMemoryRecord[] };
+    const byId = new Map((body.memories ?? []).map((m) => [m.id, m.metadata]));
+    this.metadataCache.set(assistantId, { at: Date.now(), byId });
+    return byId;
+  }
+
   async recall(userId: string, query: string): Promise<MemoryItem[]> {
     const assistantId = await this.assistantFor(userId);
-    const res = await this.call(`/assistants/${assistantId}/memories/search`, {
-      method: "POST",
-      body: JSON.stringify({ query, limit: RECALL_LIMIT }),
-    });
+    const [res, metadata] = await Promise.all([
+      this.call(`/assistants/${assistantId}/memories/search`, { method: "POST", body: JSON.stringify({ query, limit: RECALL_LIMIT }) }),
+      this.metadataById(assistantId),
+    ]);
     const body = (await res.json()) as { memories?: BackboardMemoryRecord[] };
-    return (body.memories ?? []).map((m) => this.toItem(m));
+    return (body.memories ?? []).slice(0, RECALL_LIMIT).map((m) => this.toItem({ ...m, metadata: m.metadata ?? metadata.get(m.id) ?? null }));
   }
 
   async remember(userId: string, item: MemoryItem): Promise<void> {
     const assistantId = await this.assistantFor(userId);
+    this.metadataCache.delete(assistantId);
     await this.call(`/assistants/${assistantId}/memories`, {
       method: "POST",
       body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
