@@ -31,6 +31,8 @@ export interface MemoryProvider {
   observe?(userId: string, text: string): Promise<void>;
   /** Cheap authenticated call to confirm the integration is live; may return a short detail. */
   probe?(userId: string): Promise<string | void>;
+  /** Converge stored memories to exactly `keep` (used by demo reset). */
+  reconcile?(userId: string, keep: MemoryItem[]): Promise<{ deleted: number; added: number }>;
 }
 
 export type SearchKind = "development" | "concept" | "claim" | "source";

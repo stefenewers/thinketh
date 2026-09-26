@@ -13,6 +13,8 @@ import type { MemoryProvider } from "./types.ts";
 
 const RECALL_LIMIT = 5;
 const METADATA_TTL_MS = 60_000;
+/** How long a write counts as pending (not yet visible in Backboard's list). */
+const RECENT_WRITE_MS = 2 * 60_000;
 const KIND_PRIORITY: Record<MemoryItem["kind"], number> = { preference: 0, misconception: 1, learning_topic: 2, conversation: 3 };
 
 export class LocalMemory implements MemoryProvider {
@@ -242,12 +244,15 @@ export class BackboardMemory implements MemoryProvider {
 
   async remember(userId: string, item: MemoryItem): Promise<void> {
     const assistantId = await this.assistantFor(userId);
-    if ((await this.stored(assistantId)).contents.has(item.content)) return; // already remembered
-    this.metadataCache.delete(assistantId);
+    const stored = await this.stored(assistantId);
+    const pending = (this.recentWrites.get(item.content) ?? 0) > Date.now() - RECENT_WRITE_MS;
+    if (stored.contents.has(item.content) || pending) return; // already remembered
     await this.call(`/assistants/${assistantId}/memories`, {
       method: "POST",
       body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
     });
+    stored.contents.add(item.content);
+    this.recentWrites.set(item.content, Date.now());
   }
 
   async observe(userId: string, text: string): Promise<void> {
@@ -268,9 +273,60 @@ export class BackboardMemory implements MemoryProvider {
     return `assistant ${assistantId.slice(0, 8)}…, ${body.total_count ?? 0} memories`;
   }
 
-  async reset(userId: string): Promise<void> {
+  /** Contents written recently: Backboard writes are asynchronous, so the list can lag behind them. */
+  private readonly recentWrites = new Map<string, number>();
+  private readonly reconciling = new Map<string, Promise<unknown>>();
+
+  /**
+   * Converge the user's assistant to exactly `keep`: delete every other memory
+   * (and duplicates) one by one, and add any `keep` item that's missing.
+   * Backboard is eventually consistent for both deletes and writes, so this never
+   * wipes and re-adds; repeated calls converge instead of racing.
+   */
+  async reconcile(userId: string, keep: MemoryItem[]): Promise<{ deleted: number; added: number }> {
     const assistantId = await this.assistantFor(userId);
+    // One reconcile at a time per assistant (the golden check resets twice in quick succession).
+    const previous = this.reconciling.get(assistantId) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(() => this.reconcileNow(assistantId, keep));
+    this.reconciling.set(assistantId, run.catch(() => undefined));
+    return run;
+  }
+
+  private async reconcileNow(assistantId: string, keep: MemoryItem[]): Promise<{ deleted: number; added: number }> {
+    const res = await this.call(`/assistants/${assistantId}/memories?page_size=100`);
+    const listed = ((await res.json()) as { memories?: BackboardMemoryRecord[] }).memories ?? [];
+    const wanted = new Set(keep.map((k) => k.content));
+    const seen = new Set<string>();
+    let deleted = 0;
+    for (const m of listed) {
+      if (wanted.has(m.content) && !seen.has(m.content)) {
+        seen.add(m.content);
+        continue;
+      }
+      const del = await fetch(`${this.opts.baseUrl}/assistants/${assistantId}/memories/${encodeURIComponent(m.id)}`, {
+        method: "DELETE",
+        headers: { "X-API-Key": this.opts.apiKey },
+      });
+      if (del.status !== 404) await ensureOk(del, "backboard DELETE memory"); // 404: already gone, which is the goal
+      deleted++;
+    }
+    const now = Date.now();
+    let added = 0;
+    for (const item of keep) {
+      const pending = (this.recentWrites.get(item.content) ?? 0) > now - RECENT_WRITE_MS;
+      if (seen.has(item.content) || pending) continue;
+      await this.call(`/assistants/${assistantId}/memories`, {
+        method: "POST",
+        body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
+      });
+      this.recentWrites.set(item.content, now);
+      added++;
+    }
     this.metadataCache.delete(assistantId);
-    await this.call(`/assistants/${assistantId}/memories`, { method: "DELETE" });
+    return { deleted, added };
+  }
+
+  async reset(userId: string): Promise<void> {
+    await this.reconcile(userId, []);
   }
 }

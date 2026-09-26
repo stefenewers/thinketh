@@ -792,19 +792,10 @@ export class ThinkethService {
     // questions. Backboard can take several seconds to clear many memories, so this
     // runs in the background: the knowledge-state reset above is what the demo needs now.
     const { memory } = this.adapters;
-    if (memory?.reset && userId === this.config.demoUserId) {
+    if (memory?.reconcile && userId === this.config.demoUserId) {
       runInBackground(
         "backboard-reset",
-        guarded(
-          "backboard",
-          "reset",
-          async () => {
-            await memory.reset!(userId);
-            for (const item of this.seed.memories) await memory.remember(userId, item);
-          },
-          () => undefined,
-          30_000,
-        ),
+        guarded("backboard", "reconcile", () => memory.reconcile!(userId, this.seed.memories), () => undefined, 30_000),
       );
     }
     this.phrasedDeltas.clear();

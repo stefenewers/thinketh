@@ -8,7 +8,7 @@ curl "http://localhost:8787/health?probe=true"
 
 `probe=true` makes one cheap real call to each configured service. `live` means the call succeeded, `error` means credentials exist but the call failed, and `not_configured` means the backend is using its local fallback.
 
-## Status (2026-09-25, local backend on latest main)
+## Status (2026-09-25, latest main; also verified under Deno, the Edge Function runtime)
 
 | Service | Status | Proof |
 |---|---|---|
@@ -116,6 +116,6 @@ Screenshots to capture: Backboard dashboard → the assistant's Memories, plus t
 
 ## To do
 
-- Remote deploy: needs `SUPABASE_ACCESS_TOKEN` (CLI), then deploy the Edge Function and run the golden loop over the public URL
+- Remote deploy: the public API is deployed (see `docs/DEPLOY.md` and `docs/NADANI-ACTION-ITEMS.md`). Remote Mongo needs the Atlas IP allowlist, and remote Tiger needs the TLS flag verified.
 - ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
 - Claude: `x-thinketh-delta-source: claude` on `/developments/:id`

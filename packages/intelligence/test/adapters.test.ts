@@ -252,6 +252,43 @@ describe("sponsor adapters call the documented endpoints", () => {
     expect(inferMemoryKind("Lives in Atlanta")).toBe("conversation");
   });
 
+  it("Backboard: reconcile keeps seed memories, deletes extras and duplicates, adds only what's missing", async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      calls.push(`${method} ${url.replace("https://app.backboard.io/api/assistants/asst-1", "")}${method === "POST" ? ` ${JSON.parse(String(init!.body)).content}` : ""}`);
+      if (method !== "GET") return Response.json({}, { status: method === "POST" ? 201 : 200 });
+      return Response.json({
+        memories: [
+          { id: "m1", content: "Prefers systems analogies" },
+          { id: "m2", content: "Prefers systems analogies" }, // duplicate
+          { id: "m3", content: "Asked: what changed?" }, // not a seed memory
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    const keep = [
+      { id: "a", kind: "preference" as const, content: "Prefers systems analogies", createdAt: "x" },
+      { id: "b", kind: "misconception" as const, content: "Confused memory with context", createdAt: "x" },
+    ];
+    expect(await memory.reconcile("u", keep)).toEqual({ deleted: 2, added: 1 });
+    expect(calls).toEqual([
+      "GET /memories?page_size=100",
+      "DELETE /memories/m2",
+      "DELETE /memories/m3",
+      "POST /memories Confused memory with context",
+    ]);
+    // A memory already deleted elsewhere (404) counts as deleted, not as a failure.
+    calls.length = 0;
+    fetchMock.mockImplementationOnce(async () => Response.json({ memories: [{ id: "gone", content: "stale" }] }));
+    fetchMock.mockImplementationOnce(async () => Response.json({ detail: "Memory gone not found" }, { status: 404 }));
+    await expect(memory.reconcile("u", [])).resolves.toEqual({ deleted: 1, added: 0 });
+    // A second reconcile before Backboard lists the new memory doesn't add it again.
+    calls.length = 0;
+    expect((await memory.reconcile("u", keep)).added).toBe(0);
+  });
+
   it("ElevenLabs: exchanges the server key for a conversation token", async () => {
     const fetchMock = vi.fn(async () => Response.json({ token: "tok", conversation_id: "c1" }));
     vi.stubGlobal("fetch", fetchMock);
