@@ -101,7 +101,6 @@ function Storyline({
               <View style={{ flex: 1, paddingBottom: space.xxl }}>
                 <T variant="label" tone={p.current ? "coral" : undefined}>
                   {p.label}
-                  {devs[0] ? ` · ${shortDate(devs[0].happenedAt)}` : ""}
                 </T>
                 <T variant="body" style={{ fontFamily: font.sansMedium, marginTop: space.xs }}>
                   {p.headline}
@@ -213,7 +212,9 @@ function milestoneText(t: KnowledgeStateTransition): string {
 
 function masteryChange(t: KnowledgeStateTransition): string | undefined {
   if (Math.abs(t.after.mastery - t.before.mastery) < 0.005) return undefined;
-  return t.after.mastery > t.before.mastery ? `Stronger: ${masteryLabel(t.before.mastery).toLowerCase()} → ${masteryLabel(t.after.mastery).toLowerCase()}` : `Weaker: ${masteryLabel(t.before.mastery).toLowerCase()} → ${masteryLabel(t.after.mastery).toLowerCase()}`;
+  const [from, to] = [masteryLabel(t.before.mastery).toLowerCase(), masteryLabel(t.after.mastery).toLowerCase()];
+  const dir = t.after.mastery > t.before.mastery ? "Stronger" : "Weaker";
+  return from === to ? `${dir}, still ${to}` : `${dir}: ${from} → ${to}`;
 }
 
 const styles = StyleSheet.create({

@@ -55,9 +55,9 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
       <Gutter>
         <View style={styles.meta}>
           <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
-            {sources[0]?.publisher ?? "Source"}
+            {sources.length} {sources.length === 1 ? "source" : "sources"}
           </T>
-          <T variant="meta">· {shortDate(d.happenedAt)}</T>
+          <T variant="meta">· surfaced {shortDate(d.happenedAt)}</T>
           <T variant="meta">· {significanceLabel(d)}</T>
         </View>
         <T variant="title" style={{ marginTop: space.m, fontSize: 30, lineHeight: 37 }} accessibilityRole="header">

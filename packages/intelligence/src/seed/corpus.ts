@@ -117,7 +117,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       sourceType: "paper",
       publisher: "arXiv",
       url: "https://arxiv.org/abs/2504.19413",
-      publishedAt: "2025-04-28T00:00:00.000Z",
+      publishedAt: "2025-04-28T12:00:00.000Z",
       credibility: 0.8,
     },
     {
@@ -143,7 +143,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       sourceType: "paper",
       publisher: "arXiv",
       url: "https://arxiv.org/abs/2310.01798",
-      publishedAt: "2023-10-03T00:00:00.000Z",
+      publishedAt: "2023-10-03T12:00:00.000Z",
       credibility: 0.8,
     },
     {
@@ -176,7 +176,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       sourceType: "paper",
       publisher: "arXiv",
       url: "https://arxiv.org/abs/2406.12045",
-      publishedAt: "2024-06-17T00:00:00.000Z",
+      publishedAt: "2024-06-17T12:00:00.000Z",
       credibility: 0.7,
     },
     {
@@ -202,7 +202,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       sourceType: "paper",
       publisher: "arXiv",
       url: "https://arxiv.org/abs/2005.11401",
-      publishedAt: "2020-05-22T00:00:00.000Z",
+      publishedAt: "2020-05-22T12:00:00.000Z",
       credibility: 0.75,
     },
     {

@@ -139,7 +139,7 @@ export default function Library() {
         </Pressable>
       </Gutter>
 
-      <View style={{ marginTop: space.l }}>
+      <View style={{ marginTop: space.xxl }}>
         <Gutter>
           <SectionLabel>Browse</SectionLabel>
         </Gutter>

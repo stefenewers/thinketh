@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import type { BriefResponse, Development, KnowledgeResponse, Source } from "@thinketh/contracts";
+import type { BriefResponse, Development, KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
@@ -78,7 +78,6 @@ export default function Today() {
 
 function TodayContent({ today, knowledge, following }: { today: BriefResponse; knowledge: KnowledgeResponse; following: string[] }) {
   const { brief, developments } = today;
-  const sources = today.sources ?? [];
   const concepts = today.concepts ?? knowledge.items.map((i) => i.concept);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -96,7 +95,8 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
     0,
     Math.round(brief.estimatedMinutes * (1 - understood.size / Math.max(brief.meaningfulCount, 1))),
   );
-  const sourceFor = (d: Development): Source | undefined => sources.find((s) => d.sourceIds.includes(s.id));
+  // The time shown is when Thinketh surfaced the development, so it's paired with the source count, not a publisher.
+  const sourceCount = (d: Development) => `${d.sourceIds.length} ${d.sourceIds.length === 1 ? "source" : "sources"}`;
   const latest = (today.recentTransitions ?? todaysTransitions(knowledge.items)).find((t) => isToday(t.createdAt) && improved(t));
   const latestConcept = latest ? concepts.find((c) => c.id === latest.conceptId) : undefined;
 
@@ -235,12 +235,10 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
           style={({ pressed }) => [styles.hero, pressed && { opacity: 0.85 }]}
         >
           <View style={styles.heroMeta}>
-            {sourceFor(hero)?.publisher ? (
-              <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
-                {sourceFor(hero)?.publisher} ·
-              </T>
-            ) : null}
-            <T variant="meta">{relativeTime(hero.happenedAt)}</T>
+            <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
+              {sourceCount(hero)} ·
+            </T>
+            <T variant="meta">surfaced {relativeTime(hero.happenedAt).toLowerCase()}</T>
             <View style={{ flex: 1 }} />
             {understood.has(hero.id) ? <UnderstoodTag /> : <T variant="meta">{significanceLabel(hero)}</T>}
           </View>
@@ -274,7 +272,7 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
           >
             <View style={{ flexDirection: "row", gap: space.s, alignItems: "center" }}>
               <T variant="meta">
-                {[sourceFor(d)?.publisher, relativeTime(d.happenedAt)].filter(Boolean).join(" · ")}
+                {`${sourceCount(d)} · surfaced ${relativeTime(d.happenedAt).toLowerCase()}`}
               </T>
               {understood.has(d.id) ? <UnderstoodTag /> : isMajor(d) ? <T variant="meta" style={{ color: color.ink }}>· Major</T> : null}
             </View>
