@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { PlaygroundRoom } from "@thinketh/contracts";
 import { narrativeLabel } from "@thinketh/contracts";
+import { MuseMark } from "@/components/brand/MuseMark";
 import { Mark } from "@/components/Logo";
 import { Sheet } from "@/components/Sheet";
 import { Avatar } from "@/components/system";
@@ -73,9 +74,15 @@ export function ActionBanner({ cue, onPress }: { cue: VisualCue | null; onPress:
           <Mark size={11} tone="dark" decorative />
         </View>
       ) : k === "muse" || k === "planner" ? (
-        <View style={[styles.badgeMuse, k === "planner" && { backgroundColor: color.ink2 }]}>
-          <T style={styles.badgeMuseText}>{k === "muse" ? "M" : "P"}</T>
-        </View>
+        k === "muse" ? (
+          <View style={styles.badgeMuseMark}>
+            <MuseMark size={12} />
+          </View>
+        ) : (
+          <View style={[styles.badgeMuse, { backgroundColor: color.ink2 }]}>
+            <T style={styles.badgeMuseText}>P</T>
+          </View>
+        )
       ) : (
         <Avatar name={cue.actor.name === "You" ? "Stefen" : cue.actor.name} size={22} />
       )}
@@ -244,6 +251,7 @@ export { keyOf };
 const styles = StyleSheet.create({
   banner: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 40, paddingHorizontal: space.m, paddingVertical: 6, borderRadius: 999, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
   badgeThinketh: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: 1, borderColor: color.hairline },
+  badgeMuseMark: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge },
   badgeMuse: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: color.ink },
   badgeMuseText: { fontFamily: font.sansSemibold, fontSize: 11, lineHeight: 13, color: color.onInk },
   bannerText: { flex: 1, fontFamily: font.sans, fontSize: 13, lineHeight: 17, color: color.ink },

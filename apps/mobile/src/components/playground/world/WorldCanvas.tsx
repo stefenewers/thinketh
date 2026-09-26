@@ -5,6 +5,7 @@ import { Image, Platform, Pressable, StyleSheet, View, type ImageStyle } from "r
 import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import type { PlaygroundRoom } from "@thinketh/contracts";
+import { MuseMark } from "@/components/brand/MuseMark";
 import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
 import { color, font, pixel } from "@/theme/tokens";
@@ -232,8 +233,15 @@ function MuseCue({ at, state, by, pointing, paused, reduced, onPress }: { at: { 
   return (
     <Animated.View style={[{ position: "absolute", left: 0, top: 0, width: 120, alignItems: "center" }, place]}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={choosing ? "Muse is choosing the next move. Show details" : `${by}, the conductor. Show details`} style={styles.muse}>
-        <Animated.View style={[styles.museDot, dim]}>
-          <T style={styles.museM}>{by === "Planner" ? "P" : "M"}</T>
+        {/* Muse's own mark when Muse acts; the deterministic planner keeps a plain "P". */}
+        <Animated.View style={dim}>
+          {by === "Planner" ? (
+            <View style={styles.museDot}>
+              <T style={styles.museM}>P</T>
+            </View>
+          ) : (
+            <MuseMark size={13} />
+          )}
         </Animated.View>
         <T style={styles.museText}>{text}</T>
       </Pressable>

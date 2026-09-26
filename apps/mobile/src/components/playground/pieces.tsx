@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { MuseMark } from "@/components/brand/MuseMark";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Icon, type IconName } from "@/components/Icon";
@@ -74,7 +75,7 @@ export function MuseCard({ children, label = "Muse", style }: { children: ReactN
   return (
     <RaisedCard style={[{ paddingVertical: space.m }, style]}>
       <View style={styles.museHead}>
-        <Dot tone="ink" size={5} />
+        {label === "Muse" ? <MuseMark size={10} /> : <Dot tone="ink" size={5} />}
         <T style={styles.tagText}>{label}</T>
       </View>
       {typeof children === "string" ? <T style={styles.museText}>{children}</T> : children}
