@@ -25,7 +25,10 @@ export function BookCover({
   title,
   width,
   height,
+  compact = false,
 }: {
+  /** Small preview covers: tighter padding so the title keeps its size. */
+  compact?: boolean;
   evidence: Evidence;
   uncertain: boolean;
   changed: "up" | "down" | null;
@@ -40,6 +43,7 @@ export function BookCover({
       <View
         style={[
           styles.cover,
+          compact && { paddingLeft: U * 4, paddingRight: U * 3 },
           {
             width,
             height,
@@ -58,7 +62,7 @@ export function BookCover({
         </View>
         <View style={[styles.band, { left: U * 3, backgroundColor: c.spine }]} />
         <View style={[styles.band, { right: U * 3, backgroundColor: c.spine }]} />
-        <T style={[styles.title, { color: c.title, fontSize: titleSize(title, width), lineHeight: titleSize(title, width) + 3 }]} numberOfLines={2}>
+        <T style={[styles.title, { color: c.title, fontSize: titleSize(title, width, compact ? 22 : 30), lineHeight: titleSize(title, width, compact ? 22 : 30) + 3 }]} numberOfLines={3}>
           {title}
         </T>
       </View>

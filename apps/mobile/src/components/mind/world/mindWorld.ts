@@ -109,10 +109,42 @@ export function projectMindWorld(
   };
 }
 
+/** Approximate advance of a word in em for the semibold sans: wide capitals, narrow i/l/t/f/r/j. */
+export function wordEm(word: string) {
+  let em = 0;
+  for (const ch of word) em += /[MWmw]/.test(ch) ? 0.86 : /[A-Z]/.test(ch) ? 0.68 : /[iljtfr.'-]/.test(ch) ? 0.34 : 0.58;
+  // Calibrated against rendered Inter SemiBold (the table alone ran ~10% narrow).
+  return em * 1.12;
+}
+
 /** Titles never break mid-word: a long single word gets a smaller size, on every platform. */
-export function titleSize(title: string, width: number) {
-  const longest = Math.max(...title.split(/\s+/).map((w) => w.length));
-  const room = width - 2 * 13;
-  // ~0.62em per character for the semibold sans.
-  return Math.max(9.5, Math.min(11.5, Math.floor((room / (longest * 0.62)) * 2) / 2));
+export function titleSize(title: string, width: number, inset = 26) {
+  const longest = Math.max(...title.split(/\s+/).map(wordEm));
+  const room = width - inset;
+  return Math.max(8.5, Math.min(11.5, Math.floor((room / longest) * 2) / 2));
+}
+
+/**
+ * A small shelf for previews (Home, Catch me up): the featured book with its real neighbours on your
+ * shelf, featured in the middle. Neighbours are shelf order, not a claim that the concepts are related.
+ */
+export function shelfNeighbours(world: MindWorld, conceptId: string | null | undefined): { books: Book[]; featured: Book | null } {
+  const i = conceptId ? world.books.findIndex((b) => b.conceptId === conceptId) : -1;
+  if (i < 0) return { books: [], featured: null };
+  const n = world.books.length;
+  const start = Math.max(0, Math.min(i - 1, n - 3));
+  return { books: world.books.slice(start, start + 3), featured: world.books[i]! };
+}
+
+/** Concepts linked to this one in your Mind, strongest link first. Only real edges; never invented. */
+export function relatedConcepts(data: KnowledgeResponse, conceptId: string, max = 3): { id: string; name: string; title: string }[] {
+  const names = new Map(data.items.map((i) => [i.concept.id, i.concept.name]));
+  const seen = new Set<string>([conceptId]);
+  return data.edges
+    .filter((e) => e.fromConceptId === conceptId || e.toConceptId === conceptId)
+    .sort((a, b) => b.weight - a.weight)
+    .map((e) => (e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId))
+    .filter((id) => names.has(id) && !seen.has(id) && (seen.add(id), true))
+    .slice(0, max)
+    .map((id) => ({ id, name: names.get(id)!, title: CONCEPT_LABELS[id]?.graph ?? names.get(id)! }));
 }

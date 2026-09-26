@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { KnowledgeResponse, KnowledgeStateTransition } from "@thinketh/contracts";
-import { COLS, PER_BAY, projectMindWorld, titleSize } from "../mindWorld";
+import { COLS, PER_BAY, projectMindWorld, relatedConcepts, shelfNeighbours, titleSize, wordEm } from "../mindWorld";
 
 // A real /knowledge response from the local API (the seeded demo learner, at baseline).
 const base = JSON.parse(readFileSync(join(__dirname, "fixtures/knowledge.json"), "utf8")) as KnowledgeResponse;
@@ -111,8 +111,33 @@ describe("Mind library projection", () => {
 
 describe("book titles", () => {
   it("a long single word gets a smaller size instead of breaking mid-word; short titles stay full size", () => {
-    expect(titleSize("Tool Use", 104)).toBe(11.5);
-    expect(titleSize("Consolidation", 104)).toBeLessThan(11.5);
-    expect(titleSize("Consolidation", 104) * 0.62 * 13).toBeLessThanOrEqual(104 - 26);
+    // Library covers have a 30pt inset (padding and borders); preview covers 22.
+    expect(titleSize("Tool Use", 104, 30)).toBe(11.5);
+    expect(titleSize("Consolidation", 104, 30)).toBeLessThan(11.5);
+    expect(titleSize("Consolidation", 104, 30) * wordEm("Consolidation")).toBeLessThanOrEqual(104 - 30);
+    expect(titleSize("Agent Memory", 72, 22) * wordEm("Memory")).toBeLessThanOrEqual(72 - 22);
+  });
+});
+
+describe("previews (Home, Catch me up)", () => {
+  const w = projectMindWorld(base, { selectedId: null, played: none, now: NOW });
+  it("features the linked concept's own book with its shelf neighbours", () => {
+    const { books, featured } = shelfNeighbours(w, "agent-memory");
+    expect(featured!.conceptId).toBe("agent-memory");
+    expect(books).toHaveLength(3);
+    expect(books.map((b) => b.conceptId)).toContain("agent-memory");
+  });
+
+  it("no linked concept: no featured book, nothing invented", () => {
+    expect(shelfNeighbours(w, null)).toEqual({ books: [], featured: null });
+    expect(shelfNeighbours(w, "not-in-your-mind")).toEqual({ books: [], featured: null });
+  });
+
+  it("related concepts come only from real edges, strongest first, never the concept itself", () => {
+    const rel = relatedConcepts(base, "agent-memory");
+    const linked = new Set(base.edges.flatMap((e) => (e.fromConceptId === "agent-memory" ? [e.toConceptId] : e.toConceptId === "agent-memory" ? [e.fromConceptId] : [])));
+    expect(rel.length).toBeGreaterThan(0);
+    expect(rel.every((r) => linked.has(r.id) && r.id !== "agent-memory")).toBe(true);
+    expect(relatedConcepts(base, "not-in-your-mind")).toEqual([]);
   });
 });

@@ -6,9 +6,13 @@ import { narrativeLabel, type BriefResponse, type Concept, type Development, typ
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { ActionTile, Avatar, ListCard, SectionHeader } from "@/components/system";
-import { HeroOrb } from "@/components/today/HeroOrb";
-import { InsightItem, LeadStory, TodayMetrics, TodayWash } from "@/components/today/TodayParts";
-import { DEMO_LEARNER_NAME, DEMO_PARTNER_NAME } from "@/content/demo";
+import { InsightItem, LeadStory, TodayMetrics } from "@/components/today/TodayParts";
+import { BookGlyph } from "@/components/mind/world/Book";
+import { playedHighlights } from "@/components/mind/world/MindLibrary";
+import { projectMindWorld, shelfNeighbours } from "@/components/mind/world/mindWorld";
+import { ShelfVignette, SpriteStill } from "@/components/mind/world/Vignette";
+import { AGENT_SPRITES } from "@/components/playground/world/assets";
+import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { Sheet } from "@/components/Sheet";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
@@ -16,7 +20,7 @@ import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
-import { color, depth, font, glow, gutter, radius, space, warm } from "@/theme/tokens";
+import { color, depth, font, glow, radius, space } from "@/theme/tokens";
 
 
 const SKIP_DEFINITIONS: Record<string, string> = {
@@ -84,7 +88,11 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   // Concepts today's developments touch that are already in your Mind.
   const connected = new Set(ordered.flatMap((d) => d.conceptIds).filter((id) => inMind.has(id)));
   // Coral is a signal: only what changed today, or the lead development's way into your Mind.
-  const active = new Set([latest?.conceptId, hero?.conceptIds.find((id) => inMind.has(id))].filter((id): id is string => !!id));
+  // The lead story's way into your Mind: its first linked concept that is actually in your Mind, else none.
+  const leadConceptId = hero?.conceptIds.find((id) => inMind.has(id)) ?? null;
+  const world = projectMindWorld(knowledge, { selectedId: leadConceptId, played: playedHighlights });
+  const shelf = shelfNeighbours(world, leadConceptId);
+  const mindBook = latest ? world.books.find((b) => b.conceptId === latest.conceptId) : undefined;
 
   if (!hero) {
     return (
@@ -101,11 +109,10 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
 
   const shown = showAll ? rest : rest.slice(0, VISIBLE_ROWS);
   return (
-    <Screen background={warm.ground} contentStyle={{ paddingTop: 0 }} topInset={false}>
-      <TodayWash />
+    <Screen background={color.ground} contentStyle={{ paddingTop: 0 }} topInset={false}>
       <HomeTopBar />
       <Gutter>
-        <IntelligenceHero count={brief.meaningfulCount} connected={connected.size} lit={active.size > 0 && !!latest} />
+        <IntelligenceHero count={brief.meaningfulCount} />
         <TodayMetrics
           style={{ marginTop: space.xl + space.xs }}
           metrics={[
@@ -123,7 +130,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             accessibilityRole="button"
             style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
           >
-            <T style={styles.ctaLabel}>{understood.size > 0 ? "Continue my catch-up" : "Catch me up"}</T>
+            <T style={styles.ctaLabel}>{understood.size > 0 ? "Continue catch-up" : "Catch me up"}</T>
             <T style={styles.ctaMeta}>~{understood.size > 0 ? remainingMinutes : brief.estimatedMinutes} min</T>
             <Icon name="arrow" size={16} color={color.onInk} />
           </Pressable>
@@ -140,8 +147,8 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <LeadStory
           development={hero}
           concepts={hero.conceptIds.map((id) => conceptById.get(id)).filter((c): c is Concept => !!c)}
-          // The people around this knowledge: your Playground partner and you.
-          people={[DEMO_PARTNER_NAME, DEMO_LEARNER_NAME]}
+          artHeight={176}
+          art={(w, h) => <ShelfVignette width={w} height={h} books={shelf.books} featuredId={shelf.featured?.conceptId ?? null} stefen="left" />}
           onPress={() => router.push({ pathname: "/development/[id]", params: { id: hero.id } })}
         />
 
@@ -149,16 +156,33 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <View style={styles.tiles}>
           <ActionTile
             icon="mind"
+            art={<BookGlyph evidence={mindBook?.evidence ?? "developing"} changed={mindBook?.changed ?? null} size={34} />}
             tint={glow.tileNeutral}
             ink={glow.tileNeutralInk}
             title="Your Mind"
             // What changed today is the reason to open it.
-            subtitle={latest ? `${conceptById.get(latest.conceptId)?.name ?? "A concept"} changed today` : "Explore your thinking"}
+            // The changed book (coral bookmark) and its name; a11y says it changed.
+            subtitle={latest ? (conceptById.get(latest.conceptId)?.name ?? "A concept") : "Your library"}
             accent={!!latest}
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId, from: "today" } } : "/mind")}
           />
-          <ActionTile icon="ask" tint={glow.tileCool} ink={glow.tileCoolInk} title="Ask Thinketh" subtitle="Get a quick answer" onPress={() => router.push("/ask")} />
-          <ActionTile icon="people" tint={glow.tileWarm} ink={glow.tileWarmInk} title="Playground" subtitle="Learn together" onPress={() => router.push("/playground")} />
+          <ActionTile icon="ask" tint={color.surfaceMuted} ink={color.ink} title="Ask Thinketh" subtitle="Ask a question" onPress={() => router.push("/ask")} />
+          <ActionTile
+            icon="people"
+            art={
+              <View style={{ flexDirection: "row" }}>
+                <SpriteStill size={36} />
+                <View style={{ marginLeft: -8 }}>
+                  <SpriteStill sprite={AGENT_SPRITES.blue} size={36} facing="left" />
+                </View>
+              </View>
+            }
+            tint={glow.tileNeutral}
+            ink={glow.tileNeutralInk}
+            title="Playground"
+            subtitle="Learn together"
+            onPress={() => router.push("/playground")}
+          />
         </View>
 
         {rest.length ? (
@@ -231,12 +255,9 @@ function HomeTopBar() {
   );
 }
 
-function IntelligenceHero({ count, connected, lit }: { count: number; connected: number; lit: boolean }) {
+function IntelligenceHero({ count }: { count: number }) {
   return (
     <View style={styles.hero}>
-      <View style={styles.heroOrb} pointerEvents="none">
-        <HeroOrb satellites={connected} lit={lit} />
-      </View>
       <T style={styles.kicker}>Your intelligence today</T>
       <T style={styles.headline} accessibilityRole="header">
         {count} new {count === 1 ? "thing" : "things"} worth knowing
@@ -268,8 +289,6 @@ const styles = StyleSheet.create({
   },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted, ...depth.control },
   hero: { paddingTop: space.xl },
-  // The orb sits upper right and bleeds past the edge; the headline reads over its glow.
-  heroOrb: { position: "absolute", right: -gutter - 70, top: -34 },
   kicker: { fontFamily: font.sansMedium, fontSize: 11.5, lineHeight: 14, letterSpacing: 3, textTransform: "uppercase", color: color.ink2 },
   headline: { fontFamily: font.sansBold, fontSize: 41, lineHeight: 44, letterSpacing: -1.6, color: color.ink, marginTop: space.m, maxWidth: 318 },
   heroCopy: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 21, color: color.ink2, marginTop: space.s, maxWidth: "78%" },
