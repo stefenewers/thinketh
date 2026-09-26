@@ -5,11 +5,13 @@ export type Variant =
   | "display"
   | "title"
   | "section"
+  | "editorial"
   | "statement"
   | "body"
   | "support"
   | "meta"
-  | "label";
+  | "label"
+  | "metric";
 
 type Props = TextProps & {
   variant?: Variant;
@@ -27,35 +29,43 @@ export function T({ variant = "body", tone, style, ...rest }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // Serif: hero statements, headlines, mental-model moments.
+  // Sans-first: hierarchy comes from size, weight and tracking, not font contrast.
   display: {
-    fontFamily: font.serif,
-    fontSize: 31,
-    lineHeight: 37,
-    letterSpacing: -0.6,
+    fontFamily: font.sansSemibold,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.8,
     color: color.ink,
   },
   title: {
-    fontFamily: font.serif,
-    fontSize: 24,
-    lineHeight: 30,
+    fontFamily: font.sansSemibold,
+    fontSize: 22,
+    lineHeight: 28,
     letterSpacing: -0.4,
     color: color.ink,
   },
   section: {
-    fontFamily: font.serif,
-    fontSize: 19,
-    lineHeight: 24,
+    fontFamily: font.sansSemibold,
+    fontSize: 17,
+    lineHeight: 23,
     letterSpacing: -0.2,
     color: color.ink,
   },
+  // Serif, rare by design: payoff moments only ("Your Mind", "Knowledge moved.").
+  editorial: {
+    fontFamily: font.serif,
+    fontSize: 31,
+    lineHeight: 37,
+    letterSpacing: -0.5,
+    color: color.ink,
+  },
+  // The mental-model sentence: the one editorial voice inside explanations.
   statement: {
     fontFamily: font.serifItalic,
     fontSize: 20,
     lineHeight: 28,
     color: color.ink,
   },
-  // Sans: everything functional.
   body: {
     fontFamily: font.sans,
     fontSize: 15,
@@ -78,8 +88,17 @@ const styles = StyleSheet.create({
     fontFamily: font.sansSemibold,
     fontSize: 11,
     lineHeight: 14,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
     color: color.ink3,
+  },
+  // Numbers as product metrics: sans, tabular.
+  metric: {
+    fontFamily: font.sansSemibold,
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.6,
+    fontVariant: ["tabular-nums"],
+    color: color.ink,
   },
 });

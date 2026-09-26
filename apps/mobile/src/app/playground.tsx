@@ -336,7 +336,7 @@ function Waiting({
       ) : (
         <View style={styles.inviteCard}>
           <T variant="label">Room code</T>
-          <T style={{ fontFamily: font.serif, fontSize: 30, letterSpacing: 6, marginTop: space.xs, color: color.ink }} selectable>
+          <T style={{ fontFamily: font.sansSemibold, fontSize: 30, letterSpacing: 6, marginTop: space.xs, color: color.ink, fontVariant: ["tabular-nums"] }} selectable>
             {room.code}
           </T>
           <T variant="support" style={{ marginTop: space.s }}>
@@ -560,7 +560,7 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
         {t?.explanation ? (
           <View style={styles.quote}>
             <T variant="label">{nameOf(room, t.teacherId)} explained</T>
-            <T variant="support" style={{ marginTop: space.xs, fontFamily: font.serifItalic, fontSize: 16, lineHeight: 23, color: color.ink2 }}>
+            <T variant="support" style={{ marginTop: space.xs, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2 }}>
               “{t.explanation}”
             </T>
           </View>
@@ -611,7 +611,7 @@ function KnowledgeMoved({ room, me, busy, onNext }: { room: PlaygroundRoom; me: 
   return (
     <View>
       <View style={{ paddingHorizontal: gutter }}>
-        <T variant="display" style={{ marginTop: space.m }}>
+        <T variant="editorial" style={{ marginTop: space.m }}>
           {verified ? "Knowledge moved." : "Not yet."}
         </T>
         <T variant="support" style={{ marginTop: space.s, fontSize: 16, lineHeight: 24 }}>
@@ -751,7 +751,7 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
               </T>
             ) : (
               <>
-                <T style={{ fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.coral, marginTop: space.s, fontVariant: ["tabular-nums"] }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
+                <T variant="metric" style={{ fontSize: 28, lineHeight: 34, color: color.coral, marginTop: space.s }}>~{Math.max(1, Math.round(s.usefulMinutes ?? 0))} min</T>
                 <T variant="support">useful for {s.userId === me ? "you" : nameOf(room, s.userId)}</T>
                 <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.m }}>
                   {s.newIdeas} new idea{s.newIdeas === 1 ? "" : "s"}
@@ -766,13 +766,13 @@ function ResourceScene({ room, me, busy, onEnd }: { room: PlaygroundRoom; me: st
           </View>
         ))}
       </View>
-      <T variant="title" style={{ marginTop: space.xl, fontSize: 23, lineHeight: 29 }}>
+      <T variant="editorial" style={{ marginTop: space.xl, fontSize: 25, lineHeight: 31 }}>
         {!ready || differs ? "Same source. Different delta." : "Same source. A similar delta."}
       </T>
       {res.note ? (
         <View style={{ marginTop: space.xl }}>
           <T variant="label">Muse</T>
-          <T style={{ fontFamily: font.serif, fontSize: 18, lineHeight: 25, color: color.ink, marginTop: space.xs }}>{res.note}</T>
+          <T style={{ fontFamily: font.sansMedium, fontSize: 16, lineHeight: 23, color: color.ink, marginTop: space.xs }}>{res.note}</T>
         </View>
       ) : (
         <T variant="support" style={{ marginTop: space.m }}>
@@ -841,9 +841,9 @@ const styles = StyleSheet.create({
   conceptTitle: { marginTop: space.s, fontSize: 28, lineHeight: 34 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
-  soloName: { fontFamily: font.serif, fontSize: 22, lineHeight: 28, color: color.ink, textAlign: "center", marginTop: space.xl },
+  soloName: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 24, letterSpacing: -0.3, color: color.ink, textAlign: "center", marginTop: space.xl },
   joinBox: { marginTop: space.l, alignSelf: "stretch", alignItems: "center" },
-  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.serif, fontSize: 28, letterSpacing: 6, color: color.ink, borderBottomWidth: 1, borderBottomColor: color.edge, paddingVertical: space.s },
+  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, letterSpacing: 6, color: color.ink, borderBottomWidth: 1, borderBottomColor: color.edge, paddingVertical: space.s },
   plus: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel, alignItems: "center", justifyContent: "center" },
   inviteCard: { marginTop: space.l, padding: layout.cardPad, backgroundColor: color.surfaceRaised, borderRadius: radius.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
   pill: { alignSelf: "flex-start", marginTop: space.l, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 46 },

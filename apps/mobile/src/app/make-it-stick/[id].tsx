@@ -85,6 +85,6 @@ export default function MakeItStickScreen() {
 const styles = StyleSheet.create({
   hook: { marginVertical: space.x3, paddingVertical: space.xl, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: color.edge },
   step: { flexDirection: "row", gap: space.l, marginBottom: space.l, alignItems: "flex-start" },
-  stepNum: { fontFamily: font.serif, fontSize: 22, lineHeight: 26, color: color.ink3, width: 18 },
+  stepNum: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 24, color: color.ink3, width: 18, fontVariant: ["tabular-nums"] },
   recall: { marginTop: space.xxl, padding: space.xl, backgroundColor: color.fog, borderRadius: radius.surface },
 });

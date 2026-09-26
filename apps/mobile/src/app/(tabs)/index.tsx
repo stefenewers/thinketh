@@ -35,11 +35,13 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 
 const VISIBLE_ROWS = 3;
 
-function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+function Stat({ value, label, accent, first }: { value: string; label: string; accent?: boolean; first?: boolean }) {
   return (
-    <View>
-      <T style={[styles.statValue, accent && { color: color.coral }]}>{value}</T>
-      <T variant="label" style={{ marginTop: 2 }}>
+    <View style={[styles.stat, !first && styles.statDivided]}>
+      <T variant="metric" style={accent && { color: color.coral }}>
+        {value}
+      </T>
+      <T variant="label" style={{ marginTop: space.xs }}>
         {label}
       </T>
     </View>
@@ -118,46 +120,52 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
       <Gutter>
         <View style={styles.topBar}>
           {/* Long-press opens dev-only demo controls (reset, adapter health). */}
-          <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false}>
-            <Mark size={22} />
+          <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false} style={styles.brand}>
+            <Mark size={20} />
+            <T style={styles.brandName}>Thinketh</T>
           </Pressable>
           <Pressable
             onPress={() => router.push("/mind")}
             accessibilityRole="button"
             accessibilityLabel="Open your Mind"
-            style={styles.mindButton}
+            style={({ pressed }) => [styles.mindButton, pressed && { backgroundColor: color.surfaceMuted }]}
             hitSlop={6}
           >
-            <Icon name="mind" size={18} color={color.ink} />
+            <Icon name="mind" size={16} color={color.ink} />
             <T variant="meta" style={{ color: color.ink }}>
               Mind
             </T>
           </Pressable>
         </View>
 
-        <T variant="label" style={{ marginTop: space.xxl }}>
-          {longDate(brief.date)}
-        </T>
-        {following.length ? (
-          <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Learning profile" hitSlop={6}>
-            <T variant="meta" style={{ marginTop: space.xs }} numberOfLines={1}>
-              Following {following.join(" · ")}
-            </T>
-          </Pressable>
-        ) : null}
-        <T variant="display" style={{ marginTop: space.m }} accessibilityRole="header">
+        <View style={styles.status}>
+          <T variant="label">{longDate(brief.date)}</T>
+          {following.length ? (
+            <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Learning profile" hitSlop={6}>
+              <T variant="meta" style={{ marginTop: 2 }} numberOfLines={1}>
+                Following {following.join(" · ")}
+              </T>
+            </Pressable>
+          ) : null}
+        </View>
+        <T variant="display" style={{ marginTop: space.l }} accessibilityRole="header">
           You missed {brief.meaningfulCount} things worth knowing.
         </T>
-        {/* The evidence of the work, in type: what survived, how long, and how much was filtered out. */}
+        {brief.skippedCount ? (
+          <T variant="support" style={{ marginTop: space.s }}>
+            Out of {brief.skippedCount + brief.meaningfulCount} items, only {brief.meaningfulCount} change what you understand.
+          </T>
+        ) : null}
+        {/* The evidence of the work, as product metrics: what survived, how long, and how much was filtered out. */}
         <View style={styles.stats} accessibilityRole="summary">
           {understood.size > 0 ? (
             <>
-              <Stat value={`${understood.size}/${brief.meaningfulCount}`} label="Understood" accent />
+              <Stat first value={`${understood.size}/${brief.meaningfulCount}`} label="Understood" accent />
               <Stat value={`~${remainingMinutes}`} label="Minutes left" />
             </>
           ) : (
             <>
-              <Stat value={String(brief.majorCount)} label="Major" accent />
+              <Stat first value={String(brief.majorCount)} label="Major" accent />
               <Stat value={`~${brief.estimatedMinutes}`} label="Minutes" />
             </>
           )}
@@ -167,16 +175,12 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
               accessibilityRole="button"
               accessibilityLabel={`${brief.skippedCount} items filtered. See why.`}
               hitSlop={6}
+              style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.7 }]}
             >
               <Stat value={String(brief.skippedCount)} label="Filtered ⓘ" />
             </Pressable>
           ) : null}
         </View>
-        {brief.skippedCount ? (
-          <T variant="support" style={{ marginTop: space.m }}>
-            Out of {brief.skippedCount + brief.meaningfulCount} items, only {brief.meaningfulCount} change what you understand.
-          </T>
-        ) : null}
 
         <View style={styles.ctaRow}>
           <Button
@@ -184,18 +188,8 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
             icon="arrow"
             onPress={() => router.push({ pathname: "/development/[id]", params: { id: next.id } })}
           />
-          <Pressable
-            onPress={() => router.push("/voice")}
-            accessibilityRole="button"
-            accessibilityLabel="Listen to your catch-up"
-            style={styles.listen}
-            hitSlop={6}
-          >
-            <Icon name="voice" size={18} color={color.ink2} />
-            <T variant="meta">Listen</T>
-          </Pressable>
+          <Button kind="secondary" label="Listen" icon="voice" accessibilityLabel="Listen to your catch-up" onPress={() => router.push("/voice")} />
         </View>
-
       </Gutter>
 
       {latest && latestConcept ? (
@@ -228,21 +222,25 @@ function TodayContent({ today, knowledge, following }: { today: BriefResponse; k
       ) : null}
 
       <Gutter style={{ marginTop: layout.sectionGap }}>
-        <SectionLabel>Lead development</SectionLabel>
         <Pressable
           onPress={() => router.push({ pathname: "/development/[id]", params: { id: hero.id } })}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.hero, pressed && { opacity: 0.85 }]}
+          accessibilityHint="Lead development"
+          style={({ pressed }) => [styles.hero, pressed && { transform: [{ scale: 0.99 }], opacity: 0.92 }]}
         >
           <View style={styles.heroMeta}>
-            <T variant="meta" style={{ color: color.ink, fontFamily: font.sansSemibold }}>
-              {sourceCount(hero)} ·
+            <View style={styles.leadChip}>
+              <T variant="label" style={{ color: color.onInk }}>
+                Lead
+              </T>
+            </View>
+            <T variant="meta">
+              {sourceCount(hero)} · surfaced {relativeTime(hero.happenedAt).toLowerCase()}
             </T>
-            <T variant="meta">surfaced {relativeTime(hero.happenedAt).toLowerCase()}</T>
             <View style={{ flex: 1 }} />
             {understood.has(hero.id) ? <UnderstoodTag /> : <T variant="meta">{significanceLabel(hero)}</T>}
           </View>
-          <T variant="title" style={{ marginTop: space.m }}>
+          <T variant="title" style={{ marginTop: space.m, fontSize: 20, lineHeight: 26 }}>
             {hero.title}
           </T>
           {hero.summaryBullets[0] ? (
@@ -336,21 +334,35 @@ function UnderstoodTag() {
 }
 
 const styles = StyleSheet.create({
-  stats: { flexDirection: "row", gap: space.xxl, marginTop: space.l },
-  statValue: { fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.ink, fontVariant: ["tabular-nums"] },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
+  brand: { flexDirection: "row", alignItems: "center", gap: space.s },
+  brandName: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, letterSpacing: -0.4, color: color.ink },
   mindButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    minHeight: 44,
+    minHeight: 36,
     paddingHorizontal: space.m,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: color.edge,
+    backgroundColor: color.surfaceRaised,
   },
-  ctaRow: { flexDirection: "row", alignItems: "center", gap: space.xl, marginTop: space.xl },
-  listen: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+  status: { marginTop: space.xl },
+  // One raised strip, three cells split by hairlines: reads as a console, not a pull quote.
+  stats: {
+    flexDirection: "row",
+    marginTop: space.l,
+    paddingVertical: space.m,
+    backgroundColor: color.surfaceRaised,
+    borderRadius: radius.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.edge,
+    ...shadow.raised,
+  },
+  stat: { flex: 1, paddingHorizontal: space.m },
+  statDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.lineSoft },
+  ctaRow: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.l },
   changed: {
     paddingVertical: space.l,
     paddingLeft: space.l,
@@ -366,6 +378,7 @@ const styles = StyleSheet.create({
     borderColor: color.edge,
     ...shadow.raised,
   },
-  heroMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
+  heroMeta: { flexDirection: "row", alignItems: "center", gap: space.s },
+  leadChip: { backgroundColor: color.ink, borderRadius: radius.pill, paddingHorizontal: space.s, paddingVertical: 2 },
   skipRow: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
 });

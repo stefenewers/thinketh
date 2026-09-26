@@ -23,10 +23,10 @@ export function Wordmark({ height = 24 }: { height?: number }) {
     >
       <T
         style={{
-          fontFamily: font.serif,
+          fontFamily: font.sansSemibold,
           fontSize: height,
           lineHeight: height * 1.15,
-          letterSpacing: -0.5,
+          letterSpacing: -0.04 * height,
           color: color.ink,
         }}
       >

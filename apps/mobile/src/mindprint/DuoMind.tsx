@@ -101,7 +101,7 @@ export function DuoMind({
 function NameOver({ x, name }: { x: number; name: string }) {
   return (
     <View style={[styles.name, { left: x - 70 }]}>
-      <T style={{ fontFamily: font.serif, fontSize: 22, lineHeight: 28, color: color.ink, textAlign: "center" }} numberOfLines={1}>
+      <T style={{ fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, letterSpacing: -0.3, color: color.ink, textAlign: "center" }} numberOfLines={1}>
         {name}
       </T>
     </View>

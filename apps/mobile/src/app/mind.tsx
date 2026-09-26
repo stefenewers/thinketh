@@ -63,7 +63,7 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
   return (
     <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x4 }} showsVerticalScrollIndicator={false}>
       <Gutter>
-        <T variant="display" accessibilityRole="header">
+        <T variant="editorial" accessibilityRole="header">
           Your Mind
         </T>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.xs }}>
@@ -213,7 +213,7 @@ function ChangedCard({ transition, name, onPress }: { transition: KnowledgeState
       <T variant="meta" tone="coral">
         {name} changed today
       </T>
-      <T variant="section" style={{ marginTop: space.xs, fontFamily: font.serifRegular }}>
+      <T variant="body" style={{ marginTop: space.xs, fontFamily: font.sansMedium, fontSize: 16 }}>
         {changeSentence(transition)}
       </T>
       <View style={styles.pill}>
