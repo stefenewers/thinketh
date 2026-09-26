@@ -612,7 +612,7 @@ export function memoryAidFor(conceptId: string): MemoryAid {
 
 export const voiceScript = [
   "Good morning. You have about eleven minutes.",
-  "Three developments materially changed topics you follow today.",
+  `${developments.length} developments materially changed topics you follow today.`,
   "The biggest: agents can now keep memory across sessions. You already knew agents carry context within a session. What changed is that useful state now survives after the session ends.",
   "Want to check your understanding of that, or move on to the next one?",
 ];
