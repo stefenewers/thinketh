@@ -42,7 +42,8 @@ export function adapterHealth(): Record<string, AdapterHealth & { status: Adapte
   return Object.fromEntries([...health].map(([name, h]) => [name, { status: statusOf(h), ...h }]));
 }
 
-function record(name: AdapterName, ok: boolean, error?: string): void {
+/** Record one call outcome for an adapter (used by guarded calls and health probes). */
+export function recordCall(name: AdapterName, ok: boolean, error?: string): void {
   const h = health.get(name) ?? { configured: true, calls: 0, fallbacks: 0 };
   h.calls++;
   const now = new Date().toISOString();
@@ -81,11 +82,11 @@ export async function guarded<T>(
   const started = Date.now();
   try {
     const value = await withTimeout(live(), timeoutMs, `${adapter}.${op}`);
-    record(adapter, true);
+    recordCall(adapter, true);
     return { value, source: "live" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    record(adapter, false, message);
+    recordCall(adapter, false, message);
     logEvent("adapter.fallback", { adapter, op, ms: Date.now() - started, error: message }, "warn");
     return { value: await fallback(), source: "fallback" };
   }

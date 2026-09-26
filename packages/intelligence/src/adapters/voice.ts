@@ -33,6 +33,16 @@ export class ElevenLabsVoice implements VoiceProvider {
     this.opts = opts;
   }
 
+  /** Cheap liveness check for /health?probe=true: verifies the key and the agent. */
+  async probe(): Promise<string> {
+    const res = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${encodeURIComponent(this.opts.agentId)}`, {
+      headers: { "xi-api-key": this.opts.apiKey },
+    });
+    await ensureOk(res, "elevenlabs agent");
+    const agent = (await res.json()) as { name?: string };
+    return `agent ${agent.name ?? this.opts.agentId} reachable`;
+  }
+
   async createSession(ctx: VoiceContext): Promise<VoiceSession> {
     const url = new URL("https://api.elevenlabs.io/v1/convai/conversation/token");
     url.searchParams.set("agent_id", this.opts.agentId);

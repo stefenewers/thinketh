@@ -114,6 +114,12 @@ export class ClaudeModel implements IntelligenceModel {
     this.client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 0, timeout: opts.timeoutMs });
   }
 
+  /** Cheap liveness check for /health?probe=true: verifies the key and model without generating tokens. */
+  async probe(): Promise<string> {
+    const model = await this.client.models.retrieve(this.opts.model);
+    return `model ${model.id} available`;
+  }
+
   private async structured<T>(schema: z.ZodType<T>, task: string, input: unknown): Promise<T> {
     const response = await this.client.beta.messages.parse({
       model: this.opts.model,

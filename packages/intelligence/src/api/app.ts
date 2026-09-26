@@ -89,10 +89,12 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     await next();
   });
 
-  // `?probe=1` actively checks configured sponsors first (no secrets are returned either way).
+  // `?probe=1` (or `true`) makes one cheap real call per configured sponsor first, so each
+  // adapter's `status` reflects reality, and returns per-sponsor detail. No secrets either way.
   app.get("/health", async (c) => {
-    if (c.req.query("probe")) await service.probeAdapters();
-    return c.json({ ok: true, adapters: adapterHealth() });
+    const probe = c.req.query("probe");
+    const details = probe && probe !== "0" && probe !== "false" ? await service.probeAdapters() : undefined;
+    return c.json({ ok: true, adapters: adapterHealth(), ...(details ? { probe: details } : {}) });
   });
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));

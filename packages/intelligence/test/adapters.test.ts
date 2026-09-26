@@ -99,6 +99,19 @@ describe("adapter fallbacks keep the golden loop alive", () => {
   });
 });
 
+describe("health probes", () => {
+  it("reports error (not live) when a configured sponsor fails", async () => {
+    const seed = buildSeed(NOW);
+    const config = offlineConfig();
+    const adapters = buildAdapters(config, seed);
+    const tiger = { probe: boom } as unknown as TigerTemporalStore;
+    (adapters as { temporal: ResilientTemporalStore }).temporal = new ResilientTemporalStore(new LocalTemporalStore(), tiger, 50);
+    const probe = await new ThinkethService(config, seed, adapters, () => NOW).probeAdapters();
+    expect(probe.tiger).toMatchObject({ status: "error", detail: "sponsor down" });
+    expect(probe.mongo?.status).toBe("not_configured");
+  });
+});
+
 describe("resilient temporal store", () => {
   const t = (id: string, createdAt: string): KnowledgeStateTransition =>
     ({ id, userId: "u", conceptId: "c", createdAt, after: { conceptId: "c", lastObservedAt: createdAt } }) as unknown as KnowledgeStateTransition;
@@ -133,15 +146,26 @@ describe("sponsor adapters call the documented endpoints", () => {
     vi.stubGlobal("fetch", fetchMock);
     const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
     const items = await memory.recall("u", "memory");
-    // Query + standing preference search, deduped, preferences first.
+    // Query + standing preference search (plus the cached metadata list), deduped, preferences first.
     expect(items).toEqual([
       { id: "m1", kind: "preference", content: "Prefers analogies", createdAt: "2026-09-01T00:00:00Z", source: "backboard" },
       { id: "m2", kind: "misconception", content: expect.stringMatching(/context window/), createdAt: "2026-09-02T00:00:00Z", source: "backboard" },
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // 2 searches + 1 metadata list (cached for 60s)
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://app.backboard.io/api/assistants/asst-1/memories/search");
     expect((init.headers as Record<string, string>)["X-API-Key"]).toBe("k");
+  });
+
+  it("Backboard: recovers memory kinds when search results omit metadata", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith("/memories/search")
+        ? Response.json({ memories: [{ id: "m1", content: "Prefers systems analogies", score: 0.7 }] })
+        : Response.json({ memories: [{ id: "m1", content: "Prefers systems analogies", metadata: { kind: "preference", thinkethId: "mem-1" } }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = new BackboardMemory({ apiKey: "k", baseUrl: "https://app.backboard.io/api", assistantId: "asst-1" });
+    expect(await memory.recall("u", "how to explain")).toMatchObject([{ id: "mem-1", kind: "preference", content: "Prefers systems analogies" }]);
   });
 
   it("Backboard: sends thread messages with a memory mode and reads retrieved memories", async () => {

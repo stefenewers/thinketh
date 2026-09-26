@@ -29,10 +29,14 @@ import type {
   PersonaProfile,
   VoiceSession,
 } from "./contracts.ts";
-import { guarded, runInBackground } from "./adapters/guard.ts";
+import { guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
+import { BackboardMemory } from "./adapters/memory.ts";
+import { ClaudeModel } from "./adapters/model/claude.ts";
+import { MongoSemanticStore } from "./adapters/semantic.ts";
+import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import { lexicalScore } from "./adapters/model/deterministic.ts";
-import type { AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import type { AdapterName, AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
@@ -50,6 +54,7 @@ export class BadRequestError extends Error {}
 export { InvalidAnswerError };
 
 const MEMORY_TIMEOUT_MS = 2000;
+const PROBE_TIMEOUT_MS = 6000;
 const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
 /** Backboard "Auto" extraction runs an LLM turn, so it only ever runs in the background. */
@@ -195,12 +200,6 @@ export class ThinkethService {
       "backboard.observe",
       guarded("backboard", "observe", () => memory.observe!(userId, text), () => undefined, MEMORY_OBSERVE_TIMEOUT_MS),
     );
-  }
-
-  /** Actively check configured adapters so `/health` reflects reality before the first user call. */
-  async probeAdapters(): Promise<void> {
-    const { memory } = this.adapters;
-    if (memory?.probe) await guarded("backboard", "probe", () => memory.probe!(this.config.demoUserId), () => undefined, MEMORY_TIMEOUT_MS);
   }
 
   private async getDevelopment(id: string): Promise<Development> {
@@ -734,6 +733,39 @@ export class ThinkethService {
   // Admin
   // -------------------------------------------------------------------------
 
+  /**
+   * Make one cheap real call to every configured sponsor service. This is the
+   * authoritative "is it live?" answer; the plain /health only knows whether a
+   * key is configured.
+   */
+  async probeAdapters(): Promise<Record<string, { status: "live" | "error" | "not_configured"; detail: string; ms?: number }>> {
+    const a = this.adapters;
+    const probes: Record<string, (() => Promise<string>) | undefined> = {
+      tiger: a.temporal.tiger ? () => a.temporal.tiger!.probe() : undefined,
+      mongo: a.semantic instanceof MongoSemanticStore ? () => (a.semantic as MongoSemanticStore).probe() : undefined,
+      backboard: a.memory instanceof BackboardMemory ? () => (a.memory as BackboardMemory).probe(this.config.demoUserId) : undefined,
+      claude: a.model instanceof ClaudeModel ? () => (a.model as ClaudeModel).probe() : undefined,
+      elevenlabs: a.voice instanceof ElevenLabsVoice ? () => (a.voice as ElevenLabsVoice).probe() : undefined,
+      supabase: a.supabase ? () => a.supabase!.probe() : undefined,
+    };
+    const entries = await Promise.all(
+      Object.entries(probes).map(async ([name, probe]) => {
+        if (!probe) return [name, { status: "not_configured" as const, detail: "no credentials: using local fallback" }] as const;
+        const started = Date.now();
+        try {
+          const detail = await withTimeout(probe(), PROBE_TIMEOUT_MS, `${name} probe`);
+          recordCall(name as AdapterName, true);
+          return [name, { status: "live" as const, detail, ms: Date.now() - started }] as const;
+        } catch (err) {
+          const message = (err instanceof Error ? err.message : String(err)).slice(0, 200);
+          recordCall(name as AdapterName, false, message);
+          return [name, { status: "error" as const, detail: message, ms: Date.now() - started }] as const;
+        }
+      }),
+    );
+    return Object.fromEntries(entries);
+  }
+
   /** Defaults reflect what is actually configured; Supabase feature_flags rows override them. */
   async featureFlags(): Promise<Record<string, boolean>> {
     const defaults: Record<string, boolean> = {
@@ -751,6 +783,25 @@ export class ThinkethService {
   async reset(userId: string): Promise<void> {
     await this.adapters.temporal.reset(userId);
     await this.adapters.localMemory.reset(userId);
+    // Rehearsals should start from the persona's seeded memories, not accumulated
+    // questions. Backboard can take several seconds to clear many memories, so this
+    // runs in the background: the knowledge-state reset above is what the demo needs now.
+    const { memory } = this.adapters;
+    if (memory?.reset && userId === this.config.demoUserId) {
+      runInBackground(
+        "backboard-reset",
+        guarded(
+          "backboard",
+          "reset",
+          async () => {
+            await memory.reset!(userId);
+            for (const item of this.seed.memories) await memory.remember(userId, item);
+          },
+          () => undefined,
+          30_000,
+        ),
+      );
+    }
     this.phrasedDeltas.clear();
     logEvent("demo.reset", { userId });
   }

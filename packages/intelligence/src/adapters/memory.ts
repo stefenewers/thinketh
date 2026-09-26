@@ -12,6 +12,8 @@ import { ensureOk } from "./guard.ts";
 import type { MemoryProvider } from "./types.ts";
 
 const RECALL_LIMIT = 5;
+const METADATA_TTL_MS = 60_000;
+const KIND_PRIORITY: Record<MemoryItem["kind"], number> = { preference: 0, misconception: 1, learning_topic: 2, conversation: 3 };
 
 export class LocalMemory implements MemoryProvider {
   readonly name = "local" as const;
@@ -106,6 +108,11 @@ export class BackboardMemory implements MemoryProvider {
   readonly name = "backboard" as const;
   private readonly assistants = new Map<string, string>();
   private readonly threads = new Map<string, string>();
+  /** Memory metadata by id. Backboard's search results omit metadata, so kinds are joined from the list endpoint. */
+  private readonly metadataCache = new Map<
+    string,
+    { at: number; byId: Map<string, BackboardMemoryRecord["metadata"]>; contents: Set<string> }
+  >();
   private readonly opts: BackboardOptions;
 
   constructor(opts: BackboardOptions) {
@@ -202,22 +209,41 @@ export class BackboardMemory implements MemoryProvider {
     };
   }
 
+  private async stored(assistantId: string) {
+    const cached = this.metadataCache.get(assistantId);
+    if (cached && Date.now() - cached.at < METADATA_TTL_MS) return cached;
+    const res = await this.call(`/assistants/${assistantId}/memories?page_size=100`);
+    const body = (await res.json()) as { memories?: BackboardMemoryRecord[] };
+    const entry = {
+      at: Date.now(),
+      byId: new Map((body.memories ?? []).map((m) => [m.id, m.metadata])),
+      contents: new Set((body.memories ?? []).map((m) => m.content)),
+    };
+    this.metadataCache.set(assistantId, entry);
+    return entry;
+  }
+
   async recall(userId: string, query: string): Promise<MemoryItem[]> {
     const assistantId = await this.assistantFor(userId);
-    const [relevant, standing] = await Promise.all([
+    const [relevant, standing, stored] = await Promise.all([
       this.searchMemories(assistantId, query),
       this.searchMemories(assistantId, STANDING_QUERY),
+      this.stored(assistantId),
     ]);
     const seen = new Set<string>();
-    const items = [...relevant, ...standing]
+    // Durable learning context (preferences, misconceptions, topics) outranks past
+    // questions; within a kind, relevance order is kept (sort is stable).
+    return [...relevant, ...standing]
       .filter((m) => !seen.has(m.id) && !!seen.add(m.id))
-      .map((m) => this.toItem(m));
-    // Same ordering rule as LocalMemory: preferences first, then by relevance.
-    return [...items.filter((m) => m.kind === "preference"), ...items.filter((m) => m.kind !== "preference")].slice(0, RECALL_LIMIT);
+      .map((m) => this.toItem({ ...m, metadata: m.metadata ?? stored.byId.get(m.id) ?? null }))
+      .sort((a, b) => KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind])
+      .slice(0, RECALL_LIMIT);
   }
 
   async remember(userId: string, item: MemoryItem): Promise<void> {
     const assistantId = await this.assistantFor(userId);
+    if ((await this.stored(assistantId)).contents.has(item.content)) return; // already remembered
+    this.metadataCache.delete(assistantId);
     await this.call(`/assistants/${assistantId}/memories`, {
       method: "POST",
       body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
@@ -234,13 +260,17 @@ export class BackboardMemory implements MemoryProvider {
     await this.sendMessage(threadId, text, "Auto");
   }
 
-  /** Cheap authenticated call used by `/health?probe=1`. */
-  async probe(userId: string): Promise<void> {
-    await this.call(`/assistants/${await this.assistantFor(userId)}`);
+  /** Cheap authenticated call used by `/health?probe=1`. Returns a short detail for the health report. */
+  async probe(userId: string): Promise<string> {
+    const assistantId = await this.assistantFor(userId);
+    const res = await this.call(`/assistants/${assistantId}/memories?page_size=1`);
+    const body = (await res.json()) as { total_count?: number };
+    return `assistant ${assistantId.slice(0, 8)}…, ${body.total_count ?? 0} memories`;
   }
 
   async reset(userId: string): Promise<void> {
     const assistantId = await this.assistantFor(userId);
+    this.metadataCache.delete(assistantId);
     await this.call(`/assistants/${assistantId}/memories`, { method: "DELETE" });
   }
 }

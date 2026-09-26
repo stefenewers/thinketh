@@ -106,6 +106,13 @@ export class MongoSemanticStore implements SemanticStore {
     return this.dbPromise;
   }
 
+  /** Cheap liveness check for /health?probe=true. */
+  async probe(): Promise<string> {
+    const db = await this.db();
+    await db.command({ ping: 1 });
+    return `${await db.collection("developments").countDocuments()} developments stored`;
+  }
+
   async upsertDevelopment(input: Development): Promise<void> {
     const db = await this.db();
     await db.collection("developments").replaceOne({ _id: input.id as never }, { ...input }, { upsert: true });

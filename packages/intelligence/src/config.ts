@@ -60,7 +60,7 @@ export function loadConfig() {
       url: env("TIGER_DATABASE_URL"),
     },
     supabase: {
-      url: env("SUPABASE_URL"),
+      url: env("SUPABASE_URL")?.replace(/\/+$/, ""),
       anonKey: env("SUPABASE_ANON_KEY"),
       serviceRoleKey: env("SUPABASE_SERVICE_ROLE_KEY"),
     },
