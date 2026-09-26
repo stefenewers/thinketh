@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { api } from "@/api";
 import { Mark } from "@/components/Logo";
+import { TodayWash } from "@/components/today/TodayParts";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -126,6 +127,8 @@ export default function VoiceScreen() {
         body
       ) : (
         <Screen topInset={false}>
+          {/* Today's warm light carries through ready, live, ended and the transcript. */}
+          <TodayWash height={520} />
           <Gutter>
             <View style={{ alignItems: "flex-start", marginBottom: space.xl }}>
               <Mark size={28} />
