@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Mark } from "@/components/Logo";
 import { SetupHeader, SetupRow, StepProgress } from "@/components/setup/Setup";
@@ -19,6 +19,8 @@ export default function Onboarding() {
   // Returning users (Profile -> Edit) start from their answers; first run from the demo defaults.
   const start = saved ?? DEMO_PROFILE;
   const [step, setStep] = useState(0);
+  // Storyboard 12: an overview of what Thinketh will ask, before the questions.
+  const [intro, setIntro] = useState(true);
   const [interests, setInterests] = useState<string[]>(start.interests);
   const [goals, setGoals] = useState<string[]>(start.goals);
   const [teaching, setTeaching] = useState<string[]>(start.teaching);
@@ -39,7 +41,9 @@ export default function Onboarding() {
 
   const cta = (
     <View style={styles.cta}>
-      {step < STEPS - 1 ? (
+      {intro ? (
+        <Button label="Continue" icon="arrow" onPress={() => setIntro(false)} />
+      ) : step < STEPS - 1 ? (
         <Button label="Continue" icon="arrow" disabled={!canContinue} onPress={() => setStep((s) => s + 1)} />
       ) : (
         <Button label={building ? "Building your Thinketh…" : "Build my Thinketh"} icon={building ? undefined : "arrow"} loading={building} onPress={finish} />
@@ -51,6 +55,19 @@ export default function Onboarding() {
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <Screen background={color.canvas} contentStyle={{ flexGrow: 1, paddingBottom: space.x4 }}>
         <Gutter style={{ flexGrow: 1 }}>
+          {intro ? (
+            <View style={styles.top}>
+              <View style={styles.mark}>
+                <Mark size={20} />
+              </View>
+              {/* Skip keeps the starting frame (your saved answers, or the demo defaults). */}
+              <Pressable onPress={building ? undefined : finish} accessibilityRole="button" accessibilityLabel="Skip setup" hitSlop={8} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space.s }}>
+                <T variant="meta" style={{ color: color.ink3 }}>
+                  Skip
+                </T>
+              </Pressable>
+            </View>
+          ) : (
           <View style={styles.top}>
             {step > 0 && !building ? (
               <IconButton icon="back" accessibilityLabel="Back" onPress={() => setStep((s) => s - 1)} />
@@ -66,8 +83,19 @@ export default function Onboarding() {
               </T>
             </View>
           </View>
+          )}
 
-          {step === 0 ? (
+          {intro ? (
+            <View>
+              <SetupHeader title="Let's learn about you" note="This helps Thinketh personalize what it reads for you and how it thinks with you." />
+              <ListCard style={styles.list}>
+                <SetupRow icon="explore" title="Your interests" subtitle="The fields you want to stay ahead of" onPress={() => { setIntro(false); setStep(0); }} />
+                <SetupRow icon="sparkle" title="Your goals" subtitle="What you want to get from Thinketh" onPress={() => { setIntro(false); setStep(1); }} />
+                <SetupRow icon="ask" title="How you learn" subtitle="How Thinketh should teach you" onPress={() => { setIntro(false); setStep(2); }} />
+                <SetupRow icon="mind" title="What you already know" subtitle="Never asked. Measured from evidence as you use Thinketh." last />
+              </ListCard>
+            </View>
+          ) : step === 0 ? (
             <Question
               title="What are you trying to stay ahead of?"
               note="Thinketh watches these fields for developments that change what you know."

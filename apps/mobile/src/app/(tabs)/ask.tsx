@@ -87,7 +87,7 @@ export default function Ask() {
       ) : (
         <AppTopBar
           title="Ask Thinketh"
-          right={answer && !asking ? <IconButton icon="close" accessibilityLabel="Ask something else" onPress={() => setAnswer(null)} /> : null}
+          right={answer && !asking ? <IconButton icon="plus" accessibilityLabel="Ask something new" onPress={() => setAnswer(null)} /> : null}
         />
       )}
       <ScrollView

@@ -132,7 +132,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
             <T style={[styles.smallCaps, { color: color.ink }]}>What changed</T>
             <View style={{ marginTop: space.s }}>
               {delta.whatChanged.map((line) => (
-                <DotLine key={line} tone="signal">
+                <DotLine key={line} tone="cool">
                   {line}
                 </DotLine>
               ))}
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 32, letterSpacing: -0.7, color: color.ink, marginTop: space.m },
   why: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, marginTop: space.s, alignSelf: "flex-start" },
   smallCaps: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink3 },
-  shift: { padding: space.l, borderRadius: 18, backgroundColor: color.surfaceMuted },
+  shift: { paddingTop: space.xs },
   shiftRule: { height: StyleSheet.hairlineWidth, backgroundColor: color.hairline, marginVertical: space.m },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.s },
   feedbackNote: { flexDirection: "row", gap: space.s, marginTop: space.l, alignItems: "flex-start" },

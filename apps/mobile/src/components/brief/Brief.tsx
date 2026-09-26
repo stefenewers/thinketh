@@ -55,11 +55,11 @@ export function BriefSection({ title, children, style }: { title: string; childr
   );
 }
 
-/** A bullet with a small dot. Coral marks what is new / changed; everything else stays gray. */
-export function DotLine({ children, tone = "ink" }: { children: string; tone?: "signal" | "ink" | "muted" }) {
+/** A bullet with a small dot. Coral marks what matters to you, blue marks the shift itself; the rest stays gray. */
+export function DotLine({ children, tone = "ink" }: { children: string; tone?: "signal" | "cool" | "ink" | "muted" }) {
   return (
     <View style={styles.dotLine}>
-      <View style={[styles.dot, tone === "signal" && { backgroundColor: color.coral }]} />
+      <View style={[styles.dot, tone === "signal" && { backgroundColor: color.coral }, tone === "cool" && { backgroundColor: color.partner }]} />
       <T variant="body" style={[{ flex: 1 }, tone === "muted" && { color: color.ink2 }]}>
         {children}
       </T>
