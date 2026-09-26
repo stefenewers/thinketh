@@ -175,7 +175,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           <Button
             kind="secondary"
             label="Got it"
-            style={{ flex: 1 }}
+            style={{ flex: 1, paddingHorizontal: space.m }}
             disabled={!!feedback}
             loading={sending === "got_it"}
             onPress={() => send("got_it")}
@@ -183,7 +183,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           <Button
             kind="secondary"
             label="I already knew this"
-            style={{ flex: 1.4 }}
+            style={{ flex: 1.6, paddingHorizontal: space.m }}
             disabled={!!feedback}
             loading={sending === "already_knew"}
             onPress={() => send("already_knew")}

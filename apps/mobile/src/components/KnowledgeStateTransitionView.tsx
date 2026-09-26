@@ -103,15 +103,17 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
             </T>
             {transition.propagatedChanges.map((c) => (
               <View key={c.conceptId} style={styles.propagated}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: space.m }}>
-                  <T variant="body" style={{ fontFamily: "Inter_500Medium", flex: 1 }}>
-                    {name(c.conceptId)}
-                  </T>
-                  <T variant="meta">
-                    {c.deltaMastery !== 0 ? `mastery ${signed(c.deltaMastery)}  ` : ""}
-                    {c.deltaUncertainty !== 0 ? `uncertainty ${signed(c.deltaUncertainty)}` : ""}
-                  </T>
-                </View>
+                <T variant="body" style={{ fontFamily: "Inter_500Medium" }}>
+                  {name(c.conceptId)}
+                </T>
+                <T variant="meta" style={{ fontVariant: ["tabular-nums"], marginTop: 2 }}>
+                  {[
+                    c.deltaMastery !== 0 ? `mastery ${signed(c.deltaMastery)}` : null,
+                    c.deltaUncertainty !== 0 ? `uncertainty ${signed(c.deltaUncertainty)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </T>
                 <T variant="support" style={{ marginTop: 2 }}>
                   {c.reason}
                 </T>
