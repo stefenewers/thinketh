@@ -425,6 +425,7 @@ function ArrivalNote({ from }: { from: string }) {
     check: "Opened from your check: the change and its reason are recorded below.",
     playground: "Opened from the Playground: your transfer answer was graded, and the recorded result is below.",
     today: "Opened from Today: the latest recorded change is below.",
+    voice: "Opened from Catch me up: listening adds context; a check is what changes this book.",
   };
   const t = text[from];
   if (!t) return null;

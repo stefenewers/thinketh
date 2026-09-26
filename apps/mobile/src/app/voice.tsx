@@ -1,16 +1,17 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/api";
 import { Mark } from "@/components/Logo";
-import { TodayWash } from "@/components/today/TodayParts";
+import { IconButton } from "@/components/system";
 import { T } from "@/components/Text";
-import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
+import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { improvedTodayIds } from "@/lib/knowledge";
 import { SHORT } from "@/mindprint/model";
-import { color, space } from "@/theme/tokens";
+import { color, font, gutter, space } from "@/theme/tokens";
 import { loadLiveCatchUp } from "@/voice/availability";
+import { CatchUpScene } from "@/voice/CatchUpScene";
 
 // Catch Me Up. With a development build and ElevenLabs configured on the server,
 // this is a live voice conversation; otherwise, and whenever voice fails, it is
@@ -27,12 +28,8 @@ export default function VoiceScreen() {
     const hero = today.developments.find((d) => d.id === today.brief.heroDevelopmentId);
     return { session, heroId: today.brief.heroDevelopmentId, hero };
   }, []);
-  // The Mind for the Live Briefing Canvas. Optional: voice never waits on it.
+  // Your Mind, for the reading scene and linked concepts. Optional: voice never waits on it.
   const knowledge = useApi(() => api.getKnowledge(), []);
-  const mind = useMemo(
-    () => (knowledge.data ? { items: knowledge.data.items, edges: knowledge.data.edges, changedIds: improvedTodayIds(knowledge.data.items) } : null),
-    [knowledge.data],
-  );
   const concepts = useMemo(
     () => (knowledge.data?.items ?? []).map((i) => ({ id: i.concept.id, name: i.concept.name, short: SHORT[i.concept.id] })),
     [knowledge.data],
@@ -48,6 +45,9 @@ export default function VoiceScreen() {
     setNotice(message);
     setPhase("transcript");
   };
+  // Leaving for the Mind replaces this screen, which ends any live call (the session cleans up on unmount).
+  const openInMind = (conceptId: string) => router.replace({ pathname: "/mind", params: { concept: conceptId, from: "voice" } });
+  const scene = (live = false) => <CatchUpScene knowledge={knowledge.data ?? null} conceptId={seedConcept ?? null} fallbackTitle={data?.hero?.title} live={live} onOpenInMind={openInMind} />;
 
   let body: ReactNode;
   if (loading && !session) {
@@ -57,6 +57,7 @@ export default function VoiceScreen() {
   } else if (!voiceReady || phase === "transcript") {
     body = (
       <Transcript
+        scene={scene()}
         lines={session.fallbackTranscript}
         heroId={data!.heroId}
         notice={
@@ -71,7 +72,8 @@ export default function VoiceScreen() {
         onFallback={() => showTranscript("Voice couldn't connect, so here is your catch-up as text.")}
         onEnded={() => setPhase("ended")}
         onShowTranscript={() => showTranscript(null)}
-        mind={mind}
+        onOpenInMind={openInMind}
+        knowledge={knowledge.data ?? null}
         concepts={concepts}
         seed={{ conceptId: seedConcept, label: data?.hero?.title }}
       />
@@ -100,7 +102,10 @@ export default function VoiceScreen() {
   } else {
     body = (
       <View>
-        <T variant="title">{session.fallbackTranscript[0]}</T>
+        {scene()}
+        <T variant="title" style={{ marginTop: space.xl }}>
+          {session.fallbackTranscript[0]}
+        </T>
         <T variant="support" style={{ marginTop: space.m }}>
           A short spoken briefing on what changed for you. Interrupt it with questions any time.
         </T>
@@ -114,7 +119,7 @@ export default function VoiceScreen() {
               setPhase("live");
             }}
           />
-          <Button kind="quiet" label="Read it as text instead" style={{ alignSelf: "center" }} onPress={() => showTranscript(null)} />
+          <Button kind="quiet" label="Read as text instead" style={{ alignSelf: "center" }} onPress={() => showTranscript(null)} />
         </View>
       </View>
     );
@@ -122,39 +127,59 @@ export default function VoiceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Catch me up" onClose={() => router.back()} topInset />
+      <VoiceHeader />
       {!session || error ? (
         body
       ) : (
         <Screen topInset={false}>
-          {/* Today's warm light carries through ready, live, ended and the transcript. */}
-          <TodayWash height={520} />
-          <Gutter>
-            <View style={{ alignItems: "flex-start", marginBottom: space.xl }}>
-              <Mark size={24} />
-            </View>
-            {body}
-          </Gutter>
+          <Gutter style={{ paddingTop: space.m }}>{body}</Gutter>
         </Screen>
       )}
     </View>
   );
 }
 
-function Transcript({ lines, heroId, notice }: { lines: string[]; heroId: string; notice: string | null }) {
+/** One compact header: the mark, the session, and close (closing ends any live call). */
+function VoiceHeader() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.header, { paddingTop: insets.top + space.xs }]}>
+      <Mark size={22} decorative />
+      <T style={styles.headerTitle} accessibilityRole="header">
+        Catch me up
+      </T>
+      <IconButton icon="close" accessibilityLabel="Close Catch me up" onPress={() => router.back()} />
+    </View>
+  );
+}
+
+function Transcript({ scene, lines, heroId, notice }: { scene: ReactNode; lines: string[]; heroId: string; notice: string | null }) {
   const [shown, setShown] = useState(1);
   return (
     <>
-      {notice ? (
-        <T variant="meta" style={{ marginBottom: space.xl }}>
-          {notice}
-        </T>
-      ) : null}
-      {lines.slice(0, shown).map((line, i) => (
-        <T key={line} variant={i === 0 ? "title" : "body"} style={[i > 0 && styles.line, i === shown - 1 && i > 0 && { color: color.ink }]}>
-          {line}
-        </T>
-      ))}
+      {scene}
+      <View style={styles.transcript}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <T variant="label" style={{ color: color.ink3 }}>
+            Thinketh
+          </T>
+          {/* Progress through this text, not through learning. */}
+          <T variant="meta" style={{ color: color.ink3, fontVariant: ["tabular-nums"] }}>
+            Part {shown} of {lines.length}
+          </T>
+        </View>
+        {notice ? (
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink2 }}>
+            {notice}
+          </T>
+        ) : null}
+        {lines.slice(0, shown).map((line, i) => (
+          // Earlier parts recede; the newest part reads strongest.
+          <T key={line} style={i === shown - 1 ? styles.current : styles.previous}>
+            {line}
+          </T>
+        ))}
+      </View>
       <View style={{ marginTop: space.xxl, gap: space.m }}>
         {shown < lines.length ? (
           <Button label="Continue" icon="arrow" onPress={() => setShown((n) => n + 1)} />
@@ -181,6 +206,10 @@ function CheckUnderstanding({ heroId }: { heroId: string }) {
 }
 
 const styles = StyleSheet.create({
-  line: { marginTop: space.l, color: color.ink2, fontSize: 17, lineHeight: 26 },
+  header: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: gutter, paddingBottom: space.s },
+  headerTitle: { flex: 1, fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, color: color.ink },
+  transcript: { marginTop: space.xl, paddingTop: space.l, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
+  previous: { marginTop: space.m, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink3 },
+  current: { marginTop: space.m, fontFamily: font.sansMedium, fontSize: 21, lineHeight: 29, letterSpacing: -0.3, color: color.ink },
   actions: { marginTop: space.xxl, gap: space.m },
 });

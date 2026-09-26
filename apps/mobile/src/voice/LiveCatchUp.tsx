@@ -1,7 +1,7 @@
 // Only loaded through ./availability (dev/release builds): importing
 // @elevenlabs/react-native registers native WebRTC globals.
 import { useEffect, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   ConversationProvider,
   useConversationControls,
@@ -9,7 +9,7 @@ import {
   useConversationMode,
   useConversationStatus,
 } from "@elevenlabs/react-native";
-import type { VoiceSession } from "@thinketh/contracts";
+import type { KnowledgeResponse, VoiceSession } from "@thinketh/contracts";
 import { api } from "@/api";
 import { T } from "@/components/Text";
 import { Button } from "@/components/ui";
@@ -18,7 +18,8 @@ import { color, space } from "@/theme/tokens";
 import { captionLines, initialCaption, isAligned, lastCompleteSentence, pendingReveal, reduceCaption } from "./captionState";
 import { nextFocus, type FocusConcept } from "./conceptFocus";
 import { isEndIntent } from "./endIntent";
-import { LiveBriefingCanvas, type BriefingMind } from "./LiveBriefingCanvas";
+import { LiveBriefingCanvas } from "./LiveBriefingCanvas";
+import { Pulse } from "./CatchUpScene";
 import { USER_HOLD_MS, USER_VAD_THRESHOLD, voicePhase } from "./voiceVisualState";
 
 /** How long Thinketh must stay quiet before its turn counts as over (ms). */
@@ -31,8 +32,10 @@ export type LiveCatchUpProps = {
   onEnded: () => void;
   /** The user chose the text version. */
   onShowTranscript: () => void;
-  /** Presentation only: the Mind to visualize while Thinketh speaks. Absent = no canvas graph. */
-  mind?: BriefingMind | null;
+  /** Presentation only: your Mind, for the reading scene and linked concepts. Absent = the topic as text. */
+  knowledge?: KnowledgeResponse | null;
+  /** End the call, then open a concept in the Mind (the route decides how to navigate). */
+  onOpenInMind: (conceptId: string) => void;
   /** Concepts the live words can be matched against. */
   concepts?: FocusConcept[];
   /** The briefing's lead topic, shown as "Now" before any concept is named. */
@@ -65,7 +68,7 @@ export function LiveCatchUp(props: LiveCatchUpProps) {
   );
 }
 
-function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, concepts = [], seed }: LiveCatchUpProps) {
+function LiveSession({ onFallback, onEnded, onShowTranscript, onOpenInMind, knowledge = null, concepts = [], seed }: LiveCatchUpProps) {
   const { startSession, endSession, sendContextualUpdate, getOutputVolume } = useConversationControls();
   const { status } = useConversationStatus();
   const { isSpeaking } = useConversationMode();
@@ -249,7 +252,12 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
   if (!connected || status === "connecting") {
     return (
       <View style={styles.block}>
-        <ActivityIndicator color={color.ink2} style={{ alignSelf: "flex-start" }} />
+        <View style={styles.stateRow} accessibilityLiveRegion="polite">
+          <Pulse reduceMotion={!!reduceMotion} />
+          <T variant="meta" style={{ color: color.ink2 }}>
+            Connecting
+          </T>
+        </View>
         <T variant="title" style={{ marginTop: space.l }}>
           Starting your personalized Catch Me Up…
         </T>
@@ -258,13 +266,12 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
     );
   }
 
-  const focusName = focusId ? concepts.find((c) => c.id === focusId)?.name : undefined;
   return (
     <LiveBriefingCanvas
       phase={voicePhase({ connected: true, isSpeaking, lastUserVoiceAt: lastVoiceAt, now })}
-      topic={focusName ?? seed?.label ?? null}
+      topic={seed?.label ?? null}
       focusId={focusId}
-      mind={mind}
+      knowledge={knowledge}
       caption={lines}
       announce={lastCompleteSentence(caption, now)}
       aligned={isAligned(caption)}
@@ -276,6 +283,7 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
       onToggleMic={() => setMuted(!isMuted)}
       onEnd={() => end(onEnded)}
       onText={() => end(onShowTranscript)}
+      onOpenInMind={(id) => end(() => onOpenInMind(id))}
     />
   );
 }
