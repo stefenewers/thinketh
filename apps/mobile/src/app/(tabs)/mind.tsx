@@ -9,7 +9,8 @@ import { ConceptInspector, changeSentence, direction } from "@/components/mind/C
 import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, SectionHeader, SegmentedTabs } from "@/components/system";
 import { imageFor } from "@/content/imagery";
 import { FocusLabel, LibraryLegend, MindLibrary, playedHighlights } from "@/components/mind/world/MindLibrary";
-import { projectMindWorld } from "@/components/mind/world/mindWorld";
+import { BookGlyph } from "@/components/mind/world/Book";
+import { EVIDENCE_OF, projectMindWorld } from "@/components/mind/world/mindWorld";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState } from "@/components/ui";
 import { useApi, useReducedMotion } from "@/lib/hooks";
@@ -319,7 +320,7 @@ function MindOrientation({
           accessibilityLabel={`Worth strengthening: ${shaky.concept.name}. ${shakyWhy}`}
           style={[styles.orientRow, styles.orientDivided]}
         >
-          <View style={[styles.legendDot, { backgroundColor: color.canvas, borderColor: color.ink }]} />
+          <BookGlyph evidence={EVIDENCE_OF[shaky.level]} uncertain={shaky.state.uncertainty > 0.35} size={16} />
           <View style={{ flex: 1 }}>
             <T variant="meta" style={{ color: color.ink3 }}>
               Worth strengthening

@@ -45,7 +45,7 @@ export type MindWorld = {
   highlight: { conceptId: string; key: string } | null;
 };
 
-const EVIDENCE: Record<KnowledgeLevel, Evidence> = { strong: "strong", intermediate: "solid", developing: "developing", weak: "early" };
+export const EVIDENCE_OF: Record<KnowledgeLevel, Evidence> = { strong: "strong", intermediate: "solid", developing: "developing", weak: "early" };
 export const EVIDENCE_WORDS: Record<Evidence, string> = { strong: "Strong evidence", solid: "Solid evidence", developing: "Developing evidence", early: "Early evidence" };
 
 const isPropagated = (t: KnowledgeStateTransition) => t.observation.sourceRef?.startsWith("propagated:") ?? false;
@@ -70,7 +70,7 @@ export function projectMindWorld(
     const t = i.lastTransition;
     const delta = t && !isPropagated(t) && sameDay(t.createdAt, now) ? t.after.mastery - t.before.mastery : 0;
     const changed = delta >= 0.01 ? "up" : delta <= -0.01 ? "down" : null;
-    const evidence = EVIDENCE[i.level];
+    const evidence = EVIDENCE_OF[i.level];
     const uncertain = i.state.uncertainty > 0.35;
     const sourceCount = opts.sourceCounts?.get(i.concept.id) ?? 0;
     const title = CONCEPT_LABELS[i.concept.id]?.graph ?? i.concept.name;
