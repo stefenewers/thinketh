@@ -112,3 +112,9 @@ export function longDate(isoDate: string) {
   const [y, m, d] = isoDate.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
+
+/** Misconception flags arrive as slugs ("memory-equals-context-window"); show them as a phrase. */
+export function misconceptionLabel(flag: string) {
+  if (!/^[a-z0-9-]+$/.test(flag)) return flag;
+  return flag.replace(/-equals-/g, " = ").replace(/-/g, " ");
+}

@@ -8,18 +8,9 @@ import { Icon } from "@/components/Icon";
 import { MasteryBar, MindGraph } from "@/components/MindGraph";
 import { T } from "@/components/Text";
 import { BackBar, Divider, ErrorState, Gutter, LoadingState, SectionLabel } from "@/components/ui";
+import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
-import {
-  evidenceLabel,
-  fmt2,
-  improved,
-  improvedTodayIds,
-  levelLabel,
-  observationLabel,
-  relativeTime,
-  shortDate,
-  todaysTransitions,
-} from "@/lib/knowledge";
+import { evidenceLabel, fmt2, improved, improvedTodayIds, levelLabel, misconceptionLabel, observationLabel, relativeTime, shortDate, todaysTransitions } from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
 
 export default function MindScreen() {
@@ -190,7 +181,7 @@ function ConceptPanel({
           </T>
           {state.misconceptionFlags.map((f) => (
             <T key={f} variant="support">
-              {f}
+              {misconceptionLabel(f)}
             </T>
           ))}
         </View>
@@ -217,6 +208,18 @@ function ConceptPanel({
         </T>
         <Icon name="arrow" size={14} color={color.ink} />
       </Pressable>
+      {concept.id === agentMemoryStoryline.conceptId ? (
+        <Pressable
+          onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: agentMemoryStoryline.id } })}
+          accessibilityRole="button"
+          style={styles.askLink}
+        >
+          <T variant="meta" style={{ color: color.ink }}>
+            See how this idea changed in the world
+          </T>
+          <Icon name="arrow" size={14} color={color.ink} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

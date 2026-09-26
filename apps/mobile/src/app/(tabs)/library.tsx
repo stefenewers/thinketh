@@ -8,7 +8,7 @@ import { Divider, Gutter, Row, Screen, SectionLabel } from "@/components/ui";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { improvedTodayIds } from "@/lib/knowledge";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, radius, space } from "@/theme/tokens";
 
 export default function Library() {
   const { data } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
@@ -54,31 +54,40 @@ export default function Library() {
 
       <Gutter style={{ marginTop: space.x3 }}>
         <SectionLabel>Storyline</SectionLabel>
-        <T variant="section">{agentMemoryStoryline.title}</T>
-        <T variant="support" style={{ marginTop: space.xs }}>
-          {agentMemoryStoryline.summary}
-        </T>
-        <View style={{ marginTop: space.xl }}>
-          {agentMemoryStoryline.events.map((e, i) => (
-            <View key={e.when} style={styles.event}>
-              <View style={styles.rail}>
-                <View style={[styles.node, e.current && { backgroundColor: color.coral, borderColor: color.coral }]} />
-                {i < agentMemoryStoryline.events.length - 1 ? <View style={styles.line} /> : null}
+        <Pressable
+          onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: agentMemoryStoryline.id } })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open storyline: ${agentMemoryStoryline.title}`}
+        >
+          <T variant="section">{agentMemoryStoryline.title}</T>
+          <T variant="support" style={{ marginTop: space.xs }}>
+            {agentMemoryStoryline.subtitle}, and how your understanding changed with it.
+          </T>
+          <View style={{ marginTop: space.l }}>
+            {agentMemoryStoryline.phases.map((p, i) => (
+              <View key={p.label} style={styles.event}>
+                <View style={styles.rail}>
+                  <View style={[styles.node, p.current && { backgroundColor: color.coral, borderColor: color.coral }]} />
+                  {i < agentMemoryStoryline.phases.length - 1 ? <View style={styles.line} /> : null}
+                </View>
+                <View style={{ flex: 1, paddingBottom: space.l }}>
+                  <T variant="label" tone={p.current ? "coral" : undefined}>
+                    {p.label}
+                  </T>
+                  <T variant="body" style={{ marginTop: space.xs }}>
+                    {p.headline}
+                  </T>
+                </View>
               </View>
-              <View style={{ flex: 1, paddingBottom: space.xl }}>
-                <T variant="label" tone={e.current ? "coral" : undefined}>
-                  {e.when}
-                </T>
-                <T variant="body" style={{ fontFamily: font.sansMedium, marginTop: space.xs }}>
-                  {e.title}
-                </T>
-                <T variant="support" style={{ marginTop: 2 }}>
-                  {e.change}
-                </T>
-              </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+          <View style={styles.previewLink}>
+            <T variant="meta" style={{ color: color.ink }}>
+              Open the storyline
+            </T>
+            <Icon name="arrow" size={14} color={color.ink} />
+          </View>
+        </Pressable>
       </Gutter>
 
       <View style={{ marginTop: space.l }}>
