@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
-import Svg, { Circle, Defs, LinearGradient, Polyline, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from "react-native-svg";
 import { developmentDisplay, type Concept, type Development } from "@thinketh/contracts";
 import { Icon } from "@/components/Icon";
+import { Avatar } from "@/components/system";
 import { T } from "@/components/Text";
 import { Texture } from "@/components/Texture";
 import { storyImageFor } from "@/content/imagery";
@@ -61,68 +63,60 @@ export function TodayMetrics({ metrics, style }: { metrics: TodayMetric[]; style
   );
 }
 
-export type NodeTone = "strong" | "developing" | "changed";
-
-/**
- * The connected concepts, drawn in the Mindprint's own language: a few nodes on a hairline.
- * Filled = strong in your Mind, hollow = developing, coral = changed today.
- */
-export function ConceptNodes({ tones }: { tones: NodeTone[] }) {
-  const shown = tones.slice(0, 4);
-  const pts = shown.map((_, i) => ({ x: 7 + i * 14, y: i % 2 ? 8 : 14 }));
-  const w = 14 + (shown.length - 1) * 14;
+/** The people around this knowledge: you and your Playground partner (portraits are local-only; initials otherwise). */
+export function PeopleStack({ names, size = 28 }: { names: string[]; size?: number }) {
   return (
-    <Svg width={w} height={22} accessible={false}>
-      <Polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={color.ink} strokeOpacity={0.5} strokeWidth={1.2} />
-      {shown.map((t, i) => (
-        <Circle
-          key={i}
-          cx={pts[i]!.x}
-          cy={pts[i]!.y}
-          r={4.2}
-          fill={t === "changed" ? warm.orbDeep : t === "strong" ? color.ink : color.canvas}
-          stroke={t === "developing" ? color.ink : "none"}
-          strokeWidth={1.2}
-        />
+    <View style={{ flexDirection: "row" }} accessible={false}>
+      {names.slice(0, 3).map((n, i) => (
+        <View key={n} style={[styles.person, { width: size + 4, height: size + 4, borderRadius: (size + 4) / 2, marginLeft: i ? -size * 0.3 : 0, zIndex: 3 - i }]}>
+          <Avatar name={n} size={size} />
+        </View>
       ))}
-    </Svg>
+    </View>
   );
 }
 
-/** The lead development as a feature story: its photograph fills the right, the story reads on warm paper. */
-export function LeadStory({ development, understood, concepts, tones, onPress }: { development: Development; understood: boolean; concepts: Concept[]; tones: NodeTone[]; onPress: () => void }) {
+// The photo panel: the right 56% of the card, fading into the paper on its left edge.
+const IMAGE_SHARE = 0.56;
+
+/** The lead development as a compact feature story: text on the left, its photograph on the right. */
+export function LeadStory({ development, concepts, people, onPress }: { development: Development; concepts: Concept[]; people: string[]; onPress: () => void }) {
   const { width } = useWindowDimensions();
   const w = width - gutter * 2;
-  const sources = development.sourceIds.length;
+  const [h, setH] = useState(0);
   // Consumer headline on the home screen; the real title stays on the detail view (docs/PLAYGROUND.md).
   const display = developmentDisplay(development);
+  const imageW = Math.round(w * IMAGE_SHARE);
   return (
     // Shadow outside, clipping inside: iOS drops shadows on views that clip.
     <View style={styles.leadShadow}>
       <Pressable
         onPress={onPress}
+        onLayout={(e) => setH(Math.round(e.nativeEvent.layout.height))}
         accessibilityRole="button"
-        accessibilityLabel={`Lead development. ${development.title}. ${significanceLabel(development)}. ${concepts.length} connected concepts, ${sources} sources.`}
+        accessibilityLabel={`Lead development. ${display.headline}. ${significanceLabel(development)}. ${concepts.length} connected concepts.`}
         style={({ pressed }) => [styles.lead, pressed && { transform: [{ scale: 0.99 }] }]}
       >
-        <Texture source={storyImageFor(development.conceptIds)} style={[styles.leadImage, { width: w * 0.7 }]} />
+        {/* Exact pixel size: the iOS image fallback mis-sizes an image stretched by top/bottom edges. */}
+        {h > 0 ? <Texture source={storyImageFor(development.conceptIds)} style={[styles.leadImage, { width: imageW, height: h }]} /> : null}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Svg width="100%" height="100%">
+          <Svg width={w} height={Math.max(h, 1)}>
             <Defs>
               <LinearGradient id="leadPaper" x1="0" y1="0" x2="1" y2="0">
+                {/* Opaque paper under the text; the photo keeps full contrast on the right. */}
                 <Stop offset="0" stopColor={warm.paper} stopOpacity={1} />
-                <Stop offset="0.34" stopColor={warm.paper} stopOpacity={1} />
-                <Stop offset="0.6" stopColor={warm.paper} stopOpacity={0.5} />
-                <Stop offset="0.86" stopColor={warm.paper} stopOpacity={0} />
+                <Stop offset={String(1 - IMAGE_SHARE + 0.05)} stopColor={warm.paper} stopOpacity={1} />
+                <Stop offset={String(1 - IMAGE_SHARE + 0.22)} stopColor={warm.paper} stopOpacity={0.4} />
+                <Stop offset={String(1 - IMAGE_SHARE + 0.36)} stopColor={warm.paper} stopOpacity={0} />
               </LinearGradient>
               <LinearGradient id="leadFloor" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0.6" stopColor={warm.paper} stopOpacity={0} />
-                <Stop offset="1" stopColor={warm.paper} stopOpacity={0.55} />
+                <Stop offset="0.62" stopColor={warm.paper} stopOpacity={0} />
+                <Stop offset="1" stopColor={warm.paper} stopOpacity={0.4} />
               </LinearGradient>
             </Defs>
-            <Rect x={0} y={0} width="100%" height="100%" fill="url(#leadPaper)" />
-            {/* The dark foot of the photo fades into the paper instead of ending in a line. */}
-            <Rect x={0} y={0} width="100%" height="100%" fill="url(#leadFloor)" />
+            <Rect x={0} y={0} width={w} height={Math.max(h, 1)} fill="url(#leadPaper)" />
+            {/* The dark foothills soften into the paper instead of ending in a line. */}
+            <Rect x={0} y={0} width={w} height={Math.max(h, 1)} fill="url(#leadFloor)" />
           </Svg>
         </View>
         <View style={styles.leadBody}>
@@ -130,30 +124,24 @@ export function LeadStory({ development, understood, concepts, tones, onPress }:
             <View style={styles.dot} />
             <T style={styles.leadTagText}>Lead development</T>
           </View>
-          <T style={styles.leadTitle} numberOfLines={4}>
+          <T style={styles.leadTitle} numberOfLines={3}>
             {display.headline}
           </T>
           {display.summary ? (
-            <T style={styles.leadSummary} numberOfLines={3}>
+            <T style={styles.leadSummary} numberOfLines={2}>
               {display.summary}
             </T>
           ) : null}
-          <View style={styles.leadMetaRow}>
-            {understood ? <Icon name="check" size={12} color={color.ink2} /> : null}
-            <T style={styles.leadMeta} numberOfLines={1}>
-              {understood ? "Understood" : significanceLabel(development)} · {sources} {sources === 1 ? "source" : "sources"}
-            </T>
-          </View>
           <View style={styles.leadFooter}>
             <View style={styles.connected}>
-              <ConceptNodes tones={tones} />
+              <PeopleStack names={people} />
               <T style={styles.connectedText} numberOfLines={1}>
                 {concepts.length} connected {concepts.length === 1 ? "concept" : "concepts"}
               </T>
               <Icon name="chevron" size={12} color={color.ink} />
             </View>
             <View style={styles.leadArrow}>
-              <Icon name="arrow" size={20} color={color.onInk} />
+              <Icon name="arrow" size={19} color={color.onInk} />
             </View>
           </View>
         </View>
@@ -201,8 +189,8 @@ export function InsightItem({ development, category, meta, understood, last, onP
 const styles = StyleSheet.create({
   metrics: { flexDirection: "row" },
   metric: { paddingRight: 4, paddingVertical: 2 },
-  metricDivided: { paddingLeft: 12, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(22,22,22,0.09)" },
-  metricValue: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 30, letterSpacing: -0.8, color: color.ink, fontVariant: ["tabular-nums"] },
+  metricDivided: { paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(22,22,22,0.07)" },
+  metricValue: { fontFamily: font.sansSemibold, fontSize: 28, lineHeight: 32, letterSpacing: -0.8, color: color.ink, fontVariant: ["tabular-nums"] },
   metricLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 1.3, textTransform: "uppercase", color: color.ink3, marginTop: 6 },
   metricSub: { fontFamily: font.sans, fontSize: 11.5, lineHeight: 17, color: color.ink3, marginTop: 2 },
 
@@ -210,30 +198,17 @@ const styles = StyleSheet.create({
   // The strongest depth on the screen: the feature story.
   leadShadow: { marginTop: space.xl, borderRadius: 26, backgroundColor: warm.paper, ...depth.feature },
   lead: { borderRadius: 26, overflow: "hidden", backgroundColor: warm.paper },
-  leadImage: { position: "absolute", right: 0, top: 0, bottom: 0 },
-  leadBody: { padding: space.xl, paddingTop: 22 },
+  leadImage: { position: "absolute", right: 0, top: 0 },
+  leadBody: { paddingHorizontal: space.xl, paddingTop: 18, paddingBottom: 16 },
   leadTag: { flexDirection: "row", alignItems: "center", gap: 7 },
   leadTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.8, textTransform: "uppercase", color: color.ink2 },
-  leadTitle: { fontFamily: font.sansBold, fontSize: 24, lineHeight: 29, letterSpacing: -0.8, color: color.ink, marginTop: space.m, maxWidth: "64%" },
-  leadSummary: { fontFamily: font.sans, fontSize: 14, lineHeight: 20, color: color.ink2, marginTop: space.s, maxWidth: "60%" },
-  leadMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: space.m, maxWidth: "62%" },
-  leadMeta: { fontFamily: font.sansMedium, fontSize: 12, lineHeight: 16, color: color.ink3 },
-  leadFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.l },
-  connected: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.s,
-    paddingVertical: 5,
-    paddingLeft: 5,
-    paddingRight: space.m,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    flexShrink: 1,
-    ...depth.control,
-    shadowOpacity: 0.06,
-  },
+  leadTitle: { fontFamily: font.sansBold, fontSize: 20.5, lineHeight: 25, letterSpacing: -0.6, color: color.ink, marginTop: 10, maxWidth: "62%" },
+  leadSummary: { fontFamily: font.sans, fontSize: 13.5, lineHeight: 19, color: color.ink2, marginTop: 6, maxWidth: "60%" },
+  leadFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+  connected: { flexDirection: "row", alignItems: "center", gap: space.s, flexShrink: 1 },
+  person: { backgroundColor: color.canvas, alignItems: "center", justifyContent: "center" },
   connectedText: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 17, color: color.ink, flexShrink: 1 },
-  leadArrow: { width: 54, height: 54, borderRadius: 27, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", ...depth.control, shadowOpacity: 0.22 },
+  leadArrow: { width: 48, height: 48, borderRadius: 24, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", ...depth.control, shadowOpacity: 0.24 },
 
   insight: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },
   insightThumb: { width: 76, height: 68, borderRadius: 14, alignSelf: "center", backgroundColor: color.surfaceMuted },

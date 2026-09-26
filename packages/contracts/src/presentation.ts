@@ -118,7 +118,7 @@ export const topicLabel = (conceptId: string, fallback: string) => CONCEPT_LABEL
 export const DEVELOPMENT_DISPLAY: Record<string, { headline: string; summary: string }> = {
   "dev-persistent-agent-memory": {
     headline: "AI can now remember what matters across sessions",
-    summary: "Agents keep the key facts from one conversation and pick them up in the next.",
+    summary: "Key facts can follow an AI from one conversation into the next.",
   },
   "dev-evaluator-layer": {
     headline: "A second AI now checks the first one's work",

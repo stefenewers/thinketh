@@ -10,20 +10,21 @@ const ORB_R = 36;
 
 // Three tilted orbits (rx, ry, tilt in degrees), drawn as hairlines behind the text.
 const ORBITS = [
-  { rx: 104, ry: 36, tilt: -22, opacity: 0.62 },
-  { rx: 86, ry: 62, tilt: 34, opacity: 0.42 },
-  { rx: 112, ry: 24, tilt: 10, opacity: 0.34 },
+  { rx: 104, ry: 34, tilt: -20, opacity: 0.36 },
+  { rx: 84, ry: 58, tilt: 34, opacity: 0.2 },
 ] as const;
 
 type Tone = "coral" | "stone" | "ink";
 // Satellites (offsets from the orb's centre) sit up and to the right, clear of the headline.
-const SATELLITES: { dx: number; dy: number; r: number; tone: Tone }[] = [
-  { dx: 54, dy: -66, r: 6.5, tone: "coral" },
-  { dx: -26, dy: -80, r: 4, tone: "stone" },
-  { dx: 92, dy: 24, r: 4.5, tone: "ink" },
-  { dx: 40, dy: 72, r: 5, tone: "coral" },
-  { dx: 96, dy: -30, r: 3.5, tone: "stone" },
-  { dx: 26, dy: 98, r: 3, tone: "coral" },
+// Two larger translucent spheres sit "further back" (their edges dissolve instead of a blur
+// filter); a few small nodes stay crisp. Offsets are from the orb's centre, clear of the text.
+const SATELLITES: { dx: number; dy: number; r: number; tone: Tone; far?: boolean }[] = [
+  { dx: -64, dy: -46, r: 13, tone: "coral", far: true },
+  { dx: 72, dy: 60, r: 10, tone: "stone", far: true },
+  { dx: 54, dy: -66, r: 4, tone: "coral" },
+  { dx: 94, dy: 18, r: 3, tone: "ink" },
+  { dx: -22, dy: -84, r: 3, tone: "stone" },
+  { dx: 24, dy: 96, r: 2.5, tone: "coral" },
 ];
 
 /**
@@ -41,7 +42,7 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
     lift.set(withRepeat(withTiming(1, { duration: 5200, easing: Easing.inOut(Easing.sin) }), -1, true));
   }, [reduce, lift]);
   const float = useAnimatedStyle(() => ({ transform: [{ translateY: -3 * lift.get() }] }));
-  const shown = SATELLITES.slice(0, Math.max(3, Math.min(6, satellites)));
+  const shown = SATELLITES.slice(0, Math.max(4, Math.min(6, satellites)));
 
   return (
     <View style={styles.box} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants">
@@ -66,6 +67,16 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
               <Stop offset="0" stopColor="#F6F4F2" />
               <Stop offset="1" stopColor="#AEA7A1" />
             </RadialGradient>
+            <RadialGradient id="farCoral" cx="42%" cy="38%" r="60%">
+              <Stop offset="0" stopColor={warm.orbLight} stopOpacity={0.9} />
+              <Stop offset="0.6" stopColor={warm.orbMid} stopOpacity={0.45} />
+              <Stop offset="1" stopColor={warm.orbMid} stopOpacity={0} />
+            </RadialGradient>
+            <RadialGradient id="farStone" cx="42%" cy="38%" r="60%">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.9} />
+              <Stop offset="0.6" stopColor="#CFC8C2" stopOpacity={0.45} />
+              <Stop offset="1" stopColor="#CFC8C2" stopOpacity={0} />
+            </RadialGradient>
             <RadialGradient id="satInk" cx="35%" cy="30%" r="75%">
               <Stop offset="0" stopColor="#8E8C8A" />
               <Stop offset="1" stopColor="#262626" />
@@ -78,8 +89,13 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
             const p = { x: C.x + s.dx, y: C.y + s.dy };
             return (
               <G key={i}>
-                {lit && i === 0 ? <Circle cx={p.x} cy={p.y} r={s.r + 5} fill="none" stroke={warm.orbDeep} strokeOpacity={0.35} strokeWidth={1} /> : null}
-                <Circle cx={p.x} cy={p.y} r={s.r} fill={s.tone === "coral" ? "url(#satCoral)" : s.tone === "stone" ? "url(#satStone)" : "url(#satInk)"} />
+                {lit && i === 2 ? <Circle cx={p.x} cy={p.y} r={s.r + 5} fill="none" stroke={warm.orbDeep} strokeOpacity={0.35} strokeWidth={1} /> : null}
+                <Circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={s.far ? s.r * 1.25 : s.r}
+                  fill={s.far ? (s.tone === "coral" ? "url(#farCoral)" : "url(#farStone)") : s.tone === "coral" ? "url(#satCoral)" : s.tone === "stone" ? "url(#satStone)" : "url(#satInk)"}
+                />
               </G>
             );
           })}
@@ -89,8 +105,9 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
         <Defs>
           <RadialGradient id="orbBody" cx="38%" cy="32%" r="72%" fx="34%" fy="28%">
               <Stop offset="0" stopColor={warm.orbLight} />
-              <Stop offset="0.6" stopColor={warm.orbMid} stopOpacity={0.92} />
-              <Stop offset="1" stopColor="#EE8C68" stopOpacity={0.9} />
+              <Stop offset="0.55" stopColor={warm.orbMid} stopOpacity={0.88} />
+              <Stop offset="0.9" stopColor="#EE8C68" stopOpacity={0.72} />
+              <Stop offset="1" stopColor="#EE8C68" stopOpacity={0.4} />
           </RadialGradient>
         </Defs>
         <Circle cx={C.x} cy={C.y} r={ORB_R} fill="url(#orbBody)" />
@@ -103,5 +120,5 @@ export function HeroOrb({ satellites, lit }: { satellites: number; lit: boolean 
 
 const styles = StyleSheet.create({
   // Atmosphere, not an object: the whole piece sits back behind the headline.
-  box: { width: S, height: S, opacity: 0.72 },
+  box: { width: S, height: S, opacity: 0.78 },
 });

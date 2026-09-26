@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { ActionTile, Avatar, ListCard, SectionHeader } from "@/components/system";
 import { HeroOrb } from "@/components/today/HeroOrb";
 import { InsightItem, LeadStory, TodayMetrics, TodayWash } from "@/components/today/TodayParts";
-import { DEMO_LEARNER_NAME } from "@/content/demo";
+import { DEMO_LEARNER_NAME, DEMO_PARTNER_NAME } from "@/content/demo";
 import { Sheet } from "@/components/Sheet";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
@@ -84,7 +84,6 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   // Concepts today's developments touch that are already in your Mind.
   const connected = new Set(ordered.flatMap((d) => d.conceptIds).filter((id) => inMind.has(id)));
   // Coral is a signal: only what changed today, or the lead development's way into your Mind.
-  const strongIds = new Set(knowledge.items.filter((i) => i.level === "strong" || i.level === "intermediate").map((i) => i.concept.id));
   const active = new Set([latest?.conceptId, hero?.conceptIds.find((id) => inMind.has(id))].filter((id): id is string => !!id));
 
   if (!hero) {
@@ -108,7 +107,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
       <Gutter>
         <IntelligenceHero count={brief.meaningfulCount} connected={connected.size} lit={active.size > 0 && !!latest} />
         <TodayMetrics
-          style={{ marginTop: space.xxl }}
+          style={{ marginTop: space.xl + space.xs }}
           metrics={[
             { value: String((brief.skippedCount ?? 0) + brief.meaningfulCount), label: "Items", sub: "scanned" },
             understood.size > 0
@@ -140,9 +139,9 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
 
         <LeadStory
           development={hero}
-          understood={understood.has(hero.id)}
           concepts={hero.conceptIds.map((id) => conceptById.get(id)).filter((c): c is Concept => !!c)}
-          tones={hero.conceptIds.filter((id) => conceptById.has(id)).map((id) => (id === latest?.conceptId ? "changed" : strongIds.has(id) ? "strong" : "developing"))}
+          // The people around this knowledge: your Playground partner and you.
+          people={[DEMO_PARTNER_NAME, DEMO_LEARNER_NAME]}
           onPress={() => router.push({ pathname: "/development/[id]", params: { id: hero.id } })}
         />
 
@@ -271,19 +270,19 @@ const styles = StyleSheet.create({
     ...depth.control,
   },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted, ...depth.control },
-  hero: { paddingTop: space.xxl },
+  hero: { paddingTop: space.xl },
   // The orb sits upper right and bleeds past the edge; the headline reads over its glow.
   heroOrb: { position: "absolute", right: -gutter - 70, top: -34 },
   kicker: { fontFamily: font.sansMedium, fontSize: 11.5, lineHeight: 14, letterSpacing: 3, textTransform: "uppercase", color: color.ink2 },
-  headline: { fontFamily: font.sansBold, fontSize: 41, lineHeight: 45, letterSpacing: -1.6, color: color.ink, marginTop: space.m, maxWidth: "80%" },
+  headline: { fontFamily: font.sansBold, fontSize: 41, lineHeight: 44, letterSpacing: -1.6, color: color.ink, marginTop: space.m, maxWidth: 318 },
   heroCopy: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 21, color: color.ink2, marginTop: space.s, maxWidth: "78%" },
   // A curated panel: gently lifted off the warm ground.
   panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
-  ctaRow: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.xxl },
-  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 58, paddingHorizontal: space.xl, borderRadius: radius.pill, backgroundColor: color.ink, ...depth.control, shadowOpacity: 0.18 },
+  ctaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: space.xl + space.xs },
+  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, height: 56, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: color.ink, ...depth.control, shadowOpacity: 0.16, shadowRadius: 18 },
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 16.5, lineHeight: 21, letterSpacing: -0.2, color: color.onInk, flex: 1 },
-  ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
-  listen: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },
+  ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.55, fontVariant: ["tabular-nums"] },
+  listen: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },
   tiles: { flexDirection: "row", gap: 10 },
   skipRow: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
 });

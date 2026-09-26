@@ -110,12 +110,12 @@ export const shadow = {
 // Today's depth tiers: a warm, diffuse shadow felt more than seen. One tier per role.
 const DEPTH_INK = "#2A1C15";
 export const depth = {
-  /** Cards and panels, gently lifted. */
-  card: { shadowColor: DEPTH_INK, shadowOpacity: 0.07, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
-  /** The one featured surface (the lead story). */
-  feature: { shadowColor: DEPTH_INK, shadowOpacity: 0.14, shadowRadius: 32, shadowOffset: { width: 0, height: 14 }, elevation: 6 },
-  /** Small circular controls and pills. */
-  control: { shadowColor: DEPTH_INK, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  /** Level 1: standard raised surfaces (shortcut cards, the insights panel). Very soft, wide. */
+  card: { shadowColor: DEPTH_INK, shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
+  /** Level 2: the one featured surface (the lead story). Wider and a little more present. */
+  feature: { shadowColor: DEPTH_INK, shadowOpacity: 0.16, shadowRadius: 36, shadowOffset: { width: 0, height: 16 }, elevation: 7 },
+  /** Level 3: floating circular controls (search, mic, Ask, the lead arrow). Clean and visible. */
+  control: { shadowColor: DEPTH_INK, shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
 } as const;
 
 export const gutter = layout.pageX;
