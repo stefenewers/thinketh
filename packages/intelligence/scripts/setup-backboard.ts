@@ -40,18 +40,7 @@ const res = await fetch(`${config.backboard.baseUrl}/assistants/${assistantId}/m
 if (!res.ok) throw new Error(`list memories failed: HTTP ${res.status}`);
 const existing = new Set(((await res.json()) as { memories?: Array<{ content: string }> }).memories?.map((m) => m.content) ?? []);
 
-const now = new Date().toISOString();
-const seeds = [
-  // The two memories the sponsor story calls for, then the rest of the persona.
-  { id: "mem-pref-systems-analogies", kind: "preference" as const, content: "Prefers systems analogies", createdAt: now },
-  {
-    id: "mem-misconception-memory-context",
-    kind: "misconception" as const,
-    content: "Previously confused persistent agent memory with a longer context window",
-    createdAt: now,
-  },
-  ...buildSeed().memories,
-];
+const seeds = buildSeed().memories;
 let added = 0;
 for (const item of seeds) {
   if (existing.has(item.content)) continue;

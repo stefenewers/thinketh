@@ -17,9 +17,9 @@ curl "http://localhost:8787/health?probe=true"
 | Backboard | **live** | Probe: `assistant ab52d134…, 6 memories (242ms)`. `/ask` recalls from Backboard: 21 calls, 0 fallbacks during the golden loop. |
 | Claude | not configured | Needs `ANTHROPIC_API_KEY` |
 | ElevenLabs | not configured | Needs `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` |
-| Supabase | not configured | Needs a project (`SUPABASE_URL`, keys) for remote deploy |
+| Supabase | **live** | Probe: `5 feature flags readable (163ms)`. `/config` serves flags from the `feature_flags` table. Migration tables (profiles, feature_flags, integration_ids) exist. Edge Function not deployed yet. |
 
-The mobile golden check passes against the real backend with Tiger, Mongo and Backboard live:
+The mobile golden check passes against the real backend with Tiger, Mongo, Backboard and Supabase live:
 `API_URL=http://localhost:8787 npm run check:golden -w mobile` → all checks passed.
 
 ## Tiger Data: version control for human understanding
@@ -90,12 +90,11 @@ Reproduce the evidence with `npm run evidence:backboard --workspace @thinketh/in
 
 ```text
 Assistant ab52d134-07e0-4231-a5da-c5eb62e7549b (one stable assistant for the demo persona)
-Stored memories (6)
-  [preference]     Prefers systems analogies
-  [misconception]  Previously confused persistent agent memory with a longer context window
+Stored memories (4, the seeded persona)
+  [preference]     Prefers systems analogies (databases, caches, operating systems) over mathematical explanations.
   [preference]     Learns fastest from explicit before/after comparisons of a mental model.
+  [misconception]  Previously confused persistent agent memory with a longer context window.
   [learning_topic] Currently learning how to build long-running agents that improve across sessions.
-  …
 Memory search: "How should explanations about agent memory be framed for this learner?"
   0.70  Prefers systems analogies
   0.63  Has previously conflated a long context window with persistent memory.
@@ -108,6 +107,7 @@ What this shows:
 - **Memory lives at the assistant level, not the thread.** A brand-new thread with no messages retrieved all 6 memories.
 - **Thinketh recalls through Backboard.** `POST /ask` returns `memoryUsed` from Backboard's semantic memory search, with kinds (preference, misconception, learning topic).
 - **Thinketh writes back.** A wrong diagnostic answer that reveals a misconception, an "Explain deeper", and each Ask question are stored as memories.
+- **Rehearsal-safe.** `POST /demo/reset` restores the persona's 4 seeded memories in the background (the reset itself returns in ~0.1s). A question already stored isn't stored twice, and recall ranks preferences and misconceptions ahead of past questions.
 - **Backboard never holds the numbers.** Mastery and uncertainty stay in Thinketh's engine and in Tiger. Backboard holds the qualitative learning context.
 
 Known limit: the free Backboard credit covers memory and RAG only, so Backboard's built-in chat replies are blocked on billing (the new-thread check returned a billing notice as its reply, with `retrieved_memories: 6`). Thinketh doesn't use Backboard chat: Claude writes the answers, and Backboard supplies the memory.
@@ -116,6 +116,6 @@ Screenshots to capture: Backboard dashboard → the assistant's Memories, plus t
 
 ## To do
 
-- Remote deploy: Supabase project + CLI, then the golden loop over the public URL
+- Remote deploy: needs `SUPABASE_ACCESS_TOKEN` (CLI), then deploy the Edge Function and run the golden loop over the public URL
 - ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
 - Claude: `x-thinketh-delta-source: claude` on `/developments/:id`

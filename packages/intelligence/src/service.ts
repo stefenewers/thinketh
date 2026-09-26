@@ -767,6 +767,25 @@ export class ThinkethService {
   async reset(userId: string): Promise<void> {
     await this.adapters.temporal.reset(userId);
     await this.adapters.localMemory.reset(userId);
+    // Rehearsals should start from the persona's seeded memories, not accumulated
+    // questions. Backboard can take several seconds to clear many memories, so this
+    // runs in the background: the knowledge-state reset above is what the demo needs now.
+    const { memory } = this.adapters;
+    if (memory?.reset && userId === this.config.demoUserId) {
+      runInBackground(
+        "backboard-reset",
+        guarded(
+          "backboard",
+          "reset",
+          async () => {
+            await memory.reset!(userId);
+            for (const item of this.seed.memories) await memory.remember(userId, item);
+          },
+          () => undefined,
+          30_000,
+        ),
+      );
+    }
     this.phrasedDeltas.clear();
     logEvent("demo.reset", { userId });
   }

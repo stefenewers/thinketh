@@ -622,7 +622,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       {
         id: "mem-misconception-context",
         kind: "misconception",
-        content: "Has previously conflated a long context window with persistent memory.",
+        content: "Previously confused persistent agent memory with a longer context window.",
         createdAt: ago(3),
       },
       {
