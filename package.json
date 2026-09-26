@@ -5,8 +5,13 @@
     "apps/*",
     "packages/*"
   ],
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "mobile": "npm --workspace mobile run start",
+    "dev:api": "npm run dev --workspace @thinketh/intelligence",
+    "test": "npm test --workspaces --if-present",
     "typecheck": "npm --workspaces --if-present run typecheck",
     "lint": "npm --workspaces --if-present run lint"
   },

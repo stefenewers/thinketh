@@ -1,5 +1,7 @@
 .DS_Store
 node_modules/
 .env*
+!.env.example
 thinketh-stefen-claude-code-pack.zip
+thinketh-nadani-claude-code-pack.zip
 .Rhistory

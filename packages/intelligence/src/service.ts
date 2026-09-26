@@ -1,0 +1,676 @@
+/**
+ * ThinkethService: the domain operations behind the HTTP API.
+ *
+ * Numbers (mastery, uncertainty, priority) always come from the deterministic
+ * engine. Sponsor adapters are called through `guarded`, so each one has a
+ * timeout and a local fallback, and none of them can block the golden path.
+ */
+import type {
+  AskResponse,
+  BriefResponse,
+  Claim,
+  Concept,
+  ConceptHistoryResponse,
+  DeltaExplanation,
+  Development,
+  DevelopmentDetailResponse,
+  DiagnosticAnswerResponse,
+  DiagnosticSelectResponse,
+  DiagramSpec,
+  FeedbackKind,
+  FeedbackResponse,
+  KnowledgeResponse,
+  KnowledgeState,
+  KnowledgeStateTransition,
+  MemoryAid,
+  MemoryItem,
+  Source,
+  Storyline,
+  PersonaProfile,
+  VoiceSession,
+} from "./contracts.ts";
+import { guarded, runInBackground } from "./adapters/guard.ts";
+import type { Adapters } from "./adapters/registry.ts";
+import type { LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import type { ThinkethConfig } from "./config.ts";
+import { buildBrief } from "./engine/brief.ts";
+import { computeDelta, focusConceptId } from "./engine/delta.ts";
+import { evaluateMultipleChoice, evaluateShortAnswerKeywords, InvalidAnswerError, scoreRubric, type Evaluation } from "./engine/evaluation.ts";
+import { knowledgeLevel, transition, type Graph, type TransitionResult, type UpdateOptions } from "./engine/knowledgeState.ts";
+import { kindForCorrectness, makeObservation } from "./engine/observations.ts";
+import { explainSelection, pickItem, scoreConcepts, toPublicQuestion } from "./engine/selection.ts";
+import { logEvent } from "./log.ts";
+import { MISCONCEPTIONS } from "./seed/misconceptions.ts";
+import type { DevelopmentMeta, DiagnosticItem, SeedCorpus } from "./seed/types.ts";
+import { newId, round } from "./util.ts";
+
+export class NotFoundError extends Error {}
+export class BadRequestError extends Error {}
+export { InvalidAnswerError };
+
+const MEMORY_TIMEOUT_MS = 2000;
+const SEMANTIC_TIMEOUT_MS = 3000;
+const VOICE_TIMEOUT_MS = 5000;
+
+export class ThinkethService {
+  private readonly concepts = new Map<string, Concept>();
+  private readonly claims = new Map<string, Claim>();
+  private readonly sources = new Map<string, Source>();
+  private readonly developments = new Map<string, Development>();
+  private readonly meta: Record<string, DevelopmentMeta>;
+  private readonly storylines = new Map<string, Storyline>();
+  private readonly diagnostics = new Map<string, DiagnosticItem>();
+  private readonly phrasedDeltas = new Map<string, DeltaExplanation>();
+  private readonly generated = new Map<string, DiagramSpec | MemoryAid>();
+  private readonly userLocks = new Map<string, Promise<unknown>>();
+  private readonly config: ThinkethConfig;
+  private readonly seed: SeedCorpus;
+  private readonly adapters: Adapters;
+  private readonly now: () => Date;
+
+  constructor(config: ThinkethConfig, seed: SeedCorpus, adapters: Adapters, now: () => Date = () => new Date()) {
+    this.config = config;
+    this.seed = seed;
+    this.adapters = adapters;
+    this.now = now;
+    for (const c of seed.concepts) this.concepts.set(c.id, c);
+    for (const c of seed.claims) this.claims.set(c.id, c);
+    for (const s of seed.sources) this.sources.set(s.id, s);
+    for (const d of seed.developments) this.developments.set(d.id, d);
+    for (const s of seed.storylines) this.storylines.set(s.id, s);
+    for (const q of seed.diagnostics) this.diagnostics.set(q.id, q);
+    this.meta = { ...seed.developmentMeta };
+  }
+
+  // -------------------------------------------------------------------------
+  // State
+  // -------------------------------------------------------------------------
+
+  private graph(): Graph {
+    return { concepts: this.concepts, edges: this.seed.edges };
+  }
+
+  profileFor(userId: string): PersonaProfile {
+    return { ...this.seed.profile, id: userId };
+  }
+
+  /** Baseline persona state (new users start from the demo persona) overlaid with temporal history. */
+  async statesFor(userId: string): Promise<Map<string, KnowledgeState>> {
+    const states = new Map<string, KnowledgeState>();
+    for (const s of this.seed.baselineStates) states.set(s.conceptId, { ...s, userId });
+    for (const c of this.concepts.values()) {
+      if (!states.has(c.id)) {
+        states.set(c.id, {
+          userId,
+          conceptId: c.id,
+          mastery: 0.2,
+          confidence: 0.2,
+          uncertainty: 0.6,
+          evidenceCount: 0,
+          lastObservedAt: this.now().toISOString(),
+          misconceptionFlags: [],
+        });
+      }
+    }
+    for (const s of await this.adapters.temporal.getLatestStates(userId)) states.set(s.conceptId, s);
+    return states;
+  }
+
+  /** Serialize state-changing operations per user so double taps can't race. */
+  private withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.userLocks.get(userId) ?? Promise.resolve();
+    const next = prev.then(fn, fn);
+    this.userLocks.set(
+      userId,
+      next.catch(() => undefined),
+    );
+    return next;
+  }
+
+  private async persist(result: TransitionResult): Promise<void> {
+    const t = this.adapters.temporal;
+    await t.appendObservation(result.transition.observation);
+    await t.appendTransition(result.transition);
+    for (const p of result.propagatedTransitions) {
+      await t.appendObservation(p.observation);
+      await t.appendTransition(p);
+    }
+    logEvent("knowledge.transition", {
+      userId: result.transition.userId,
+      conceptId: result.transition.conceptId,
+      kind: result.transition.observation.kind,
+      mastery: [result.transition.before.mastery, result.transition.after.mastery],
+      uncertainty: [result.transition.before.uncertainty, result.transition.after.uncertainty],
+      propagated: result.transition.propagatedChanges.map((p) => p.conceptId),
+    });
+  }
+
+  private async observe(
+    userId: string,
+    conceptId: string,
+    kind: Parameters<typeof makeObservation>[0]["kind"],
+    extra: { correctness?: number; sourceRef?: string; options?: UpdateOptions; states?: Map<string, KnowledgeState> } = {},
+  ): Promise<TransitionResult> {
+    const now = this.now();
+    const states = extra.states ?? (await this.statesFor(userId));
+    const observation = makeObservation({
+      userId,
+      conceptId,
+      kind,
+      ...(extra.correctness !== undefined ? { correctness: extra.correctness } : {}),
+      ...(extra.sourceRef ? { sourceRef: extra.sourceRef } : {}),
+      now,
+    });
+    const result = transition({ states, observation, graph: this.graph(), now, ...(extra.options ? { options: extra.options } : {}) });
+    await this.persist(result);
+    for (const s of result.updatedStates) states.set(s.conceptId, s);
+    return result;
+  }
+
+  // -------------------------------------------------------------------------
+  // Sponsor-backed helpers
+  // -------------------------------------------------------------------------
+
+  private async recall(userId: string, query: string): Promise<MemoryItem[]> {
+    const { memory, localMemory } = this.adapters;
+    return (
+      await guarded("backboard", "recall", memory ? () => memory.recall(userId, query) : undefined, () => localMemory.recall(userId, query), MEMORY_TIMEOUT_MS)
+    ).value;
+  }
+
+  private async remember(userId: string, item: MemoryItem): Promise<void> {
+    const { memory, localMemory } = this.adapters;
+    await localMemory.remember(userId, item);
+    await guarded("backboard", "remember", memory ? () => memory.remember(userId, item) : undefined, () => undefined, MEMORY_TIMEOUT_MS);
+  }
+
+  private async getDevelopment(id: string): Promise<Development> {
+    const { semantic } = this.adapters;
+    const local = this.developments.get(id) ?? null;
+    const found = (
+      await guarded("mongo", "getDevelopment", semantic ? async () => (await semantic.getDevelopment(id)) ?? local : undefined, () => local, SEMANTIC_TIMEOUT_MS)
+    ).value;
+    if (!found) throw new NotFoundError(`Development not found: ${id}`);
+    return found;
+  }
+
+  private model() {
+    return this.adapters.model;
+  }
+
+  private claudeTimeout(): number {
+    return this.config.anthropic.timeoutMs;
+  }
+
+  // -------------------------------------------------------------------------
+  // Today
+  // -------------------------------------------------------------------------
+
+  async brief(userId: string): Promise<BriefResponse> {
+    const states = await this.statesFor(userId);
+    const { brief, ordered } = buildBrief({
+      developments: [...this.developments.values()],
+      meta: this.meta,
+      states,
+      profile: this.profileFor(userId),
+      ingestion: this.seed.ingestion,
+      now: this.now(),
+      timeZone: this.config.timeZone,
+    });
+    logEvent("brief.built", { userId, meaningful: brief.meaningfulCount, skipped: brief.skippedBreakdown, hero: brief.heroDevelopmentId });
+    // Warm the Claude phrasing of the hero card so the first tap is already personalized.
+    const hero = ordered[0];
+    if (hero) runInBackground("warm-delta", this.phrasedDelta(userId, hero, states));
+    return { brief, developments: ordered };
+  }
+
+  // -------------------------------------------------------------------------
+  // Development detail + delta
+  // -------------------------------------------------------------------------
+
+  deterministicDelta(userId: string, development: Development, states: Map<string, KnowledgeState>): DeltaExplanation {
+    return computeDelta({
+      userId,
+      development,
+      meta: this.meta[development.id],
+      profile: this.profileFor(userId),
+      states,
+      concepts: this.concepts,
+      edges: this.seed.edges,
+      claims: this.claims,
+      baselineClaimIds: this.seed.baselineClaimIds,
+    });
+  }
+
+  private deltaCacheKey(userId: string, development: Development, states: Map<string, KnowledgeState>): string {
+    const sig = development.conceptIds.map((id) => `${id}:${states.get(id)?.mastery.toFixed(2)}`).join(",");
+    return `${userId}|${development.id}|${sig}`;
+  }
+
+  /** Claude-phrased delta, cached per user/development/state. Falls back to the deterministic delta. */
+  private async phrasedDelta(userId: string, development: Development, states: Map<string, KnowledgeState>): Promise<DeltaExplanation> {
+    const key = this.deltaCacheKey(userId, development, states);
+    const cached = this.phrasedDeltas.get(key);
+    if (cached) return cached;
+    const delta = this.deterministicDelta(userId, development, states);
+    const model = this.model();
+    if (!model || !this.config.claudeDeltaPhrasing) return delta;
+    const memories = await this.recall(userId, development.title);
+    const result = await guarded(
+      "claude",
+      "explainDelta",
+      () => model.explainDelta({ delta, development, profile: this.profileFor(userId), memories }),
+      () => delta,
+      this.claudeTimeout(),
+    );
+    if (result.source === "live") this.phrasedDeltas.set(key, result.value);
+    return result.value;
+  }
+
+  async development(userId: string, id: string): Promise<DevelopmentDetailResponse & { deltaSource: "claude" | "deterministic" }> {
+    const development = await this.getDevelopment(id);
+    const states = await this.statesFor(userId);
+    const cached = this.phrasedDeltas.get(this.deltaCacheKey(userId, development, states));
+    // Never make the detail screen wait on Claude: serve the cached phrasing or the deterministic delta, and warm the cache.
+    const delta = cached ?? this.deterministicDelta(userId, development, states);
+    if (!cached) runInBackground("warm-delta", this.phrasedDelta(userId, development, states));
+
+    runInBackground(
+      "interaction",
+      this.adapters.temporal.appendInteraction({ userId, kind: "development_opened", refId: id, at: this.now().toISOString() }),
+    );
+    const pick = <T>(ids: string[], map: Map<string, T>) => ids.flatMap((x) => (map.has(x) ? [map.get(x)!] : []));
+    return {
+      development,
+      delta,
+      concepts: pick(development.conceptIds, this.concepts),
+      claims: pick(development.claimIds, this.claims),
+      sources: pick(development.sourceIds, this.sources),
+      storylines: pick(development.storylineIds, this.storylines),
+      deltaSource: cached ? "claude" : "deterministic",
+    };
+  }
+
+  async feedback(userId: string, developmentId: string, kind: FeedbackKind): Promise<FeedbackResponse> {
+    const development = await this.getDevelopment(developmentId);
+    return this.withUserLock(userId, async () => {
+      const states = await this.statesFor(userId);
+      const transitions: KnowledgeStateTransition[] = [];
+      for (const conceptId of development.conceptIds) {
+        if (!states.has(conceptId)) continue;
+        const r = await this.observe(userId, conceptId, kind, { sourceRef: `development:${developmentId}`, states });
+        transitions.push(r.transition);
+      }
+      if (kind === "explained") {
+        await this.remember(userId, {
+          id: newId("mem"),
+          kind: "learning_topic",
+          content: `Asked for a deeper explanation of “${development.title}”.`,
+          createdAt: this.now().toISOString(),
+        });
+      }
+      return { transitions };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Diagnostics
+  // -------------------------------------------------------------------------
+
+  private async answeredQuestionIds(userId: string): Promise<Set<string>> {
+    const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
+    return new Set(
+      recent.flatMap((t) => (t.observation.sourceRef?.startsWith("diagnostic:") ? [t.observation.sourceRef.slice("diagnostic:".length)] : [])),
+    );
+  }
+
+  async selectDiagnostic(userId: string, input: { developmentId?: string; conceptId?: string }): Promise<DiagnosticSelectResponse> {
+    const states = await this.statesFor(userId);
+    const contextDevelopment = input.developmentId ? await this.getDevelopment(input.developmentId) : undefined;
+    if (input.conceptId && !this.concepts.has(input.conceptId)) throw new NotFoundError(`Concept not found: ${input.conceptId}`);
+    const candidateConceptIds = input.conceptId ? [input.conceptId] : (contextDevelopment?.conceptIds ?? [...this.concepts.keys()]);
+
+    const ranked = scoreConcepts({
+      candidateConceptIds,
+      concepts: [...this.concepts.values()],
+      edges: this.seed.edges,
+      states,
+      profile: this.profileFor(userId),
+      developments: [...this.developments.values()],
+      ...(contextDevelopment ? { contextDevelopment } : {}),
+      now: this.now(),
+    });
+    const top = ranked[0];
+    if (!top) throw new NotFoundError("No candidate concepts for a diagnostic");
+    const { conceptId, conceptName: _n, ...debug } = top;
+
+    const answered = await this.answeredQuestionIds(userId);
+    let item = pickItem(conceptId, [...this.diagnostics.values()], states.get(conceptId), answered);
+    if (!item) item = await this.generateDiagnostic(userId, conceptId, states, contextDevelopment);
+
+    const explanation = explainSelection(top, states.get(conceptId));
+    logEvent("diagnostic.selected", { userId, questionId: item.id, conceptId, priority: top.priority, explanation, ranked: ranked.slice(0, 5) });
+    return { question: toPublicQuestion(item, debug), selection: { explanation, candidates: ranked.slice(0, 5) } };
+  }
+
+  private async generateDiagnostic(
+    userId: string,
+    conceptId: string,
+    states: Map<string, KnowledgeState>,
+    development?: Development,
+  ): Promise<DiagnosticItem> {
+    const ctx = await this.learningContext(userId, conceptId, states, development);
+    const model = this.model();
+    const { value } = await guarded(
+      "claude",
+      "generateDiagnostic",
+      model ? () => model.generateDiagnostic(ctx) : undefined,
+      () => this.adapters.fallbackModel.generateDiagnostic(ctx),
+      this.claudeTimeout(),
+    );
+    this.diagnostics.set(value.id, value);
+    return value;
+  }
+
+  async answerDiagnostic(userId: string, questionId: string, answer: string): Promise<DiagnosticAnswerResponse> {
+    const item = this.diagnostics.get(questionId);
+    if (!item) throw new NotFoundError(`Diagnostic not found: ${questionId}`);
+    const evaluation = await this.evaluate(item, answer);
+
+    return this.withUserLock(userId, async () => {
+      const states = await this.statesFor(userId);
+      const kind = kindForCorrectness(evaluation.correctness);
+      const options: UpdateOptions = {
+        ...(item.evidencePhrase ? { evidencePhrase: item.evidencePhrase } : {}),
+        ...(evaluation.misconception ? { addMisconception: evaluation.misconception } : {}),
+        ...(kind === "diagnostic_correct" && item.targetsMisconception ? { clearMisconception: item.targetsMisconception } : {}),
+      };
+      const result = await this.observe(userId, item.conceptId, kind, {
+        correctness: evaluation.correctness,
+        sourceRef: `diagnostic:${item.id}`,
+        options,
+        states,
+      });
+
+      if (evaluation.misconception) {
+        const description = MISCONCEPTIONS[evaluation.misconception] ?? evaluation.misconception;
+        await this.remember(userId, {
+          id: newId("mem"),
+          kind: "misconception",
+          content: `On ${this.concepts.get(item.conceptId)?.name}: showed the misconception ${description}.`,
+          createdAt: this.now().toISOString(),
+        });
+      }
+      logEvent("diagnostic.answered", { userId, questionId, correctness: evaluation.correctness, kind, misconception: evaluation.misconception });
+      return {
+        answer: { questionId, userId, answer, correctness: evaluation.correctness, feedback: evaluation.feedback },
+        transition: result.transition,
+      };
+    });
+  }
+
+  private async evaluate(item: DiagnosticItem, answer: string): Promise<Evaluation> {
+    if (item.type === "multiple_choice") return evaluateMultipleChoice(item, answer);
+    const model = this.model();
+    const { value } = await guarded(
+      "claude",
+      "gradeShortAnswer",
+      model
+        ? async () => {
+            const grade = await model.gradeShortAnswer({ item, answer });
+            const { correctness } = scoreRubric(item, grade.coveredIdeaIndices);
+            return { correctness, feedback: grade.feedback, ...(grade.misconception ? { misconception: grade.misconception } : {}) };
+          }
+        : undefined,
+      () => evaluateShortAnswerKeywords(item, answer),
+      this.claudeTimeout(),
+    );
+    return value;
+  }
+
+  // -------------------------------------------------------------------------
+  // Knowledge / Mind
+  // -------------------------------------------------------------------------
+
+  /** The persona's seeded prior history, re-addressed to this user. */
+  private seedHistory(userId: string, conceptId?: string): KnowledgeStateTransition[] {
+    const readdress = (s: KnowledgeState) => ({ ...s, userId });
+    return this.seed.history
+      .filter((t) => !conceptId || t.conceptId === conceptId)
+      .map((t) => ({ ...t, userId, before: readdress(t.before), after: readdress(t.after), observation: { ...t.observation, userId } }));
+  }
+
+  async knowledge(userId: string): Promise<KnowledgeResponse> {
+    const states = await this.statesFor(userId);
+    const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
+    const lastByConcept = new Map<string, KnowledgeStateTransition>();
+    for (const t of [...recent, ...this.seedHistory(userId).reverse()]) if (!lastByConcept.has(t.conceptId)) lastByConcept.set(t.conceptId, t);
+    const items = [...this.concepts.values()].flatMap((concept) => {
+      const state = states.get(concept.id);
+      if (!state) return [];
+      const last = lastByConcept.get(concept.id);
+      return [{ concept, state, level: knowledgeLevel(state), ...(last ? { lastTransition: last } : {}) }];
+    });
+    items.sort((a, b) => b.state.mastery - a.state.mastery);
+    return { userId, items, edges: this.seed.edges };
+  }
+
+  async conceptHistory(userId: string, conceptId: string): Promise<ConceptHistoryResponse> {
+    const concept = this.concepts.get(conceptId);
+    if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
+    const states = await this.statesFor(userId);
+    const current = states.get(conceptId)!;
+    const transitions = [...this.seedHistory(userId, conceptId), ...(await this.adapters.temporal.getConceptHistory(userId, conceptId))];
+    return { concept, current, level: knowledgeLevel(current), transitions };
+  }
+
+  // -------------------------------------------------------------------------
+  // Ask / Visualize / Make it stick
+  // -------------------------------------------------------------------------
+
+  private async learningContext(
+    userId: string,
+    conceptId: string,
+    states: Map<string, KnowledgeState>,
+    development?: Development,
+  ): Promise<LearningContext> {
+    const concept = this.concepts.get(conceptId);
+    if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
+    const relatedIds = new Set<string>();
+    for (const e of this.seed.edges) {
+      if (e.fromConceptId === conceptId) relatedIds.add(e.toConceptId);
+      if (e.toConceptId === conceptId) relatedIds.add(e.fromConceptId);
+    }
+    const claims = [...this.claims.values()].filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6);
+    return {
+      concept,
+      state: states.get(conceptId),
+      profile: this.profileFor(userId),
+      relatedConcepts: [...relatedIds].flatMap((id) => (this.concepts.has(id) ? [this.concepts.get(id)!] : [])),
+      claims,
+      ...(development ? { development } : {}),
+      memories: await this.recall(userId, concept.name),
+    };
+  }
+
+  private async resolveLearningTarget(userId: string, input: { conceptId?: string; developmentId?: string }) {
+    const states = await this.statesFor(userId);
+    const development = input.developmentId ? await this.getDevelopment(input.developmentId) : undefined;
+    let conceptId = input.conceptId;
+    if (!conceptId && development) {
+      conceptId = focusConceptId({
+        userId,
+        development,
+        meta: this.meta[development.id],
+        profile: this.profileFor(userId),
+        states,
+        concepts: this.concepts,
+        edges: this.seed.edges,
+        claims: this.claims,
+        baselineClaimIds: this.seed.baselineClaimIds,
+      });
+    }
+    if (!conceptId) throw new BadRequestError("Provide conceptId or developmentId");
+    return this.learningContext(userId, conceptId, states, development);
+  }
+
+  async visualize(userId: string, input: { conceptId?: string; developmentId?: string }): Promise<DiagramSpec> {
+    const ctx = await this.resolveLearningTarget(userId, input);
+    const seeded = this.seed.diagrams[ctx.concept.id];
+    if (seeded) return seeded;
+    const key = `diagram:${ctx.concept.id}:${ctx.development?.id ?? ""}`;
+    const cached = this.generated.get(key) as DiagramSpec | undefined;
+    if (cached) return cached;
+    const model = this.model();
+    const r = await guarded("claude", "visualize", model ? () => model.visualize(ctx) : undefined, () => this.adapters.fallbackModel.visualize(ctx), this.claudeTimeout());
+    if (r.source === "live") this.generated.set(key, r.value);
+    return r.value;
+  }
+
+  async makeItStick(userId: string, input: { conceptId?: string; developmentId?: string }): Promise<MemoryAid> {
+    const ctx = await this.resolveLearningTarget(userId, input);
+    const seeded = this.seed.memoryAids[ctx.concept.id];
+    if (seeded) return seeded;
+    const key = `aid:${ctx.concept.id}`;
+    const cached = this.generated.get(key) as MemoryAid | undefined;
+    if (cached) return cached;
+    const model = this.model();
+    const r = await guarded("claude", "makeItStick", model ? () => model.makeItStick(ctx) : undefined, () => this.adapters.fallbackModel.makeItStick(ctx), this.claudeTimeout());
+    if (r.source === "live") this.generated.set(key, r.value);
+    return r.value;
+  }
+
+  async ask(userId: string, input: { question: string; developmentId?: string }): Promise<AskResponse> {
+    const { semantic, localSemantic } = this.adapters;
+    const [memories, hits] = await Promise.all([
+      this.recall(userId, input.question),
+      guarded(
+        "mongo",
+        "search",
+        semantic ? () => semantic.search({ text: input.question, limit: 8 }) : undefined,
+        () => localSemantic.search({ text: input.question, limit: 8 }),
+        SEMANTIC_TIMEOUT_MS,
+      ).then((r) => r.value),
+    ]);
+
+    // Expand search hits into claims: claims directly, developments/concepts via their claims.
+    const claimIds = new Set<string>();
+    if (input.developmentId) for (const id of (await this.getDevelopment(input.developmentId)).claimIds) claimIds.add(id);
+    for (const h of hits) {
+      if (h.kind === "claim") claimIds.add(h.id);
+      if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) claimIds.add(id);
+      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) claimIds.add(c.id);
+    }
+    const claims = [...claimIds].flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : [])).slice(0, 12);
+    const sources = [...new Set(claims.flatMap((c) => c.sourceIds))].flatMap((id) => (this.sources.has(id) ? [this.sources.get(id)!] : []));
+    const states = await this.statesFor(userId);
+    const conceptIds = new Set(claims.flatMap((c) => c.conceptIds));
+    const ctx = {
+      question: input.question,
+      profile: this.profileFor(userId),
+      memories,
+      claims,
+      sources,
+      concepts: [...this.concepts.values()],
+      states: [...conceptIds].flatMap((id) => (states.has(id) ? [states.get(id)!] : [])),
+    };
+    const model = this.model();
+    const { value } = await guarded("claude", "ask", model ? () => model.ask(ctx) : undefined, () => this.adapters.fallbackModel.ask(ctx), this.claudeTimeout());
+
+    await this.remember(userId, {
+      id: newId("mem"),
+      kind: "conversation",
+      content: `Asked: “${input.question.slice(0, 200)}”`,
+      createdAt: this.now().toISOString(),
+    });
+    if (input.developmentId) {
+      await this.withUserLock(userId, async () => {
+        for (const conceptId of value.relatedConceptIds.slice(0, 2)) {
+          await this.observe(userId, conceptId, "asked_followup", { sourceRef: `ask:${input.developmentId}` });
+        }
+      });
+    }
+    return {
+      answer: value.answer,
+      citations: value.citedSourceIds.flatMap((id) => (this.sources.has(id) ? [{ sourceId: id, title: this.sources.get(id)!.title }] : [])),
+      relatedConceptIds: value.relatedConceptIds,
+      memoryUsed: memories,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Voice
+  // -------------------------------------------------------------------------
+
+  async voiceSession(userId: string): Promise<VoiceSession> {
+    const { brief, developments } = await this.brief(userId);
+    const states = await this.statesFor(userId);
+    const profile = this.profileFor(userId);
+    const major = developments.filter((d) => d.significance >= 0.75);
+    const script = [
+      `Good morning, ${profile.displayName}. You have about ${Math.round(brief.estimatedMinutes)} minutes. ${major.length} developments materially changed topics you follow today.`,
+      ...developments.slice(0, 3).map((d, i) => {
+        const delta = this.deterministicDelta(userId, d, states);
+        const changed = delta.whatChanged[0] ?? d.summaryBullets[0] ?? "";
+        // Personalize the lead story; keep the rest short so the briefing stays brisk.
+        const tail = i === 0 ? ` ${delta.whyItMattersToYou.split(". ")[0]}.` : "";
+        return `${i === 0 ? "First" : i === 1 ? "Next" : "And"}: ${d.title}. ${changed}${tail}`;
+      }),
+      `I skipped ${brief.skippedCount ?? 0} items that were duplicates, low signal, or things you already understand. Want to go deeper on any of these?`,
+    ];
+    const ctx = { userId, displayName: profile.displayName, script, briefDate: brief.date, minutes: brief.estimatedMinutes };
+    const { voice, transcriptVoice } = this.adapters;
+    return (await guarded("elevenlabs", "createSession", voice ? () => voice.createSession(ctx) : undefined, () => transcriptVoice.createSession(ctx), VOICE_TIMEOUT_MS)).value;
+  }
+
+  // -------------------------------------------------------------------------
+  // Admin
+  // -------------------------------------------------------------------------
+
+  /** Defaults reflect what is actually configured; Supabase feature_flags rows override them. */
+  async featureFlags(): Promise<Record<string, boolean>> {
+    const defaults: Record<string, boolean> = {
+      voice: !!this.adapters.voice,
+      ask: true,
+      visualize: true,
+      make_it_stick: true,
+      storylines: true,
+    };
+    const { supabase } = this.adapters;
+    const remote = await guarded("supabase", "featureFlags", supabase ? () => supabase.featureFlags() : undefined, () => ({}), MEMORY_TIMEOUT_MS);
+    return { ...defaults, ...remote.value };
+  }
+
+  async reset(userId: string): Promise<void> {
+    await this.adapters.temporal.reset(userId);
+    await this.adapters.localMemory.reset(userId);
+    this.phrasedDeltas.clear();
+    logEvent("demo.reset", { userId });
+  }
+
+  /** Normalize raw sources into a Development with Claude (claims, concepts), then store it. */
+  async ingest(bundle: Omit<RawSourceBundle, "knownConcepts">): Promise<Development> {
+    const full: RawSourceBundle = { ...bundle, knownConcepts: [...this.concepts.values()] };
+    const model = this.model();
+    const { value, source } = await guarded(
+      "claude",
+      "normalizeDevelopment",
+      model ? () => model.normalizeDevelopment(full) : undefined,
+      () => this.adapters.fallbackModel.normalizeDevelopment(full),
+      Math.max(this.claudeTimeout(), 45000),
+    );
+    for (const c of value.newConcepts) if (!this.concepts.has(c.id)) this.concepts.set(c.id, c);
+    for (const c of value.claims) this.claims.set(c.id, c);
+    for (const s of value.sources) this.sources.set(s.id, s);
+    this.developments.set(value.development.id, value.development);
+    this.meta[value.development.id] = {
+      readMinutes: round(Math.max(1, value.claims.length * 0.5), 1),
+      mentalModelShift: value.mentalModelShift,
+      newClaimIds: value.claims.map((c) => c.id),
+    };
+    const { semantic } = this.adapters;
+    await guarded("mongo", "upsertDevelopment", semantic ? () => semantic.upsertDevelopment(value.development) : undefined, () => undefined, SEMANTIC_TIMEOUT_MS);
+    logEvent("development.ingested", { id: value.development.id, via: source, claims: value.claims.length, concepts: value.development.conceptIds });
+    return value.development;
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "@thinketh/contracts": "../../../packages/contracts/src/index.ts",
+    "zod": "npm:zod@^3.25.76",
+    "zod/v4": "npm:zod@^3.25.76/v4",
+    "hono": "npm:hono@^4.13.9",
+    "hono/cors": "npm:hono@^4.13.9/cors",
+    "@hono/node-server": "npm:@hono/node-server@^2.1.1",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.128.0",
+    "@anthropic-ai/sdk/helpers/beta/zod": "npm:@anthropic-ai/sdk@^0.128.0/helpers/beta/zod",
+    "mongodb": "npm:mongodb@^7.6.0",
+    "postgres": "npm:postgres@^3.4.9"
+  }
+}
