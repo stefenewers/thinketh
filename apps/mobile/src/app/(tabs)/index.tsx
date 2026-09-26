@@ -24,6 +24,7 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 };
 
 const VISIBLE_ROWS = 3;
+const LEAD_BAND_H = 116;
 
 export default function Today() {
   const profile = useProfile();
@@ -318,85 +319,90 @@ function MetricStrip({ metrics }: { metrics: Metric[] }) {
 
 function LeadDevelopmentCard({ development, understood, concepts }: { development: Development; understood: boolean; concepts: Concept[] }) {
   const { width } = useWindowDimensions();
-  const w = width - space.xl * 2;
-  const h = 340;
   const sources = development.sourceIds.length;
   return (
     <Pressable
       onPress={() => router.push({ pathname: "/development/[id]", params: { id: development.id } })}
       accessibilityRole="button"
       accessibilityLabel={`Lead development. ${development.title}. ${significanceLabel(development)}.`}
-      style={({ pressed }) => [styles.lead, { height: h }, pressed && { transform: [{ scale: 0.99 }] }]}
+      style={({ pressed }) => [styles.lead, pressed && { transform: [{ scale: 0.99 }] }]}
     >
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <DuskArt width={w} height={h} />
-      </View>
-      <View style={styles.leadPill}>
-        <Icon name="sparkle" size={13} color={glow.sun} />
-        <T style={styles.leadPillText}>Lead development</T>
-        {understood ? <Icon name="check" size={13} color={color.onInk} /> : null}
-      </View>
-      <View style={{ flex: 1 }} />
-      <T style={styles.leadTitle} numberOfLines={3}>
-        {development.title}
-      </T>
-      {development.summaryBullets[0] ? (
-        <T style={styles.leadSummary} numberOfLines={2}>
-          {development.summaryBullets[0]}
-        </T>
-      ) : null}
-      <View style={styles.leadFooter}>
-        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-          <View style={{ flexDirection: "row", marginRight: space.s }}>
-            {concepts.slice(0, 3).map((c, i) => (
-              <View key={c.id} style={[styles.conceptDot, i > 0 && { marginLeft: -8 }]}>
-                <T style={styles.conceptInitial}>{c.name.slice(0, 1)}</T>
-              </View>
-            ))}
-          </View>
-          <T style={styles.leadMeta} numberOfLines={1}>
-            {concepts.length} connected {concepts.length === 1 ? "concept" : "concepts"} · {sources} {sources === 1 ? "source" : "sources"}
-          </T>
+      {/* A short dusk band: the cinematic moment, kept to the top of an otherwise white product card. */}
+      <View style={styles.leadBand}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <DuskArt width={width - space.xl * 2} height={LEAD_BAND_H} />
         </View>
-        <View style={styles.leadArrow}>
-          <Icon name="arrow" size={20} color={color.onInk} />
+        <View style={styles.leadPill}>
+          <Icon name="sparkle" size={13} color={glow.sun} />
+          <T style={styles.leadPillText}>Lead development</T>
+        </View>
+      </View>
+      <View style={styles.leadBody}>
+        {understood ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Icon name="check" size={13} color={color.ink} />
+            <T variant="meta" style={{ color: color.ink }}>
+              Understood
+            </T>
+          </View>
+        ) : (
+          <T variant="meta" style={{ color: color.ink3 }}>
+            {significanceLabel(development)}
+          </T>
+        )}
+        <T style={styles.leadTitle} numberOfLines={3}>
+          {development.title}
+        </T>
+        {development.summaryBullets[0] ? (
+          <T style={styles.leadSummary} numberOfLines={2}>
+            {development.summaryBullets[0]}
+          </T>
+        ) : null}
+        <View style={styles.leadFooter}>
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+            <View style={{ flexDirection: "row", marginRight: space.s }}>
+              {concepts.slice(0, 3).map((c, i) => (
+                <View key={c.id} style={[styles.conceptDot, i > 0 && { marginLeft: -7 }]}>
+                  <T style={styles.conceptInitial}>{c.name.slice(0, 1)}</T>
+                </View>
+              ))}
+            </View>
+            <T style={styles.leadMeta} numberOfLines={1}>
+              {concepts.length} connected {concepts.length === 1 ? "concept" : "concepts"} · {sources} {sources === 1 ? "source" : "sources"}
+            </T>
+          </View>
+          <View style={styles.leadArrow}>
+            <Icon name="arrow" size={18} color={color.onInk} />
+          </View>
         </View>
       </View>
     </Pressable>
   );
 }
 
-/** A dusk landscape in layered haze: cinematic, and dark enough to read white type over. */
+/** Dusk in layered haze, cropped to a band: ridges, a coral sun, and a soft floor. */
 function DuskArt({ width, height }: { width: number; height: number }) {
   return (
-    <Svg width={width} height={height} viewBox="0 0 350 340" preserveAspectRatio="xMidYMid slice">
+    <Svg width={width} height={height} viewBox="0 0 350 116" preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={glow.duskTop} />
-          <Stop offset="0.55" stopColor={glow.duskMid} />
-          <Stop offset="1" stopColor={glow.duskLow} />
-        </LinearGradient>
-        <LinearGradient id="read" x1="0" y1="0" x2="1" y2="0">
-          <Stop offset="0" stopColor="#000" stopOpacity={0.42} />
-          <Stop offset="0.75" stopColor="#000" stopOpacity={0} />
+          <Stop offset="1" stopColor={glow.duskMid} />
         </LinearGradient>
         <LinearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0.45" stopColor="#000" stopOpacity={0} />
-          <Stop offset="1" stopColor="#000" stopOpacity={0.4} />
+          <Stop offset="0.5" stopColor="#000" stopOpacity={0} />
+          <Stop offset="1" stopColor="#000" stopOpacity={0.25} />
         </LinearGradient>
       </Defs>
-      <Rect x={0} y={0} width={350} height={340} fill="url(#sky)" />
-      <Circle cx={292} cy={88} r={6} fill={glow.sun} />
-      <Path d="M0 150 C 90 118, 180 108, 350 52 L350 340 L0 340 Z" fill={glow.ridgeFar} fillOpacity={0.55} />
-      <Path d="M0 214 C 100 176, 210 150, 350 112 L350 340 L0 340 Z" fill={glow.ridgeMid} fillOpacity={0.7} />
-      <Path d="M110 340 C 180 262, 250 226, 350 206 L350 340 Z" fill={glow.ridgeNear} fillOpacity={0.9} />
-      <Ellipse cx={120} cy={196} rx={170} ry={26} fill="#FFFFFF" fillOpacity={0.07} />
-      <Rect x={0} y={0} width={350} height={340} fill="url(#read)" />
-      <Rect x={0} y={0} width={350} height={340} fill="url(#floor)" />
+      <Rect x={0} y={0} width={350} height={116} fill="url(#sky)" />
+      <Circle cx={286} cy={36} r={5.5} fill={glow.sun} />
+      <Path d="M0 70 C 90 52, 180 46, 350 18 L350 116 L0 116 Z" fill={glow.ridgeFar} fillOpacity={0.55} />
+      <Path d="M0 100 C 100 80, 210 66, 350 50 L350 116 L0 116 Z" fill={glow.ridgeMid} fillOpacity={0.7} />
+      <Path d="M150 116 C 210 92, 270 82, 350 76 L350 116 Z" fill={glow.ridgeNear} fillOpacity={0.9} />
+      <Rect x={0} y={0} width={350} height={116} fill="url(#floor)" />
     </Svg>
   );
 }
-
 
 
 function SectionHeader({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
@@ -529,27 +535,29 @@ const styles = StyleSheet.create({
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.6, fontVariant: ["tabular-nums"] },
   listen: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised },
-  lead: { marginTop: space.xl, borderRadius: 22, overflow: "hidden", padding: space.xl, backgroundColor: glow.duskMid, ...shadow.raised, shadowOpacity: 0.16, shadowRadius: 20 },
+  lead: { marginTop: space.xl, borderRadius: 20, overflow: "hidden", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge, ...shadow.raised, shadowOpacity: 0.08, shadowRadius: 18 },
+  leadBand: { height: LEAD_BAND_H, padding: space.l, backgroundColor: glow.duskMid },
+  leadBody: { padding: space.xl, paddingTop: space.l },
   leadPill: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
     gap: 6,
     paddingHorizontal: space.m,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.35)",
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  leadPillText: { fontFamily: font.sansMedium, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: "uppercase", color: color.onInk },
-  leadTitle: { fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 31, letterSpacing: -0.7, color: color.onInk },
-  leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: "rgba(255,255,255,0.8)", marginTop: space.s },
+  leadPillText: { fontFamily: font.sansMedium, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.onInk },
+  leadTitle: { fontFamily: font.sansSemibold, fontSize: 23, lineHeight: 29, letterSpacing: -0.6, color: color.ink, marginTop: space.s },
+  leadSummary: { fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink2, marginTop: space.s },
   leadFooter: { flexDirection: "row", alignItems: "center", marginTop: space.l, gap: space.m },
-  leadMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: "rgba(255,255,255,0.88)", flexShrink: 1 },
-  leadArrow: { width: 52, height: 52, borderRadius: 26, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
-  conceptDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: glow.orbLight, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" },
-  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 11, lineHeight: 13, color: glow.orbDeep },
+  leadMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.ink2, flexShrink: 1 },
+  leadArrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
+  conceptDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: glow.tileCoral, borderWidth: 1.5, borderColor: color.canvas, alignItems: "center", justifyContent: "center" },
+  conceptInitial: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, color: color.coral },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.xxl, marginBottom: space.s },
   sectionTitle: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 23, letterSpacing: -0.3, color: color.ink },
   tiles: { flexDirection: "row", gap: 10 },

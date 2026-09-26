@@ -53,9 +53,9 @@ function TabBar({ state, navigation, insets }: BottomTabBarProps) {
           return (
             <Pressable key={route.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={tab.label} onPress={onPress} style={styles.tab}>
               <View style={styles.askButton}>
-                <Icon name="sparkle" size={22} color={color.onInk} />
+                <Icon name="sparkle" size={20} color={color.onInk} />
               </View>
-              <T style={[styles.label, { color: color.coral, fontFamily: font.sansSemibold }]}>{tab.label}</T>
+              <T style={[styles.label, { fontFamily: focused ? font.sansSemibold : font.sans, color: focused ? color.coral : color.ink3 }]}>{tab.label}</T>
             </Pressable>
           );
         }
@@ -79,19 +79,17 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingTop: space.s, minHeight: 52 },
   label: { fontSize: 11, lineHeight: 14, marginTop: 3 },
+  // Coral, but quiet: smaller, neutral shadow, no glow.
   askButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginTop: -26,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginTop: -16,
     backgroundColor: color.coral,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
     borderColor: color.canvas,
     ...shadow.raised,
-    shadowColor: color.coral,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
   },
 });
