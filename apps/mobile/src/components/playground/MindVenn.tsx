@@ -254,7 +254,7 @@ export function MindVenn({
       ))}
 
       {showMuse ? (
-        <Animated.View pointerEvents="none" style={[styles.museWrap, museStyle]}>
+        <Animated.View style={[styles.museWrap, { pointerEvents: "none" }, museStyle]}>
           <Animated.View style={[styles.muse, museOpacity]} accessibilityLabel={stage.conductedBy === "planner" ? "Thinketh's planner made this move" : "Muse is conducting"}>
             <Svg width={14} height={12}>
               <Path d="M2,10 L2,2 L7,7 L12,2 L12,10" stroke={color.onInk} strokeWidth={1.6} fill="none" strokeLinejoin="round" />

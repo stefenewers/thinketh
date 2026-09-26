@@ -47,6 +47,15 @@ describe("mastery update", () => {
     expect(after.evidenceCount).toBe(1);
   });
 
+  it("a repeated question holds the estimate; a miss on a repeat still counts", () => {
+    const before = stateOf({ conceptId: "agent-memory", mastery: 0.51, uncertainty: 0.29 });
+    const held = applyObservation(before, obs("diagnostic_correct", "agent-memory"), NOW, { repeat: true });
+    expect(held.after).toEqual(before);
+    expect(held.deltaMastery).toBe(0);
+    const missed = applyObservation(before, obs("diagnostic_incorrect", "agent-memory"), NOW, { repeat: true });
+    expect(missed.after.mastery).toBeLessThan(before.mastery);
+  });
+
   it("“Got it” is not demonstrated understanding: it is tiny and capped", () => {
     const before = stateOf({ conceptId: "c", mastery: 0.42, uncertainty: 0.44 });
     const gotIt = applyObservation(before, obs("got_it"), NOW);

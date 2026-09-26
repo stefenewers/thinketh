@@ -1,22 +1,43 @@
 import { StyleSheet, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import type { ConceptHistoryResponse, Development, KnowledgeStateTransition } from "@thinketh/contracts";
 import { api } from "@/api";
 import { T } from "@/components/Text";
 import { BackBar, Button, ErrorState, Gutter, LoadingState, Row, Screen, SectionLabel } from "@/components/ui";
-import { agentMemoryStoryline as story } from "@/content/demo";
+import { storylineFor, type StorylineContent } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { evidenceLabel, masteryLabel, misconceptionLabel, shortDate, significanceLabel } from "@/lib/knowledge";
+import { firstSentence } from "@/lib/briefText";
 import { color, font, space } from "@/theme/tokens";
 
 // A storyline shows two timelines side by side in meaning: how the world's
 // understanding of an idea changed, and how yours did. Thinketh models both.
-// One seeded storyline for now (Persistent Agent Memory).
+// One seeded storyline for now (Persistent Agent Memory); other ids show a not-found state.
 
 /** Observations worth telling as part of the story (not views or revisits). */
 const MILESTONE_KINDS = new Set(["diagnostic_correct", "diagnostic_partial", "diagnostic_incorrect", "misconception_detected", "explained", "already_knew", "got_it"]);
 
 export default function StorylineScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const story = storylineFor(id);
+  const back = () => (router.canGoBack() ? router.back() : router.replace("/library"));
+  if (!story) {
+    return (
+      <View style={{ flex: 1, backgroundColor: color.ground }}>
+        <BackBar onBack={back} />
+        <Gutter style={{ marginTop: space.x3 }}>
+          <T variant="section">No storyline here yet.</T>
+          <T variant="support" style={{ marginTop: space.s }}>
+            Thinketh hasn&apos;t traced how this idea changed over time.
+          </T>
+        </Gutter>
+      </View>
+    );
+  }
+  return <StorylineLoader story={story} back={back} />;
+}
+
+function StorylineLoader({ story, back }: { story: StorylineContent; back: () => void }) {
   const { data, error, loading, reload } = useApi(
     async () => {
       const [today, history, knowledge] = await Promise.all([
@@ -26,19 +47,20 @@ export default function StorylineScreen() {
       ]);
       return { today, history, knowledge };
     },
-    [],
+    [story.id],
     { refetchOnFocus: true },
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <BackBar onBack={() => (router.canGoBack() ? router.back() : router.replace("/library"))} />
+      <BackBar onBack={back} />
       {loading && !data ? (
         <LoadingState message="Lining up how this idea changed with how your understanding did…" />
       ) : error || !data ? (
         <ErrorState onRetry={reload} />
       ) : (
         <Storyline
+          story={story}
           developments={data.today.developments}
           heroId={data.today.brief.heroDevelopmentId}
           history={data.history}
@@ -51,12 +73,14 @@ export default function StorylineScreen() {
 }
 
 function Storyline({
+  story,
   developments,
   heroId,
   history,
   priorMastery,
   priorName,
 }: {
+  story: StorylineContent;
   developments: Development[];
   heroId: string;
   history: ConceptHistoryResponse;
@@ -204,7 +228,7 @@ function Milestone({ when, text, change, current, last }: { when: string; text: 
 
 /** The engine's own reason, told as a sentence about you: "Updated because you missed…" -> "You missed…". */
 function milestoneText(t: KnowledgeStateTransition): string {
-  const first = t.reason.split(/(?<=\.)\s/)[0] ?? t.reason;
+  const first = firstSentence(t.reason);
   const told = first.replace(/^Updated because you /i, "You ");
   const cleared = t.before.misconceptionFlags.filter((f) => !t.after.misconceptionFlags.includes(f));
   return cleared.length ? `${told} Misconception corrected: ${cleared.map(misconceptionLabel).join("; ")}.` : told;

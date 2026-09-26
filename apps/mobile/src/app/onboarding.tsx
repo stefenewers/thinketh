@@ -16,8 +16,13 @@ const STEPS = 4;
 
 export default function Onboarding() {
   const saved = useProfile();
+  // Wait for the saved profile: the form seeds its state once, and Skip saves that state.
+  if (saved === undefined) return <View style={{ flex: 1, backgroundColor: color.ground }} />;
   // Returning users (Profile -> Edit) start from their answers; first run from the demo defaults.
-  const start = saved ?? DEMO_PROFILE;
+  return <OnboardingForm start={saved ?? DEMO_PROFILE} />;
+}
+
+function OnboardingForm({ start }: { start: LearnerProfile }) {
   const [step, setStep] = useState(0);
   // Storyboard 12: an overview of what Thinketh will ask, before the questions.
   const [intro, setIntro] = useState(true);

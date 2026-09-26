@@ -69,7 +69,7 @@ export function VoiceMindprint({
 
   return (
     <View style={{ width, height }} accessible accessibilityLabel={view.active ? `Your Mind, focused on ${view.byId.get(view.active.id)?.label ?? "a concept"}.` : "Your Mind, overview."}>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glowStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }, glowStyle]}>
         <Svg width={width} height={height}>
           <Defs>
             <RadialGradient id="voiceLight" cx={cx} cy={cy} rx="62%" ry="68%">
@@ -90,8 +90,7 @@ export function VoiceMindprint({
         <Mindprint width={width} height={height} regions={[{ layout: view.layout, nodes: view.byId, focusId: view.active ? focusId : null, dim: !!view.active, fontSize: 12 }]} />
         {view.active && !reduceMotion ? (
           <Animated.View
-            pointerEvents="none"
-            style={[styles.ring, { left: view.active.x - view.active.r - 7, top: view.active.y - view.active.r - 7, width: (view.active.r + 7) * 2, height: (view.active.r + 7) * 2, borderRadius: view.active.r + 7 }, ring]}
+            style={[styles.ring, { pointerEvents: "none", left: view.active.x - view.active.r - 7, top: view.active.y - view.active.r - 7, width: (view.active.r + 7) * 2, height: (view.active.r + 7) * 2, borderRadius: view.active.r + 7 }, ring]}
           />
         ) : null}
       </Animated.View>

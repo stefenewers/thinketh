@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 // Thinketh design tokens: the white, precise, Mindprint-led product system.
 // Coral is a signal, reserved for new / changing / active knowledge.
 
@@ -100,23 +102,34 @@ export const motion = {
   transition: 1400,
 } as const;
 
+/**
+ * A shadow in native terms. Web gets the equivalent `boxShadow` (react-native-web deprecates
+ * shadow* props); native keeps shadow* + elevation so the phone renders exactly as designed.
+ */
+export function lift(ink: string, opacity: number, blur: number, y: number, elevation: number) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(ink.slice(i, i + 2), 16));
+  return Platform.OS === "web"
+    ? { boxShadow: `0px ${y}px ${blur}px rgba(${r}, ${g}, ${b}, ${opacity})` }
+    : { shadowColor: ink, shadowOpacity: opacity, shadowRadius: blur, shadowOffset: { width: 0, height: y }, elevation };
+}
+
 // Layered surfaces: a hairline border plus this, never a heavy border.
 export const shadow = {
-  raised: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-  sheet: { shadowColor: color.ink, shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 12 },
+  raised: lift(color.ink, 0.05, 12, 3, 2),
+  sheet: lift(color.ink, 0.1, 24, -4, 12),
   // Very soft lift for white cards on a white page.
-  soft: { shadowColor: color.ink, shadowOpacity: 0.05, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+  soft: lift(color.ink, 0.05, 16, 4, 1),
 } as const;
 
 // Today's depth tiers: a warm, diffuse shadow felt more than seen. One tier per role.
-const DEPTH_INK = "#2A1C15";
+export const DEPTH_INK = "#2A1C15";
 export const depth = {
   /** Level 1: standard raised surfaces (shortcut cards, the insights panel). Very soft, wide. */
-  card: { shadowColor: DEPTH_INK, shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
+  card: lift(DEPTH_INK, 0.08, 24, 8, 2),
   /** Level 2: the one featured surface (the lead story). Wider and a little more present. */
-  feature: { shadowColor: DEPTH_INK, shadowOpacity: 0.16, shadowRadius: 36, shadowOffset: { width: 0, height: 16 }, elevation: 7 },
+  feature: lift(DEPTH_INK, 0.16, 36, 16, 7),
   /** Level 3: floating circular controls (search, mic, Ask, the lead arrow). Clean and visible. */
-  control: { shadowColor: DEPTH_INK, shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  control: lift(DEPTH_INK, 0.14, 14, 5, 5),
 } as const;
 
 export const gutter = layout.pageX;

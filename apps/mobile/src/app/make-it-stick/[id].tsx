@@ -1,5 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { api } from "@/api";
 import { DiagramView } from "@/components/DiagramView";
 import { T } from "@/components/Text";
@@ -16,7 +17,7 @@ export default function MakeItStickScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Make it stick" onClose={() => router.back()} />
+      <ModalHeader title="Make it stick" onClose={() => goBack({ pathname: "/development/[id]", params: { id } })} />
       {loading && !aid ? (
         <LoadingState message="Finding an analogy that fits what you already know…" />
       ) : error || !aid ? (

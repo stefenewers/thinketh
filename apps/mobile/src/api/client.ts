@@ -18,6 +18,9 @@ import type {
   VoiceSession,
 } from "@thinketh/contracts";
 
+/** A question this backend never issued (e.g. served by the live API before it dropped): pick a new one. */
+export class UnknownQuestionError extends Error {}
+
 // One method per Thinketh endpoint. Shapes are the canonical envelopes in
 // packages/contracts; the UI only ever talks to this interface.
 export interface ThinkethApi {

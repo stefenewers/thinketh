@@ -44,6 +44,8 @@ export type UpdateOptions = {
   clearMisconception?: string;
   /** Short phrase describing the evidence, e.g. "a transfer question about …". */
   evidencePhrase?: string;
+  /** The learner has answered this question before: a repeat can't raise the estimate. */
+  repeat?: boolean;
 };
 
 export type StateUpdate = {
@@ -68,6 +70,12 @@ export function applyObservation(
   const rule = OBSERVATION_RULES[observation.kind];
   const { value: uEff, staleness } = effectiveUncertainty(state, now);
   const m = state.mastery;
+
+  // A repeated question isn't new evidence of understanding: the state holds. A miss on a
+  // repeat still counts below, because forgetting something you once answered is evidence.
+  if (options.repeat && rule.demonstrated && (observation.correctness ?? 0.5) >= m) {
+    return { after: { ...state, misconceptionFlags: [...state.misconceptionFlags] }, deltaMastery: 0, deltaUncertainty: 0, staleness: 0 };
+  }
 
   let deltaMastery: number;
   if (rule.demonstrated) {
@@ -121,7 +129,9 @@ export function explainUpdate(input: {
   const parts: string[] = [];
 
   const evidence = options.evidencePhrase ? ` ${options.evidencePhrase}` : "";
-  switch (observation.kind) {
+  const held = options.repeat && after.mastery === before.mastery && after.uncertainty === before.uncertainty;
+  if (held) parts.push("Updated because you answered a question you'd already answered, so it isn't new evidence.");
+  else switch (observation.kind) {
     case "diagnostic_correct":
       parts.push(`Updated because you correctly answered${evidence || ` a question on ${concept.name}`}.`);
       break;
@@ -147,7 +157,9 @@ export function explainUpdate(input: {
       : `uncertainty ${uChange < 0 ? "fell" : "rose"} ${fmt(before.uncertainty)} → ${fmt(after.uncertainty)}`;
   parts.push(`${movement} and ${certainty}.`);
 
-  if (rule.demonstrated) {
+  if (held) {
+    parts.push("A new question on this concept is what can show more.");
+  } else if (rule.demonstrated) {
     parts.push(
       `Diagnostic evidence is weighted ${observation.weight.toFixed(2)}, versus ${OBSERVATION_RULES.got_it.weight.toFixed(2)} for “Got it”, because it shows understanding rather than reporting it.`,
     );

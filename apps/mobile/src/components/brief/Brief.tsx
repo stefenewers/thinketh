@@ -24,7 +24,7 @@ export function TextureHeader({ source, onBack, hero }: { source: ImageSourcePro
   return (
     <View style={{ height: h, overflow: "hidden" }}>
       <Texture source={source} style={[StyleSheet.absoluteFill, { opacity: hero ? 0.92 : 0.55 }]} />
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
         <Svg width={width} height={h}>
           <Defs>
             <LinearGradient id="briefFade" x1="0" y1="0" x2="0" y2="1">

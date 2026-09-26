@@ -107,17 +107,20 @@ export function explainSelection(top: ScoredConcept, state: KnowledgeState | und
   return line;
 }
 
-/** Choose a question for a concept: unanswered first, then ones probing a known misconception, then multiple choice. */
+/**
+ * Choose an unanswered question for a concept: ones probing a known misconception first, then
+ * multiple choice. Undefined when every banked question was answered: the caller writes a new
+ * one, because repeating a question can't show anything new.
+ */
 export function pickItem(
   conceptId: string,
   bank: DiagnosticItem[],
   state: KnowledgeState | undefined,
   answeredIds: Set<string>,
 ): DiagnosticItem | undefined {
-  const items = bank.filter((q) => q.conceptId === conceptId);
+  const items = bank.filter((q) => q.conceptId === conceptId && !answeredIds.has(q.id));
   if (items.length === 0) return undefined;
   const score = (q: DiagnosticItem) =>
-    (answeredIds.has(q.id) ? 0 : 4) +
     (q.targetsMisconception && state?.misconceptionFlags.includes(q.targetsMisconception) ? 2 : 0) +
     (q.type === "multiple_choice" ? 1 : 0);
   return [...items].sort((a, b) => score(b) - score(a))[0];

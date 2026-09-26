@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { Pressable, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, G, Path } from "react-native-svg";
-import { color, depth, font, radius, shadow, space } from "@/theme/tokens";
+import { color, depth, font, lift, radius, shadow, space } from "@/theme/tokens";
 import { Icon, type IconName } from "./Icon";
 import { T } from "./Text";
 import { Texture } from "./Texture";
@@ -366,17 +366,17 @@ const styles = StyleSheet.create({
   tabOn: { borderBottomColor: color.ink },
   pillTrack: { flexDirection: "row", padding: 3, borderRadius: radius.pill, backgroundColor: color.surfaceMuted },
   pillSeg: { flex: 1, minHeight: 34, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  pillSegOn: { backgroundColor: color.canvas, ...shadow.soft, shadowOpacity: 0.08 },
+  pillSegOn: { backgroundColor: color.canvas, ...lift(color.ink, 0.08, 16, 4, 1) },
   tabText: { fontFamily: font.sansMedium, fontSize: 14, lineHeight: 18, color: color.ink3 },
   metrics: { flexDirection: "row" },
   metric: { paddingHorizontal: space.s },
   metricDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
   metricLabel: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 13, letterSpacing: 0.9, textTransform: "uppercase", color: color.ink2, marginTop: space.xs },
   metricSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink3 },
-  tile: { flex: 1, padding: 12, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
+  tile: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   tileHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   tileIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.04)" },
-  tileTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.4, color: color.ink, marginTop: space.m },
+  tileTitle: { fontFamily: font.sansSemibold, fontSize: 14, lineHeight: 19, letterSpacing: -0.4, color: color.ink, marginTop: space.m },
   tileSub: { fontFamily: font.sans, fontSize: 12.5, lineHeight: 17, color: color.ink2, marginTop: 2, minHeight: 34 },
   listCard: { borderRadius: 18, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, overflow: "hidden", ...shadow.soft },
   row: { flexDirection: "row", alignItems: "stretch", paddingLeft: space.m },

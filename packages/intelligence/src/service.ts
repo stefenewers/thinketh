@@ -54,7 +54,7 @@ import { logEvent } from "./log.ts";
 import { MISCONCEPTIONS } from "./seed/misconceptions.ts";
 import { TRANSFER_QUESTION_FOR } from "./seed/personas.ts";
 import type { DevelopmentMeta, DiagnosticItem, SeedCorpus } from "./seed/types.ts";
-import { newId, round } from "./util.ts";
+import { firstSentence, newId, round } from "./util.ts";
 import {
   enforceAnalysis,
   inferSourceType,
@@ -85,6 +85,21 @@ const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
 /** Backboard "Auto" extraction runs an LLM turn, so it only ever runs in the background. */
 const MEMORY_OBSERVE_TIMEOUT_MS = 45_000;
+
+/** "What am I weakest on?": a question about the learner's knowledge state, not about sources. */
+const SELF_ASSESSMENT = /\b(i|my|me)\b.*\b(weak(est)?|strong(est)?|gaps?|blind spots?)\b|\b(weak(est)?|strong(est)?|gaps?)\b.*\b(i|my|me)\b/i;
+
+/** Concepts the question names by acronym ("MCP" -> Model Context Protocol), which word search misses. */
+function conceptsByAcronym(question: string, concepts: Iterable<Concept>): Concept[] {
+  const named: Concept[] = [];
+  for (const c of concepts) {
+    // "Model Context Protocol" -> MCP; "Retrieval (RAG)" -> RAG, as written.
+    const words = c.name.replace(/\(.*?\)/g, "").split(/\s+/).filter((w) => /^[a-z]/i.test(w));
+    const acronyms = [...(c.name.match(/\(([A-Za-z]{2,})\)/)?.slice(1) ?? []), ...(words.length >= 2 ? [words.map((w) => w[0]).join("")] : [])];
+    if (acronyms.some((a) => new RegExp(`\\b${a}\\b`, "i").test(question))) named.push(c);
+  }
+  return named;
+}
 
 export class ThinkethService {
   private readonly concepts = new Map<string, Concept>();
@@ -278,9 +293,15 @@ export class ThinkethService {
   }
 
   /** Newest first, primary transitions only (propagated side effects excluded). */
-  private async recentPrimaryTransitions(userId: string, limit = 20): Promise<KnowledgeStateTransition[]> {
+  private async recentPrimaryTransitions(userId: string, limit = 20, { withSeedHistory = false } = {}): Promise<KnowledgeStateTransition[]> {
     const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
-    return recent.filter((t) => !t.observation.sourceRef?.startsWith("propagated:")).slice(0, limit);
+    // Mind tells the whole story, seeded history included, so a fresh store doesn't read "0 changes".
+    // The brief keeps only live changes: Today reads them as what you did today.
+    const seen = new Set<string>();
+    return [...recent, ...(withSeedHistory ? this.seedHistory(userId) : [])]
+      .filter((t) => !t.observation.sourceRef?.startsWith("propagated:") && !seen.has(t.id) && (seen.add(t.id), true))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   async brief(userId: string): Promise<BriefResponse> {
@@ -389,9 +410,17 @@ export class ThinkethService {
     return this.withUserLock(userId, async () => {
       const states = await this.statesFor(userId);
       const transitions: KnowledgeStateTransition[] = [];
-      for (const conceptId of development.conceptIds) {
+      const sourceRef = `development:${developmentId}`;
+      // A self-report ("Got it", "I already knew this") is about the development's main idea, and
+      // counts once: saying it again, or for every related concept, isn't more evidence.
+      const selfReport = kind === "got_it" || kind === "already_knew";
+      if (selfReport) {
+        const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
+        if (recent.some((t) => t.observation.kind === kind && t.observation.sourceRef === sourceRef)) return { transitions };
+      }
+      for (const conceptId of selfReport ? development.conceptIds.slice(0, 1) : development.conceptIds) {
         if (!states.has(conceptId)) continue;
-        const r = await this.observe(userId, conceptId, kind, { sourceRef: `development:${developmentId}`, states });
+        const r = await this.observe(userId, conceptId, kind, { sourceRef, states });
         transitions.push(r.transition);
       }
       if (kind === "explained") {
@@ -473,7 +502,14 @@ export class ThinkethService {
     return this.withUserLock(userId, async () => {
       const states = await this.statesFor(userId);
       const kind = kindForCorrectness(evaluation.correctness);
+      // Same question (or the same prompt under a new id, as generated ones get) answered before.
+      const answered = await this.answeredQuestionIds(userId);
+      const repeat = [...answered].some((id) => {
+        const q = id === item.id ? item : this.diagnostics.get(id);
+        return !!q && q.conceptId === item.conceptId && q.prompt === item.prompt;
+      });
       const options: UpdateOptions = {
+        ...(repeat ? { repeat } : {}),
         ...(item.evidencePhrase ? { evidencePhrase: item.evidencePhrase } : {}),
         ...(evaluation.misconception ? { addMisconception: evaluation.misconception } : {}),
         ...(kind === "diagnostic_correct" && item.targetsMisconception ? { clearMisconception: item.targetsMisconception } : {}),
@@ -545,7 +581,7 @@ export class ThinkethService {
       return [{ concept, state, level: knowledgeLevel(state), ...(last ? { lastTransition: last } : {}) }];
     });
     items.sort((a, b) => b.state.mastery - a.state.mastery);
-    return { userId, items, edges: this.seed.edges, recentTransitions: await this.recentPrimaryTransitions(userId) };
+    return { userId, items, edges: this.seed.edges, recentTransitions: await this.recentPrimaryTransitions(userId, 20, { withSeedHistory: true }) };
   }
 
   async conceptHistory(userId: string, conceptId: string): Promise<ConceptHistoryResponse> {
@@ -634,14 +670,18 @@ export class ThinkethService {
   }
 
   async ask(userId: string, input: { question: string; developmentId?: string; mode?: "quick" | "teach" | "deep" }): Promise<AskResponse> {
+    if (!input.developmentId && SELF_ASSESSMENT.test(input.question)) return this.askAboutKnowledge(userId);
+    const named = conceptsByAcronym(input.question, this.concepts.values());
+    const namedIds = new Set(named.map((c) => c.id));
+    const query = [input.question, ...named.map((c) => c.name)].join(" ");
     const { semantic, localSemantic } = this.adapters;
     const [memories, hits] = await Promise.all([
       this.recall(userId, input.question),
       guarded(
         "mongo",
         "search",
-        semantic ? () => semantic.search({ text: input.question, limit: 8 }) : undefined,
-        () => localSemantic.search({ text: input.question, limit: 8 }),
+        semantic ? () => semantic.search({ text: query, limit: 8 }) : undefined,
+        () => localSemantic.search({ text: query, limit: 8 }),
         SEMANTIC_TIMEOUT_MS,
       ).then((r) => r.value),
     ]);
@@ -649,6 +689,7 @@ export class ThinkethService {
     // Expand search hits into candidate claims: claims directly, developments/concepts via their claims.
     const devClaimIds = new Set(input.developmentId ? (await this.getDevelopment(input.developmentId)).claimIds : []);
     const candidateIds = new Set(devClaimIds);
+    for (const c of this.claims.values()) if (c.conceptIds.some((id) => namedIds.has(id))) candidateIds.add(c.id);
     for (const h of hits) {
       if (h.kind === "claim") candidateIds.add(h.id);
       if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) candidateIds.add(id);
@@ -656,7 +697,7 @@ export class ThinkethService {
     }
     const ranked = [...candidateIds]
       .flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : []))
-      .map((c) => ({ c, score: lexicalScore(input.question, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) }))
+      .map((c) => ({ c, score: lexicalScore(query, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) + (c.conceptIds.some((id) => namedIds.has(id)) ? 0.5 : 0) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((x) => x.c);
@@ -758,6 +799,32 @@ export class ThinkethService {
     };
   }
 
+  /** Strengths and gaps, straight from the knowledge state (deterministic; no sources to cite). */
+  private async askAboutKnowledge(userId: string): Promise<AskResponse> {
+    const states = [...(await this.statesFor(userId)).values()].filter((s) => this.concepts.has(s.conceptId));
+    const name = (s: KnowledgeState) => this.concepts.get(s.conceptId)!.name;
+    const byMastery = [...states].sort((a, b) => a.mastery - b.mastery);
+    const weakest = byMastery.slice(0, 3);
+    const strongest = byMastery.slice(-2).reverse();
+    const thinkethInfers = [
+      `Your weakest areas right now: ${weakest.map((s) => `${name(s)} (${knowledgeLevel(s)}, mastery ${s.mastery.toFixed(2)})`).join(", ")}.`,
+      ...weakest.flatMap((s) => {
+        const flag = s.misconceptionFlags.find((f) => MISCONCEPTIONS[f]);
+        return flag ? [`On ${name(s)} you've shown a misconception: ${MISCONCEPTIONS[flag]}.`] : [];
+      }),
+    ];
+    const stillUncertain = weakest
+      .filter((s) => s.uncertainty >= 0.4)
+      .map((s) => `Thinketh has little evidence on ${name(s)} (uncertainty ${s.uncertainty.toFixed(2)}), so a single check would tell a lot.`);
+    return {
+      answer: thinkethInfers.join(" "),
+      citations: [],
+      relatedConceptIds: weakest.map((s) => s.conceptId),
+      memoryUsed: [],
+      sections: { sourcesSay: [], thinkethInfers, youAlreadyUnderstand: strongest.map((s) => `${name(s)} (${knowledgeLevel(s)})`), stillUncertain },
+    };
+  }
+
   // -------------------------------------------------------------------------
   // Voice
   // -------------------------------------------------------------------------
@@ -772,7 +839,8 @@ export class ThinkethService {
         const delta = this.deterministicDelta(userId, d, states);
         const changed = delta.whatChanged[0] ?? d.summaryBullets[0] ?? "";
         // Personalize the lead story; keep the rest short so the briefing stays brisk.
-        const tail = i === 0 ? ` ${delta.whyItMattersToYou.split(". ")[0]}.` : "";
+        const lead = firstSentence(delta.whyItMattersToYou);
+        const tail = i === 0 && lead ? ` ${/[.!?]$/.test(lead) ? lead : `${lead}.`}` : "";
         return `${i === 0 ? "First" : i === 1 ? "Next" : "And"}: ${d.title}. ${changed}${tail}`;
       }),
       `I skipped ${brief.skippedCount ?? 0} items that were duplicates, low signal, or things you already understand. Want to go deeper on any of these?`,
