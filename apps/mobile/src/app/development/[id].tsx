@@ -128,30 +128,23 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           </View>
         ) : (
           <View style={[styles.card, { marginTop: space.xl }]}>
+            {/* Compact on purpose: the new idea, one link to what you knew, one line of why. The rest is in the full brief. */}
             <T style={styles.kicker}>The change in a minute</T>
             <T style={styles.lead}>{delta.whatChanged[0]}</T>
-            {delta.whatChanged.slice(1).map((line) => (
-              <DotLine key={line} tone="cool">
-                {line}
-              </DotLine>
-            ))}
-            {delta.alreadyKnew.length ? (
-              <>
-                <View style={styles.rule} />
-                <T style={styles.smallCaps}>Builds on what you knew</T>
-                <View style={{ marginTop: space.s }}>
-                  {delta.alreadyKnew.map((line) => (
-                    <DotLine key={line} tone="muted">
-                      {line}
-                    </DotLine>
-                  ))}
-                </View>
-              </>
+            {delta.alreadyKnew[0] ? (
+              <T variant="support" style={{ marginTop: space.s }}>
+                <T variant="support" style={{ fontFamily: font.sansSemibold, color: color.ink2 }}>
+                  Builds on what you knew:{" "}
+                </T>
+                {delta.alreadyKnew[0]}
+              </T>
             ) : null}
             <View style={styles.rule} />
-            <T style={styles.smallCaps}>Why it matters to you</T>
-            <T variant="support" style={{ marginTop: space.s, color: color.ink }}>
-              {delta.whyItMattersToYou}
+            <T variant="support" style={{ color: color.ink }}>
+              <T variant="support" style={{ fontFamily: font.sansSemibold, color: color.ink }}>
+                Why it matters to you:{" "}
+              </T>
+              {firstSentence(delta.whyItMattersToYou)}
             </T>
           </View>
         )}
@@ -222,7 +215,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           <View style={{ flex: 1 }}>
             <T style={styles.briefTitle}>{briefOpen ? "Hide the full brief" : "Read the full brief"}</T>
             <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
-              What happened, the mental-model change, related concepts, why it ranks, and all {sources.length} sources
+              {nothingNew ? "What happened" : "Everything that changed, what happened"}, related concepts, why it ranks, and {sources.length === 1 ? "the source" : `all ${sources.length} sources`}
             </T>
           </View>
           <View style={{ transform: [{ rotate: briefOpen ? "90deg" : "0deg" }] }}>
@@ -232,6 +225,31 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
 
         {briefOpen ? (
           <>
+            {!nothingNew ? (
+              <BriefSection title="Everything that changed">
+                {delta.whatChanged.map((line) => (
+                  <DotLine key={line} tone="cool">
+                    {line}
+                  </DotLine>
+                ))}
+                {delta.alreadyKnew.length ? (
+                  <>
+                    <T style={[styles.smallCaps, { marginTop: space.l }]}>What you already knew</T>
+                    <View style={{ marginTop: space.s }}>
+                      {delta.alreadyKnew.map((line) => (
+                        <DotLine key={line} tone="muted">
+                          {line}
+                        </DotLine>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+                <T style={[styles.smallCaps, { marginTop: space.l }]}>Why it matters to you</T>
+                <T variant="support" style={{ marginTop: space.s, color: color.ink }}>
+                  {delta.whyItMattersToYou}
+                </T>
+              </BriefSection>
+            ) : null}
             <BriefSection title="Why this changes your mental model">
               <T variant="statement" style={{ fontSize: 19, lineHeight: 27 }}>
                 {delta.mentalModelChange}
@@ -294,6 +312,12 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   );
 }
 
+/** The first sentence of a paragraph (the rest stays in the full brief). */
+function firstSentence(text: string): string {
+  const m = text.match(/^.*?[.!?](\s|$)/);
+  return (m ? m[0] : text).trim();
+}
+
 /** Your completed check, straight from the API response, and the obvious next step. */
 function CheckResult({ check, conceptName, onAgain }: { check: NonNullable<ReturnType<typeof lastCheckFor>>; conceptName: string; onAgain: () => void }) {
   const { transition } = check.result;
@@ -343,7 +367,7 @@ const styles = StyleSheet.create({
   card: { padding: space.l, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   kicker: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.6, textTransform: "uppercase", color: color.coral },
-  lead: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 25, letterSpacing: -0.3, color: color.ink, marginTop: space.s, marginBottom: space.xs },
+  lead: { fontFamily: font.sansSemibold, fontSize: 18, lineHeight: 25, letterSpacing: -0.3, color: color.ink, marginTop: space.s },
   smallCaps: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink3 },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: color.hairline, marginVertical: space.m },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.s },
