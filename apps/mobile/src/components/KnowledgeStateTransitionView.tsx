@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
+import * as Haptics from "expo-haptics";
 import type { Concept, KnowledgeStateTransition } from "@thinketh/contracts";
-import { color, font, motion, radius, space } from "@/theme/tokens";
-import { evidenceLabel, fmt2, masteryLabel, observationLabel } from "@/lib/knowledge";
+import { color, font, motion, space } from "@/theme/tokens";
+import { evidenceLabel, fmt2, masteryLabel, misconceptionLabel, observationLabel } from "@/lib/knowledge";
 import { useReducedMotion } from "@/lib/hooks";
 import { T } from "./Text";
-import { Divider } from "./ui";
 
 type Props = {
   transition: KnowledgeStateTransition;
@@ -13,112 +13,146 @@ type Props = {
   onDone?: () => void;
 };
 
-// The signature moment: the model visibly changes, and says why.
+/**
+ * The Knowledge Update moment. Still until the model changes; then a single
+ * coral knowledge trace on the concept, and only what the transition actually
+ * contains: level, a resolved misconception, connected concepts that moved,
+ * the evidence added. Raw numbers sit one tap away.
+ */
 export function KnowledgeStateTransitionView({ transition, concepts, onDone }: Props) {
   const reduced = useReducedMotion();
-  const [progress] = useState(() => new Animated.Value(0));
-  const [reveal] = useState(() => new Animated.Value(0));
-  const [p, setP] = useState(0);
+  const [trace] = useState(() => new Animated.Value(0));
+  const [level] = useState(() => new Animated.Value(0));
+  const [details] = useState(() => new Animated.Value(0));
+  const [numbersOpen, setNumbersOpen] = useState(false);
   const { before, after } = transition;
   const name = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
-  const improved = after.mastery >= before.mastery;
+  const improved = after.mastery > before.mastery;
+
+  const levelBefore = masteryLabel(before.mastery);
+  const levelAfter = masteryLabel(after.mastery);
+  const evidenceBefore = evidenceLabel(before.uncertainty);
+  const evidenceAfter = evidenceLabel(after.uncertainty);
+  const resolved = before.misconceptionFlags.filter((f) => !after.misconceptionFlags.includes(f));
+  const flagged = after.misconceptionFlags.filter((f) => !before.misconceptionFlags.includes(f));
+  const strengthened = transition.propagatedChanges.filter((c) => c.deltaMastery > 0);
+  const why = transition.reason.split(/(?<=\.)\s/)[0] ?? transition.reason;
 
   useEffect(() => {
-    const id = progress.addListener(({ value }) => setP(value));
     if (reduced) {
-      progress.setValue(1);
-      reveal.setValue(1);
+      trace.setValue(1);
+      level.setValue(1);
+      details.setValue(1);
       onDone?.();
-    } else {
-      Animated.sequence([
-        Animated.delay(350),
-        Animated.timing(progress, {
-          toValue: 1,
-          duration: motion.transition,
-          easing: Easing.bezier(0.2, 0.7, 0.2, 1),
-          useNativeDriver: false,
-        }),
-        Animated.timing(reveal, { toValue: 1, duration: motion.small, useNativeDriver: false }),
-      ]).start(() => onDone?.());
+      return;
     }
-    return () => progress.removeListener(id);
+    const ease = Easing.bezier(0.2, 0.7, 0.2, 1);
+    // ~1.7s: pause, trace, the level resolves, then the consequences, then calm.
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.parallel([
+        Animated.timing(trace, { toValue: 1, duration: 700, easing: ease, useNativeDriver: true }),
+        Animated.timing(level, { toValue: 1, duration: motion.shared, delay: 250, easing: ease, useNativeDriver: true }),
+      ]),
+      Animated.timing(details, { toValue: 1, duration: motion.screen, easing: ease, useNativeDriver: true }),
+    ]).start(() => onDone?.());
+    const h = setTimeout(() => {
+      if (improved) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }, 320);
+    return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transition.id, reduced]);
 
-  const lerp = (a: number, b: number) => a + (b - a) * p;
-  const pct = (a: number, b: number) =>
-    progress.interpolate({ inputRange: [0, 1], outputRange: [`${a * 100}%`, `${b * 100}%`] });
+  const summary = [
+    `${name(transition.conceptId)}: ${levelBefore}${levelBefore !== levelAfter ? ` to ${levelAfter}` : ""}.`,
+    evidenceBefore !== evidenceAfter ? `${evidenceBefore} to ${evidenceAfter}.` : "",
+    resolved.length ? `Misconception resolved: ${resolved.map(misconceptionLabel).join("; ")}.` : "",
+    why,
+  ].join(" ");
 
-  const summary = `${name(transition.conceptId)}. Mastery ${fmt2(before.mastery)} to ${fmt2(after.mastery)}. Uncertainty ${fmt2(before.uncertainty)} to ${fmt2(after.uncertainty)}. ${transition.reason}`;
+  const rise = (v: Animated.Value) => ({ opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] });
 
   return (
-    <View style={styles.card} accessible accessibilityLabel={summary} accessibilityLiveRegion="polite">
+    <View accessible accessibilityLabel={summary} accessibilityLiveRegion="polite">
       <T variant="label" tone={improved ? "coral" : "ink3"}>
-        {improved ? "Your mental model was updated" : "Thinketh adjusted its model"}
-      </T>
-      <T variant="title" style={{ marginTop: space.s }}>
-        {name(transition.conceptId)}
-      </T>
-      <T variant="support" style={{ marginTop: space.xs }}>
-        {masteryLabel(before.mastery)}
-        {masteryLabel(before.mastery) !== masteryLabel(after.mastery) ? ` → ${masteryLabel(after.mastery)}` : ""}
-        {" · "}
-        {evidenceLabel(after.uncertainty).toLowerCase()}
+        {improved ? "Your understanding changed." : "Thinketh adjusted its model."}
       </T>
 
-      {/* The headline numbers count up live; each bar sits under its number. */}
-      <View style={styles.bigRow}>
-        <BigDelta
-          label="Mastery"
-          from={before.mastery}
-          value={lerp(before.mastery, after.mastery)}
-          width={pct(before.mastery, after.mastery)}
-          fill={color.coral}
-          emphasize={improved}
-        />
-        <BigDelta
-          label="Uncertainty"
-          from={before.uncertainty}
-          value={lerp(before.uncertainty, after.uncertainty)}
-          width={pct(before.uncertainty, after.uncertainty)}
-          fill={color.ink}
-        />
+      {/* The concept, with a single coral knowledge trace. */}
+      <View style={styles.conceptRow}>
+        <View style={styles.markerBox}>
+          {improved && !reduced ? (
+            <Animated.View
+              style={[
+                styles.ring,
+                {
+                  opacity: trace.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.7, 0] }),
+                  transform: [{ scale: trace.interpolate({ inputRange: [0, 1], outputRange: [0.6, 2.6] }) }],
+                },
+              ]}
+            />
+          ) : null}
+          <View style={[styles.marker, improved && { backgroundColor: color.coral, borderColor: color.coral }]} />
+        </View>
+        <T variant="title" style={{ flex: 1 }}>
+          {name(transition.conceptId)}
+        </T>
       </View>
 
-      <Animated.View style={{ opacity: reveal, marginTop: space.xl }}>
-        <Divider />
-        <T variant="label" style={{ marginTop: space.l, marginBottom: space.s }}>
-          Why it changed
-        </T>
-        <T variant="body">{transition.reason}</T>
-        <T variant="meta" style={{ marginTop: space.m }}>
-          {observationLabel[transition.observation.kind]} · signal weight {fmt2(transition.observation.weight)} · evidence{" "}
-          {before.evidenceCount} → {after.evidenceCount}
-        </T>
-
-        {transition.propagatedChanges.length > 0 ? (
-          <View style={{ marginTop: space.xl }}>
-            <T variant="label" style={{ marginBottom: space.s }}>
-              Also updated
+      <Animated.View style={[{ marginTop: space.m }, rise(level)]}>
+        {levelBefore !== levelAfter ? (
+          <T variant="section">
+            {levelBefore} <T variant="section" style={{ color: color.ink3 }}>→</T> <T variant="section" tone="coral">{levelAfter}</T>
+          </T>
+        ) : (
+          <T variant="section">
+            {levelAfter}
+            <T variant="section" style={{ color: color.ink3 }}>
+              {improved ? ", on firmer ground" : ""}
             </T>
-            {transition.propagatedChanges.map((c) => (
-              <View key={c.conceptId} style={styles.propagated}>
-                <T variant="body" style={{ fontFamily: "Inter_500Medium" }}>
-                  {name(c.conceptId)}
-                </T>
-                <T variant="meta" style={{ fontVariant: ["tabular-nums"], marginTop: 2 }}>
-                  {[
-                    c.deltaMastery !== 0 ? `mastery ${signed(c.deltaMastery)}` : null,
-                    c.deltaUncertainty !== 0 ? `uncertainty ${signed(c.deltaUncertainty)}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </T>
-                <T variant="support" style={{ marginTop: 2 }}>
-                  {c.reason}
-                </T>
-              </View>
-            ))}
+          </T>
+        )}
+      </Animated.View>
+
+      <Animated.View style={[{ marginTop: space.xl, gap: space.l }, rise(details)]}>
+        {resolved.length ? (
+          <Fact label="Misconception resolved" accent>
+            {resolved.map((f) => `“${capitalize(misconceptionLabel(f))}”`).join("\n")}
+          </Fact>
+        ) : null}
+        {flagged.length ? <Fact label="Confusion noted">{flagged.map((f) => capitalize(misconceptionLabel(f))).join("\n")}</Fact> : null}
+        {evidenceBefore !== evidenceAfter ? (
+          <Fact label="Uncertainty reduced">
+            {evidenceBefore} → {evidenceAfter}
+          </Fact>
+        ) : null}
+        {strengthened.length ? (
+          <Fact label={strengthened.length === 1 ? "Connected concept strengthened" : "Connected concepts strengthened"}>
+            {strengthened.map((c) => name(c.conceptId)).join(" · ")}
+          </Fact>
+        ) : null}
+        <Fact label="Evidence added">
+          {observationLabel[transition.observation.kind]}. {why.replace(/^Updated because you /i, "You ")}
+        </Fact>
+
+        <Pressable onPress={() => setNumbersOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: numbersOpen }} hitSlop={8} style={styles.numbersToggle}>
+          <T variant="meta">{numbersOpen ? "Hide the numbers" : "See the numbers"}</T>
+        </Pressable>
+        {numbersOpen ? (
+          <View style={styles.numbers}>
+            <Num label="Mastery" from={before.mastery} to={after.mastery} />
+            <Num label="Uncertainty" from={before.uncertainty} to={after.uncertainty} />
+            <T variant="meta" style={{ marginTop: space.s }}>
+              Evidence {before.evidenceCount} → {after.evidenceCount} · signal weight {fmt2(transition.observation.weight)}
+            </T>
+            {strengthened.length ? (
+              <T variant="meta" style={{ marginTop: space.xs }}>
+                {strengthened.map((c) => `${name(c.conceptId)} +${c.deltaMastery.toFixed(2)}`).join(" · ")}
+              </T>
+            ) : null}
+            <T variant="support" style={{ marginTop: space.m }}>
+              {transition.reason}
+            </T>
           </View>
         ) : null}
       </Animated.View>
@@ -126,57 +160,42 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
   );
 }
 
-function BigDelta({
-  label,
-  from,
-  value,
-  width,
-  fill,
-  emphasize,
-}: {
-  label: string;
-  from: number;
-  value: number;
-  width: Animated.AnimatedInterpolation<string>;
-  fill: string;
-  emphasize?: boolean;
-}) {
+function Fact({ label, children, accent }: { label: string; children: string | string[]; accent?: boolean }) {
   return (
-    <View style={{ flex: 1 }}>
-      <T variant="label">{label}</T>
-      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: space.xs }}>
-        <T style={styles.bigFrom}>{fmt2(from)}</T>
-        <T style={styles.bigArrow}>→</T>
-        <T style={[styles.bigTo, emphasize && { color: color.coral }]}>{fmt2(value)}</T>
-      </View>
-      <View style={[styles.track, { marginTop: space.s }]}>
-        {/* Where it was: a quiet marker so the change is legible without color. */}
-        <View style={[styles.ghost, { left: `${from * 100}%` }]} />
-        <Animated.View style={[styles.fill, { width, backgroundColor: fill }]} />
-      </View>
+    <View style={[styles.fact, { borderLeftColor: accent ? color.coral : color.edge }]}>
+      <T variant="label" tone={accent ? "coral" : undefined}>
+        {label}
+      </T>
+      <T variant="body" style={{ marginTop: 2 }}>
+        {children}
+      </T>
     </View>
-  )
+  );
 }
 
-const signed = (n: number) => `${n > 0 ? "+" : "−"}${Math.abs(n).toFixed(2)}`;
+function Num({ label, from, to }: { label: string; from: number; to: number }) {
+  return (
+    <View style={styles.numRow}>
+      <T variant="meta" style={{ width: 96 }}>
+        {label}
+      </T>
+      <T variant="body" style={styles.tabular}>
+        {fmt2(from)} → {fmt2(to)}
+      </T>
+    </View>
+  );
+}
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const styles = StyleSheet.create({
-  bigRow: { flexDirection: "row", gap: space.l, marginTop: space.xl },
-  bigFrom: { fontFamily: font.sansMedium, fontSize: 17, color: color.ink3, fontVariant: ["tabular-nums"] },
-  bigArrow: { fontFamily: font.sans, fontSize: 17, color: color.ink3 },
-  bigTo: { fontFamily: font.serif, fontSize: 34, lineHeight: 40, color: color.ink, fontVariant: ["tabular-nums"] },
-  card: {
-    backgroundColor: color.panel,
-    borderRadius: radius.feature,
-    padding: space.xl,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  track: { height: 8, borderRadius: 4, backgroundColor: color.fog, overflow: "visible", justifyContent: "center" },
-  fill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 4 },
-  ghost: { position: "absolute", top: -4, bottom: -4, width: 2, marginLeft: -1, backgroundColor: color.ink3, zIndex: 2 },
-  propagated: { paddingVertical: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.edge },
+  conceptRow: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.m },
+  markerBox: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
+  marker: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: color.ink2, backgroundColor: color.ground },
+  ring: { position: "absolute", width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.coral },
+  fact: { borderLeftWidth: 2, paddingLeft: space.l },
+  numbersToggle: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center" },
+  numbers: { paddingTop: space.s },
+  numRow: { flexDirection: "row", alignItems: "baseline" },
+  tabular: { fontFamily: font.sansMedium, fontVariant: ["tabular-nums"] },
 });
