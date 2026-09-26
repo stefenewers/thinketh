@@ -165,7 +165,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
     !lesson && nothingNew ? (
       // No delta, nothing to teach: say so instead of offering an empty lesson.
       <T variant="support" style={{ textAlign: "center" }}>
-        {r.relevance?.level === "outside" ? "This sits outside what you're learning, and there's nothing new for you in it." : "You already have what this source offers."}
+        {r.relevance?.level === "outside" ? "This is outside the topics you follow, so Thinketh didn't find anything that connects to your Mind yet." : "You already have what this source offers."}
       </T>
     ) : !lesson ? (
       <>

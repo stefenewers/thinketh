@@ -25,7 +25,7 @@ export const READ_VIA_COPY: Record<NonNullable<Resource["readVia"]>, string> = {
 export const RELEVANCE_LABEL: Record<NonNullable<Resource["relevance"]>["level"], string> = {
   core: "Core to what you're learning",
   adjacent: "Adjacent to what you're learning",
-  outside: "Outside what you're learning",
+  outside: "Outside the topics you follow",
 };
 
 /** "watch" for videos, "read" for everything else. */

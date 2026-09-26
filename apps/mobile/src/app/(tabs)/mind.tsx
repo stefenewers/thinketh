@@ -120,7 +120,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
         <>
           {!selected ? (
             <Gutter>
-              <MindOrientation recent={recent[0]} items={items} conceptById={conceptById} onOpen={select} />
+              <MindOrientation recent={recent[0]} items={items} conceptById={conceptById} inBrief={new Set(developments.flatMap((d) => d.conceptIds))} onOpen={select} />
             </Gutter>
           ) : null}
           <MindMap items={items} edges={data.edges} changedIds={updatedIds} selectedId={selectedId} onSelect={select} />
@@ -191,7 +191,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
                       key={c.id}
                       onPress={() => openOnMap(c.id)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${c.name}. ${levelLabel[band]}, ${evidenceLabel(s.uncertainty)}.${updatedIds.has(c.id) ? " Just improved." : ""}`}
+                      accessibilityLabel={`${c.name}. ${levelLabel[band]}, ${evidenceLabel(s.uncertainty)}.${updatedIds.has(c.id) ? " Stronger evidence today." : ""}`}
                       style={({ pressed }) => [
                         styles.conceptRow,
                         i < inBand.length - 1 && styles.rowDivided,
@@ -206,7 +206,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
                           <View style={styles.signal}>
                             <View style={styles.dot} />
                             <T variant="meta" tone="coral">
-                              Just improved
+                              Stronger evidence
                             </T>
                           </View>
                         ) : (
@@ -299,18 +299,30 @@ function MindOrientation({
   recent,
   items,
   conceptById,
+  inBrief,
   onOpen,
 }: {
   recent: KnowledgeStateTransition | undefined;
   items: KnowledgeResponse["items"];
   conceptById: Map<string, Concept>;
+  /** Concepts that today's developments touch: the relevant ones right now. */
+  inBrief: Set<string>;
   onOpen: (conceptId: string) => void;
 }) {
-  // Worth strengthening: among developing or weak concepts, the one with the highest uncertainty
-  // (ties: the more important concept). Excludes whatever just changed.
+  // Worth strengthening, deterministic: among developing or weak concepts (not the one that just
+  // changed), prefer those today's brief touches (relevant now), then the highest uncertainty,
+  // then importance. The row says which rule picked it.
   const shaky = items
     .filter((i) => (i.level === "developing" || i.level === "weak") && i.concept.id !== recent?.conceptId)
-    .sort((a, b) => b.state.uncertainty - a.state.uncertainty || b.concept.importance - a.concept.importance)[0];
+    .sort(
+      (a, b) =>
+        Number(inBrief.has(b.concept.id)) - Number(inBrief.has(a.concept.id)) ||
+        b.state.uncertainty - a.state.uncertainty ||
+        b.concept.importance - a.concept.importance,
+    )[0];
+  const shakyWhy = shaky
+    ? `${inBrief.has(shaky.concept.id) ? "In today's brief, and " : ""}Thinketh has only ${shaky.state.evidenceCount} ${shaky.state.evidenceCount === 1 ? "signal" : "signals"} for it (${evidenceLabel(shaky.state.uncertainty).toLowerCase()}). Tap to add evidence.`
+    : "";
   const recentName = recent ? (conceptById.get(recent.conceptId)?.name ?? recent.conceptId) : undefined;
   return (
     <View style={styles.orient}>
@@ -339,7 +351,7 @@ function MindOrientation({
         <Pressable
           onPress={() => onOpen(shaky.concept.id)}
           accessibilityRole="button"
-          accessibilityLabel={`Worth strengthening: ${shaky.concept.name}. Thinketh is least sure about this one. Open it.`}
+          accessibilityLabel={`Worth strengthening: ${shaky.concept.name}. ${shakyWhy}`}
           style={[styles.orientRow, styles.orientDivided]}
         >
           <View style={[styles.legendDot, { backgroundColor: color.canvas, borderColor: color.ink }]} />
@@ -351,7 +363,7 @@ function MindOrientation({
               {shaky.concept.name}
             </T>
             <T variant="support" numberOfLines={2}>
-              Thinketh is least sure about this one: {shaky.state.evidenceCount} {shaky.state.evidenceCount === 1 ? "signal" : "signals"} so far, {evidenceLabel(shaky.state.uncertainty).toLowerCase()}.
+              {shakyWhy}
             </T>
           </View>
           <Icon name="chevron" size={13} color={color.ink3} />
@@ -398,14 +410,14 @@ function ChangeList({
           <InsightRow
             key={t.id}
             thumb={imageFor([t.conceptId])}
-            category={signal ? "Just improved" : direction(t)}
+            category={signal ? "Stronger evidence" : direction(t)}
             signal={signal}
             title={name}
             summary={changeSentence(t)}
             meta={relativeTime(t.createdAt)}
             last={i === transitions.length - 1}
             onPress={() => onOpen(t.conceptId)}
-            accessibilityLabel={`${name}. ${signal ? "Just improved" : direction(t)}, ${relativeTime(t.createdAt)}. ${changeSentence(t)}`}
+            accessibilityLabel={`${name}. ${signal ? "Stronger evidence" : direction(t)}, ${relativeTime(t.createdAt)}. ${changeSentence(t)}`}
           />
         );
       })}

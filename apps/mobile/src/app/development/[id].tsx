@@ -10,6 +10,7 @@ import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/u
 import { AppTopBar, ConceptChip, ListCard, SectionHeader, SignalPill } from "@/components/system";
 import { useApi } from "@/lib/hooks";
 import { shortDate, significanceLabel } from "@/lib/knowledge";
+import { firstSentence, nuanceOf } from "@/lib/briefText";
 import { lastCheckFor } from "@/lib/lastCheck";
 import { openExternal } from "@/lib/links";
 import { color, depth, font, space, warm } from "@/theme/tokens";
@@ -46,6 +47,9 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   const significance = significanceLabel(d);
   // "No new information = no card": if nothing changes what you know, say so instead of pushing a lesson.
   const nothingNew = delta.whatChanged.length === 0;
+  // The caveat that keeps the short version accurate: only a line the data explicitly marks as one
+  // ("Nuance: …", "Caveat: …"), never a generic warning.
+  const catchLine = nuanceOf(delta.whatChanged.slice(1));
   const publishers = [...new Set(sources.map((x) => x.publisher).filter((x): x is string => !!x))];
 
   const send = async (kind: FeedbackKind) => {
@@ -131,6 +135,14 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
             {/* Compact on purpose: the new idea, one link to what you knew, one line of why. The rest is in the full brief. */}
             <T style={styles.kicker}>The change in a minute</T>
             <T style={styles.lead}>{delta.whatChanged[0]}</T>
+            {catchLine ? (
+              <T variant="support" style={{ marginTop: space.s, color: color.ink }}>
+                <T variant="support" style={{ fontFamily: font.sansSemibold, color: color.ink }}>
+                  The catch:{" "}
+                </T>
+                {catchLine}
+              </T>
+            ) : null}
             {delta.alreadyKnew[0] ? (
               <T variant="support" style={{ marginTop: space.s }}>
                 <T variant="support" style={{ fontFamily: font.sansSemibold, color: color.ink2 }}>
@@ -152,7 +164,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
         {/* 3. One primary action: show you understand it. After a check, the next step is your Mind. */}
         {!nothingNew ? (
           check ? (
-            <CheckResult check={check} conceptName={conceptName(check.conceptId)} onAgain={checkUnderstanding} />
+            <CheckResult check={check} conceptName={conceptName(check.conceptId)} onAgain={checkUnderstanding} onExplain={ways.find((w) => w.key === "deeper")!.onPress} />
           ) : (
             <View style={{ marginTop: space.xl }}>
               <Button label="Check my understanding" icon="arrow" onPress={checkUnderstanding} accessibilityHint="One question about this development" />
@@ -312,17 +324,20 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   );
 }
 
-/** The first sentence of a paragraph (the rest stays in the full brief). */
-function firstSentence(text: string): string {
-  const m = text.match(/^.*?[.!?](\s|$)/);
-  return (m ? m[0] : text).trim();
-}
-
-/** Your completed check, straight from the API response, and the obvious next step. */
-function CheckResult({ check, conceptName, onAgain }: { check: NonNullable<ReturnType<typeof lastCheckFor>>; conceptName: string; onAgain: () => void }) {
+/** Your completed check, straight from the API response, in proportion to the evidence, and the next step. */
+function CheckResult({ check, conceptName, onAgain, onExplain }: { check: NonNullable<ReturnType<typeof lastCheckFor>>; conceptName: string; onAgain: () => void; onExplain: () => void }) {
   const { transition } = check.result;
   const kind = transition.observation.kind;
-  const heading = kind === "diagnostic_correct" ? "You showed it." : kind === "diagnostic_partial" ? "Partly there." : "Not yet.";
+  const rose = transition.after.mastery > transition.before.mastery;
+  const heading =
+    kind === "diagnostic_correct" ? "Your answer supports this understanding." : kind === "diagnostic_partial" ? "Part of it came through." : "Not yet.";
+  const body =
+    kind === "diagnostic_correct"
+      ? `Your Mind has stronger evidence for ${conceptName}. One answer is a signal, not proof.`
+      : kind === "diagnostic_partial"
+        ? `Thinketh recorded partial evidence for ${conceptName}.`
+        : `Nothing was marked as learned. Thinketh recorded what your answer showed about ${conceptName}.`;
+  const openMind = () => router.push({ pathname: "/mind", params: { concept: check.conceptId } });
   return (
     <View style={[styles.card, { marginTop: space.xl }]} accessibilityLiveRegion="polite">
       <T style={styles.kicker}>Your check</T>
@@ -330,14 +345,24 @@ function CheckResult({ check, conceptName, onAgain }: { check: NonNullable<Retur
         {heading}
       </T>
       <T variant="support" style={{ marginTop: space.xs }}>
-        Thinketh updated {conceptName} in your Mind from your answer. Mastery {transition.before.mastery.toFixed(2)} → {transition.after.mastery.toFixed(2)}.
+        {body}
       </T>
-      <Button
-        label="See what changed in my Mind"
-        icon="arrow"
-        style={{ marginTop: space.l }}
-        onPress={() => router.push({ pathname: "/mind", params: { concept: check.conceptId } })}
-      />
+      {/* The real transition, as recorded: numbers and the update's own reason. */}
+      <T variant="meta" style={{ marginTop: space.s, color: color.ink3, fontVariant: ["tabular-nums"] }}>
+        Mastery {transition.before.mastery.toFixed(2)} → {transition.after.mastery.toFixed(2)}
+        {rose ? "" : " · no increase"}
+      </T>
+      <T variant="meta" style={{ marginTop: 2, color: color.ink3 }} numberOfLines={3}>
+        {transition.reason}
+      </T>
+      {kind === "diagnostic_correct" ? (
+        <Button label="See what changed in my Mind" icon="arrow" style={{ marginTop: space.l }} onPress={openMind} />
+      ) : (
+        <>
+          <Button label="Explain it another way" icon="arrow" style={{ marginTop: space.l }} onPress={onExplain} />
+          <Button kind="secondary" label="See my Mind" style={{ marginTop: space.s }} onPress={openMind} />
+        </>
+      )}
       <Button kind="quiet" label="Check again" style={{ alignSelf: "center", marginTop: space.xs }} onPress={onAgain} />
     </View>
   );

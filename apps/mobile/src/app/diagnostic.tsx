@@ -87,7 +87,7 @@ function Diagnostic({
     }
   };
 
-  const [verdict, explanation] = result ? splitFeedback(result.answer.correctness, result.answer.feedback) : [null, null];
+  const [verdict, explanation] = result ? splitFeedback(result.transition.observation.kind, result.answer.feedback) : [null, null];
 
   return (
     <Screen topInset={false}>
@@ -175,17 +175,34 @@ function Diagnostic({
                   {explanation}
                 </T>
               ) : null}
+              <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+                {EVIDENCE_NOTE[result.transition.observation.kind] ?? "Thinketh recorded this answer as evidence."}
+              </T>
             </View>
           </Gutter>
           <Gutter style={{ marginTop: space.xl }}>
             <KnowledgeStateTransitionView transition={result.transition} concepts={concepts} onDone={() => setSettled(true)} />
           </Gutter>
           <Gutter style={{ marginTop: space.xxl, gap: space.m, opacity: settled ? 1 : 0.6 }}>
-            <Button
-              label="See what changed in my Mind"
-              icon="arrow"
-              onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })}
-            />
+            {result.transition.observation.kind === "diagnostic_correct" ? (
+              <Button
+                label="See what changed in my Mind"
+                icon="arrow"
+                onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })}
+              />
+            ) : (
+              // Not yet (or partly): the useful next step is another way in, not a victory lap.
+              <>
+                <Button
+                  label="Explain it another way"
+                  icon="arrow"
+                  onPress={() =>
+                    router.replace({ pathname: "/ask", params: { q: `Explain ${concept?.name ?? "this"} based on what I already know. I just got a check on it wrong.`, mode: "teach" } })
+                  }
+                />
+                <Button kind="secondary" label="See my Mind" onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })} />
+              </>
+            )}
             <Button
               kind="quiet"
               label="Back to today"
@@ -199,13 +216,22 @@ function Diagnostic({
   );
 }
 
+/** What one answer means, stated in proportion to the evidence. */
+const EVIDENCE_NOTE: Partial<Record<string, string>> = {
+  diagnostic_correct: "Your answer supports this understanding. One answer is a signal, not proof.",
+  diagnostic_partial: "Part of the idea came through. Thinketh recorded it as partial evidence.",
+  diagnostic_incorrect: "Nothing was marked as learned. Thinketh recorded what your answer showed.",
+};
+
 // Feedback may lead with its own verdict ("Right. …"); use it as the heading
 // instead of stacking a second one above it.
-function splitFeedback(correctness: number, feedback: string): [string, string] {
+// The verdict comes from the same recorded observation that drives the knowledge update, so the
+// heading can never disagree with "Evidence added" below it.
+function splitFeedback(kind: string, feedback: string): [string, string] {
   const m = feedback.match(/^(Right|Correct|Not quite|Partly|Almost)[^.!]{0,20}[.!]\s*/i);
-  if (m) return [m[0].trim(), feedback.slice(m[0].length)];
-  const verdict = correctness >= 0.99 ? "Right." : correctness > 0 ? "Partly there." : "One connection needs clarification.";
-  return [verdict, feedback];
+  const rest = m ? feedback.slice(m[0].length) : feedback;
+  const verdict = kind === "diagnostic_correct" ? "Right." : kind === "diagnostic_partial" ? "Partly there." : "Not quite.";
+  return [verdict, rest];
 }
 
 function WhyThisQuestion({

@@ -8,7 +8,6 @@ import { ListCard, SectionHeader } from "@/components/system";
 import { T } from "@/components/Text";
 import { Texture } from "@/components/Texture";
 import { Button, Gutter, Screen } from "@/components/ui";
-import { agentMemoryStoryline } from "@/content/demo";
 import { storyImageFor } from "@/content/imagery";
 import { useApi } from "@/lib/hooks";
 import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
@@ -17,8 +16,9 @@ import { color, depth, font, glow, space, warm } from "@/theme/tokens";
 const VISIBLE = 5;
 
 /**
- * Learn: what can I read, save or explore next? Saved sources (the learning queue), a way to add
- * one, a way into related ideas, and the storyline you're following. Your Mind lives in its own tab.
+ * Learn: what can I read, save or explore next? What you saved (yours), a way to add more, and,
+ * kept separate, what Thinketh suggests. The storyline is reached from its development and concept;
+ * your learning profile from your avatar on Today.
  */
 export default function Learn() {
   const queue = useApi(() => api.listResources(), [], { refetchOnFocus: true });
@@ -33,14 +33,14 @@ export default function Learn() {
           Learn
         </T>
         <T variant="support" style={{ marginTop: space.s }}>
-          Save what you want to understand. Thinketh reads it against your Mind and keeps what&apos;s new for you.
+          Save what you want to understand. Thinketh reads each one against your Mind and shows what&apos;s new for you.
         </T>
         <Button label="Add a source" icon="arrow" style={{ marginTop: space.l }} onPress={() => router.push("/resource/add")} accessibilityHint="An article, paper, docs page or video" />
       </Gutter>
 
       <Gutter>
         <SectionHeader
-          title="Your learning queue"
+          title="Saved by you"
           action={resources.length > VISIBLE ? { label: showAll ? "Show fewer" : "See all", onPress: () => setShowAll((v) => !v) } : undefined}
         />
         {queue.loading && !queue.data ? (
@@ -60,31 +60,16 @@ export default function Learn() {
           </ListCard>
         )}
 
-        <SectionHeader title="Go further" />
+        {/* Thinketh's suggestions, kept apart from what you saved. */}
+        <SectionHeader title="Suggested for you" />
         <ListCard style={styles.panel}>
           <EntryRow
             icon="explore"
             tint={glow.tileCool}
             ink={glow.tileCoolInk}
             title="Explore related ideas"
-            subtitle="Adjacent ideas that would strengthen what you already understand."
+            subtitle="Adjacent ideas Thinketh picked because they'd strengthen what you already understand."
             onPress={() => router.push("/explore")}
-          />
-          <EntryRow
-            icon="library"
-            tint={glow.tileWarm}
-            ink={glow.tileWarmInk}
-            title={agentMemoryStoryline.title}
-            subtitle={`${agentMemoryStoryline.subtitle}, and how your understanding changed with it.`}
-            onPress={() => router.push({ pathname: "/storyline/[id]", params: { id: agentMemoryStoryline.id } })}
-          />
-          <EntryRow
-            icon="people"
-            tint={glow.tileNeutral}
-            ink={glow.tileNeutralInk}
-            title="Learning profile"
-            subtitle="What you follow, what you're optimizing for, and how you like to learn."
-            onPress={() => router.push("/profile")}
             last
           />
         </ListCard>
@@ -96,7 +81,7 @@ export default function Learn() {
 function queueStatus(r: Resource): string {
   if (r.status === "processing") return STAGE_COPY[r.stage];
   if (r.status === "failed") return "Couldn't read this one";
-  if (r.relevance?.level === "outside") return "Outside what you're learning";
+  if (r.relevance?.level === "outside") return "Outside the topics you follow";
   return `~${r.estimatedUsefulMinutes ?? "?"} useful min of ~${r.estimatedReadMinutes ?? "?"} ${consumeVerb(r)} · ${r.newToYou.length} new for you`;
 }
 
@@ -118,7 +103,8 @@ function QueueRow({ r, last }: { r: Resource; last: boolean }) {
           <T style={styles.title} numberOfLines={2}>
             {r.title}
           </T>
-          <T style={[styles.status, r.status === "ready" && { color: color.coral }]} numberOfLines={1}>
+          {/* Coral only for something ready with new ideas for you; everything else is neutral. */}
+          <T style={[styles.status, r.status === "ready" && r.relevance?.level !== "outside" && { color: color.coral }]} numberOfLines={1}>
             {queueStatus(r)}
           </T>
         </View>
@@ -128,7 +114,7 @@ function QueueRow({ r, last }: { r: Resource; last: boolean }) {
   );
 }
 
-function EntryRow({ icon, tint, ink, title, subtitle, onPress, last }: { icon: "explore" | "library" | "people"; tint: string; ink: string; title: string; subtitle: string; onPress: () => void; last?: boolean }) {
+function EntryRow({ icon, tint, ink, title, subtitle, onPress, last }: { icon: "explore"; tint: string; ink: string; title: string; subtitle: string; onPress: () => void; last?: boolean }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}`} style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.surfaceMuted }]}>
       <View style={[styles.icon, { backgroundColor: tint }]}>
