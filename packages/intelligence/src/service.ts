@@ -47,9 +47,11 @@ import { computeDelta, focusConceptId } from "./engine/delta.ts";
 import { evaluateMultipleChoice, evaluateShortAnswerKeywords, InvalidAnswerError, scoreRubric, type Evaluation } from "./engine/evaluation.ts";
 import { knowledgeLevel, transition, type Graph, type TransitionResult, type UpdateOptions } from "./engine/knowledgeState.ts";
 import { kindForCorrectness, makeObservation } from "./engine/observations.ts";
+import { hasGroundedChallenge, sanitizeDraft, TransferNotAssessableError, validateTransferDraft, type TransferContext, type TransferDraft } from "./engine/transfer.ts";
 import { explainSelection, pickItem, scoreConcepts, toPublicQuestion } from "./engine/selection.ts";
 import { logEvent } from "./log.ts";
 import { MISCONCEPTIONS } from "./seed/misconceptions.ts";
+import { TRANSFER_QUESTION_FOR } from "./seed/personas.ts";
 import type { DevelopmentMeta, DiagnosticItem, SeedCorpus } from "./seed/types.ts";
 import { newId, round } from "./util.ts";
 import {
@@ -66,6 +68,9 @@ import { fetchPage, ResourceReadError, validateUrl, youtubeId } from "./resource
 
 /** Background analysis of a saved resource: nobody waits on it, so Claude gets room. */
 const RESOURCE_ANALYSIS_TIMEOUT_MS = 50_000;
+/** How long a fetched page is shared between readers of the same URL. */
+const SHARED_PAGE_TTL_MS = 10 * 60_000;
+const SHARED_PAGE_MAX = 40;
 const MAX_QUEUE = 30;
 const READ_FAILED = "Thinketh couldn't reliably read this source yet.";
 
@@ -88,6 +93,7 @@ export class ThinkethService {
   private readonly meta: Record<string, DevelopmentMeta>;
   private readonly storylines = new Map<string, Storyline>();
   private readonly diagnostics = new Map<string, DiagnosticItem>();
+  private readonly sharedPages = new Map<string, { at: number; p: ReturnType<typeof fetchPage> }>();
   private readonly phrasedDeltas = new Map<string, DeltaExplanation>();
   private readonly generated = new Map<string, DiagramSpec | MemoryAid>();
   private readonly userLocks = new Map<string, Promise<unknown>>();
@@ -903,6 +909,24 @@ export class ThinkethService {
     return resource;
   }
 
+  /**
+   * One fetch per source, shared: when two people read the same URL at once (a Playground's shared
+   * source), the page is fetched and extracted once and personalized separately for each Mind.
+   * Same hardened fetchPage (URL validation, SSRF checks, redirects, size/PDF/YouTube limits, reader
+   * fallback). Kept briefly; failures are never cached.
+   */
+  private fetchShared(url: string): ReturnType<typeof fetchPage> {
+    const now = Date.now();
+    for (const [k, v] of this.sharedPages) if (now - v.at > SHARED_PAGE_TTL_MS) this.sharedPages.delete(k);
+    const hit = this.sharedPages.get(url);
+    if (hit) return hit.p;
+    const p = fetchPage(url, fetch, { readerBase: this.config.readerFallback });
+    this.sharedPages.set(url, { at: now, p });
+    if (this.sharedPages.size > SHARED_PAGE_MAX) this.sharedPages.delete(this.sharedPages.keys().next().value!);
+    p.catch(() => this.sharedPages.delete(url));
+    return p;
+  }
+
   private async conceptViews(userId: string): Promise<ConceptView[]> {
     const states = await this.statesFor(userId);
     return [...this.concepts.values()].map((c) => {
@@ -920,7 +944,7 @@ export class ThinkethService {
   private async processResource(userId: string, id: string): Promise<void> {
     const started = Date.now();
     try {
-      const page = await fetchPage(this.getResource(userId, id).url, fetch, { readerBase: this.config.readerFallback });
+      const page = await this.fetchShared(this.getResource(userId, id).url);
       const readMin = page.durationMinutes ?? readMinutes(page.words);
       this.updateResource(userId, id, {
         title: page.title ?? this.getResource(userId, id).title,
@@ -1048,6 +1072,88 @@ export class ThinkethService {
 
   isPersona(userId: string): boolean {
     return !!this.seed.personas[userId];
+  }
+
+  private transferContext(conceptId: string, teacherExplanation?: string): TransferContext | undefined {
+    const concept = this.concepts.get(conceptId);
+    if (!concept) return undefined;
+    const related = new Set<string>();
+    for (const e of this.seed.edges) {
+      if (e.fromConceptId === conceptId) related.add(e.toConceptId);
+      if (e.toConceptId === conceptId) related.add(e.fromConceptId);
+    }
+    return {
+      concept,
+      relatedConcepts: [...related].flatMap((id) => (this.concepts.has(id) ? [this.concepts.get(id)!] : [])),
+      claims: [...this.claims.values()].filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6),
+      ...(teacherExplanation ? { teacherExplanation } : {}),
+    };
+  }
+
+  /**
+   * Can Thinketh verify learning of this concept after peer teaching? Yes if a seeded transfer
+   * question exists, or a grounded fallback can always be built (so a failed generation can't
+   * strand a learner). Never simply "true".
+   */
+  isTransferAssessable(conceptId: string): boolean {
+    if (TRANSFER_QUESTION_FOR[conceptId]) return true;
+    const ctx = this.transferContext(conceptId);
+    return !!ctx && hasGroundedChallenge(ctx);
+  }
+
+  /**
+   * The transfer challenge for a peer-taught concept. Seeded when one exists (the golden fixture);
+   * otherwise generated by Claude from trusted Thinketh data and validated here, with a grounded
+   * deterministic fallback on timeout, error or invalid output. Registered as a Playground-only
+   * diagnostic so the answer is graded by answerDiagnostic like every other: same grader, same
+   * observation, same update rule, same Tiger record. The prompt shown is the stored item's prompt,
+   * and grading reads that same stored item by id.
+   */
+  async transferChallenge(
+    conceptId: string,
+    teacherExplanation?: string,
+  ): Promise<{ item: DiagnosticItem; source: "seeded" | "generated" | "fallback"; applicationContext?: string }> {
+    const seededId = TRANSFER_QUESTION_FOR[conceptId];
+    const seeded = seededId ? this.diagnostics.get(seededId) : undefined;
+    if (seeded) return { item: seeded, source: "seeded", applicationContext: "an autonomous coding agent" };
+    const ctx = this.transferContext(conceptId, teacherExplanation);
+    if (!ctx) throw new NotFoundError(`Concept not found: ${conceptId}`);
+    const model = this.model();
+    let out: { value: TransferDraft; source: "live" | "fallback" };
+    try {
+      out = await guarded(
+        "claude",
+        "generateTransferChallenge",
+        model
+          ? async () => {
+              const draft = sanitizeDraft(await model.generateTransferChallenge(ctx));
+              const problem = validateTransferDraft(draft, ctx);
+              if (problem) throw new Error(`transfer challenge rejected: ${problem}`);
+              return draft;
+            }
+          : undefined,
+        () => this.adapters.fallbackModel.generateTransferChallenge(ctx),
+        this.diagnosticClaudeTimeout(),
+      );
+    } catch (err) {
+      if (err instanceof TransferNotAssessableError) throw new BadRequestError("Thinketh can't verify learning on that concept yet.");
+      throw err;
+    }
+    const d = out.value;
+    const item: DiagnosticItem = {
+      id: newId("dq-transfer"),
+      conceptId,
+      type: "short_answer",
+      prompt: d.prompt,
+      expectedConcepts: d.expectedConcepts,
+      rationale: d.rationale,
+      evidencePhrase: `a transfer question applying peer-taught ${ctx.concept.name.toLowerCase()} to ${d.applicationContext}`,
+      playgroundOnly: true,
+      rubric: d.rubric,
+    };
+    this.diagnostics.set(item.id, item);
+    logEvent("playground.transfer_challenge", { conceptId, questionId: item.id, source: out.source === "live" ? "generated" : "fallback", ideas: d.rubric.length });
+    return { item, source: out.source === "live" ? "generated" : "fallback", applicationContext: d.applicationContext };
   }
 
   /** Public prompt of a diagnostic (the answer key stays server-side). */

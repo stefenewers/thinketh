@@ -63,8 +63,13 @@ describe("conductor boundary", () => {
   const view: ConductorView = {
     scene: "overview",
     participants: [{ id: "demo-user", name: "Stefen" }, { id: "nadani", name: "Nadani" }],
-    teachable: [{ conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", teacherId: "nadani", learnerId: "demo-user", hasTransferQuestion: true }],
+    teachable: [{ conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", teacherId: "nadani", learnerId: "demo-user", assessmentAvailable: true }],
     sharedGaps: [{ conceptId: "memory-consolidation", conceptName: "Memory Consolidation" }],
+    plan: [
+      { id: "peer:evaluator-architectures:nadani", type: "peer_teach", conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", teacherId: "nadani", learnerId: "demo-user", done: false },
+      { id: "gap:memory-consolidation", type: "shared_gap", conceptId: "memory-consolidation", conceptName: "Memory Consolidation", done: false },
+    ],
+    next: "peer:evaluator-architectures:nadani",
     progress: { teacherAssigned: false, explanationSubmitted: false, transferAsked: false, transferAnswered: false, sharedGapTaught: false, resourceIntroduced: false },
   };
 
@@ -164,7 +169,8 @@ describe("Playground golden path (HTTP)", () => {
     const k = (await res.json()) as { items: Array<{ concept: { id: string }; state: { mastery: number } }> };
     expect(k.items.find((i) => i.concept.id === "evaluator-architectures")!.state.mastery).toBeCloseTo(t.after.mastery, 5);
 
-    room = await ok("POST", `/playground/rooms/${room.id}/conduct`, {});
+    // "Next: the shared gap" in the app sends this intent (the plan's next item would be the second peer teaching).
+    room = await ok("POST", `/playground/rooms/${room.id}/conduct`, { intent: "shared_gap" });
     expect(room.scene).toBe("shared_gap");
     expect(room.sharedGap).toMatchObject({ conceptId: "memory-consolidation" });
     expect(room.sharedGap!.lesson!.length).toBeGreaterThan(1);

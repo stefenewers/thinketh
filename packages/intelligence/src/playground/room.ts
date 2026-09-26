@@ -16,7 +16,8 @@ import type {
 import { collaborativeDelta } from "../engine/collaborative.ts";
 import { knowledgeLevel } from "../engine/knowledgeState.ts";
 import { logEvent } from "../log.ts";
-import { NADANI_ID, PEER_PROMPTS, TRANSFER_QUESTION_FOR } from "../seed/personas.ts";
+import { nextPlanItem, planSession } from "../engine/sessionPlan.ts";
+import { NADANI_ID, PEER_PROMPTS } from "../seed/personas.ts";
 import { BadRequestError, NotFoundError, type ThinkethService } from "../service.ts";
 import { newId } from "../util.ts";
 import { validateAction, type Conductor, type ConductorView } from "./conductor.ts";
@@ -149,6 +150,13 @@ export class PlaygroundService {
     const [a, b] = room.snapshots as [MindSnapshot, MindSnapshot];
     const importance = Object.fromEntries(this.svc.conceptList().map((c) => [c.id, c.importance]));
     room.delta = collaborativeDelta(a, b, importance);
+    // Thinketh plans the session from the delta: the most valuable valid moves that fit 7 minutes.
+    room.plan = planSession({
+      delta: room.delta,
+      names: Object.fromEntries(room.participants.map((p) => [p.userId, p.displayName])),
+      assessable: (conceptId) => this.svc.isTransferAssessable(conceptId),
+    });
+    room.completedTeachings = [];
     room.scene = "overview";
     const d = room.delta;
     this.emit(room, "delta_ready", "thinketh", "Three useful differences in your current evidence.", {
@@ -157,6 +165,7 @@ export class PlaygroundService {
       sharedGaps: d.sharedGaps.length,
       conflicts: d.conflicts.length,
     });
+    logEvent("playground.plan", { roomId, estimatedMinutes: room.plan.estimatedMinutes, items: room.plan.items.map((i) => i.id) });
     logEvent("playground.delta", { roomId, a: a.userId, b: b.userId, aTeachesB: d.aTeachesB.map((i) => i.conceptId), bTeachesA: d.bTeachesA.map((i) => i.conceptId), sharedGaps: d.sharedGaps.map((i) => i.conceptId), conflicts: d.conflicts.map((i) => i.conceptId) });
     return this.view(room);
   }
@@ -203,18 +212,30 @@ export class PlaygroundService {
 
   private conductorView(room: Room, intent?: ConductorView["intent"]): ConductorView {
     const d = room.delta!;
+    const answered = room.transfer?.correctness !== undefined;
     return {
       scene: room.scene,
       participants: room.participants.map((p) => ({ id: p.userId, name: p.displayName })),
       teachable: [...d.aTeachesB, ...d.bTeachesA]
         .sort((x, y) => y.score - x.score)
-        .map((t) => ({ conceptId: t.conceptId, conceptName: t.conceptName, teacherId: t.teacherId!, learnerId: t.learnerId!, hasTransferQuestion: !!TRANSFER_QUESTION_FOR[t.conceptId] })),
+        .map((t) => ({ conceptId: t.conceptId, conceptName: t.conceptName, teacherId: t.teacherId!, learnerId: t.learnerId!, assessmentAvailable: this.svc.isTransferAssessable(t.conceptId) })),
       sharedGaps: d.sharedGaps.map((g) => ({ conceptId: g.conceptId, conceptName: g.conceptName })),
+      plan: (room.plan?.items ?? []).map((i) => ({
+        id: i.id,
+        type: i.type,
+        ...(i.conceptId ? { conceptId: i.conceptId } : {}),
+        ...(i.conceptName ? { conceptName: i.conceptName } : {}),
+        ...(i.teacherId ? { teacherId: i.teacherId } : {}),
+        ...(i.learnerId ? { learnerId: i.learnerId } : {}),
+        done: i.done,
+      })),
+      next: nextPlanItem(room.plan)?.id ?? null,
+      // The CURRENT peer teaching; once its transfer is answered, the next one can start.
       progress: {
-        teacherAssigned: !!room.teaching,
-        explanationSubmitted: !!room.teaching?.explanation,
-        transferAsked: !!room.transfer,
-        transferAnswered: room.transfer?.correctness !== undefined,
+        teacherAssigned: !!room.teaching && !answered,
+        explanationSubmitted: !!room.teaching?.explanation && !answered,
+        transferAsked: !!room.transfer && !answered,
+        transferAnswered: answered,
         sharedGapTaught: !!room.sharedGap,
         resourceIntroduced: !!room.resource,
       },
@@ -235,6 +256,16 @@ export class PlaygroundService {
         return;
       case "assign_peer_teacher": {
         const concept = this.svc.conceptList().find((c) => c.id === s("conceptId"))!;
+        if (room.teaching && room.transfer?.correctness !== undefined) {
+          (room.completedTeachings ??= []).push({
+            conceptId: room.teaching.conceptId,
+            conceptName: room.teaching.conceptName,
+            teacherId: room.teaching.teacherId,
+            learnerId: room.teaching.learnerId,
+            verified: !!room.transfer.verified,
+          });
+        }
+        delete room.transfer;
         room.teaching = {
           conceptId: concept.id,
           conceptName: concept.name,
@@ -257,9 +288,18 @@ export class PlaygroundService {
         return;
       case "ask_transfer_question": {
         const t = room.teaching!;
-        const questionId = TRANSFER_QUESTION_FOR[t.conceptId]!;
-        const q = this.svc.diagnosticPrompt(questionId)!;
-        room.transfer = { conceptId: t.conceptId, learnerId: t.learnerId, questionId, prompt: q.prompt };
+        // Seeded, generated or grounded fallback; stored server-side. The prompt shown here is the
+        // stored item's prompt, and grading reads that same item by id: no regeneration in between.
+        const ch = await this.svc.transferChallenge(t.conceptId, t.explanation);
+        room.transfer = {
+          conceptId: t.conceptId,
+          learnerId: t.learnerId,
+          questionId: ch.item.id,
+          prompt: ch.item.prompt,
+          source: ch.source,
+          ...(ch.applicationContext ? { applicationContext: ch.applicationContext } : {}),
+          rationale: ch.item.rationale,
+        };
         room.scene = "transfer";
         room.spotlight = { conceptId: t.conceptId, participantId: t.learnerId };
         this.emit(room, "transfer_question", "muse", say ?? "Apply it somewhere new.", { conceptId: t.conceptId, learnerId: t.learnerId, by: a.by });
@@ -269,6 +309,7 @@ export class PlaygroundService {
         const concept = this.svc.conceptList().find((c) => c.id === s("conceptId"))!;
         const lesson = this.svc.conceptLesson(concept.id);
         room.sharedGap = { conceptId: concept.id, conceptName: concept.name, lesson: lesson.sections };
+        this.markDone(room, (i) => i.type === "shared_gap");
         room.scene = "shared_gap";
         room.spotlight = { conceptId: concept.id };
         this.emit(room, "shared_gap_taught", "muse", say ?? `Shared gap: ${concept.name}`, { conceptId: concept.id, by: a.by, resourceTitle: lesson.resourceTitle ?? null });
@@ -322,6 +363,8 @@ export class PlaygroundService {
     tr.feedback = result.answer.feedback;
     tr.verified = verified;
     tr.transition = result.transition;
+    const taught = room.teaching;
+    if (taught) this.markDone(room, (i) => i.type === "peer_teach" && i.conceptId === taught.conceptId && i.teacherId === taught.teacherId && i.learnerId === taught.learnerId);
     room.scene = "knowledge_moved";
     const teacher = room.teaching ? this.name(room, room.teaching.teacherId) : "Your peer";
     this.emit(
@@ -357,6 +400,7 @@ export class PlaygroundService {
     );
     const first = this.svc.getResource(sides[0]!.userId, sides[0]!.resourceId);
     room.resource = { url: first.url, title: first.title, sides };
+    this.markDone(room, (i) => i.type === "resource");
     room.scene = "resource";
     room.spotlight = null;
     this.emit(room, "resource_introduced", actor, "Same source. Different delta.", { by });
@@ -415,6 +459,11 @@ export class PlaygroundService {
 
   // -------------------------------------------------------------------------
   // Helpers
+
+  private markDone(room: Room, match: (i: NonNullable<Room["plan"]>["items"][number]) => boolean): void {
+    const item = room.plan?.items.find((i) => !i.done && match(i));
+    if (item) item.done = true;
+  }
 
   /** Joining is the consent: both Minds' knowledge-state snapshots become visible to the room. */
   private async onArrival(room: Room, userId: string): Promise<void> {

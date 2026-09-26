@@ -4,6 +4,7 @@
  */
 import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source } from "../../contracts.ts";
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
+import { groundedFallback, TransferNotAssessableError, type TransferContext, type TransferDraft } from "../../engine/transfer.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
 import { newId } from "../../util.ts";
 import {
@@ -124,6 +125,13 @@ export class DeterministicModel implements IntelligenceModel {
       expectedConcepts: [ctx.concept.id],
       rationale: `A recognition check on ${ctx.concept.name}, built from the concept graph.`,
     };
+  }
+
+  /** Grounded in the concept's definition and Thinketh's claims only; refuses when that isn't enough. */
+  async generateTransferChallenge(ctx: TransferContext): Promise<TransferDraft> {
+    const draft = groundedFallback(ctx);
+    if (!draft) throw new TransferNotAssessableError(ctx.concept.id);
+    return draft;
   }
 
   async gradeShortAnswer(input: { item: DiagnosticItem; answer: string }): Promise<ShortAnswerGrade> {
