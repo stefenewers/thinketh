@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Mark } from "@/components/Logo";
+import { Mark, Wordmark } from "@/components/Logo";
 import { SetupHeader, SetupRow, StepProgress } from "@/components/setup/Setup";
 import { IconButton, ListCard, SectionHeader } from "@/components/system";
 import { T } from "@/components/Text";
@@ -57,8 +57,8 @@ export default function Onboarding() {
         <Gutter style={{ flexGrow: 1 }}>
           {intro ? (
             <View style={styles.top}>
-              <View style={styles.mark}>
-                <Mark size={20} />
+              <View style={styles.wordmark}>
+                <Wordmark height={22} />
               </View>
               {/* Skip keeps the starting frame (your saved answers, or the demo defaults). */}
               <Pressable onPress={building ? undefined : finish} accessibilityRole="button" accessibilityLabel="Skip setup" hitSlop={8} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space.s }}>
@@ -173,6 +173,7 @@ function Question({
 const styles = StyleSheet.create({
   top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, marginLeft: -space.m, marginBottom: space.xxl },
   mark: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  wordmark: { height: 44, justifyContent: "center" },
   progressWrap: { flexDirection: "row", alignItems: "center", gap: space.m },
   list: { marginTop: space.xxl },
   cta: { marginTop: space.l },

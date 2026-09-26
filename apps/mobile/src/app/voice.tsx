@@ -131,7 +131,7 @@ export default function VoiceScreen() {
           <TodayWash height={520} />
           <Gutter>
             <View style={{ alignItems: "flex-start", marginBottom: space.xl }}>
-              <Mark size={28} />
+              <Mark size={24} />
             </View>
             {body}
           </Gutter>

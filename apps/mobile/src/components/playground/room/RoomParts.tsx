@@ -70,7 +70,7 @@ export function ActionBanner({ cue, onPress }: { cue: VisualCue | null; onPress:
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${cue.label}. Show the recorded action.`} accessibilityLiveRegion="polite" style={({ pressed }) => [styles.banner, pressed && { opacity: 0.8 }]}>
       {k === "thinketh" ? (
         <View style={styles.badgeThinketh}>
-          <Mark size={12} />
+          <Mark size={11} tone="dark" decorative />
         </View>
       ) : k === "muse" || k === "planner" ? (
         <View style={[styles.badgeMuse, k === "planner" && { backgroundColor: color.ink2 }]}>

@@ -143,3 +143,11 @@ export const pixel = {
   paper: "#FBF9F7",
   paperEdge: "#E7DFD3",
 } as const;
+
+// The Thinketh identity (docs/BRAND.md). One brand coral for artwork and filled surfaces (icon, splash,
+// tile); `color.coral` is its accessible shade for coral text on light grounds.
+export const brand = {
+  coral: "#D35935",
+  ink: "#161616",
+  onCoral: "#FFFFFF",
+} as const;

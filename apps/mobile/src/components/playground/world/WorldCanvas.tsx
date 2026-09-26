@@ -154,7 +154,7 @@ export function WorldCanvas({
 
       {world.thinketh ? (
         <View style={styles.system} accessibilityLiveRegion="polite">
-          <Mark size={14} />
+          <Mark size={12} decorative />
           <T style={styles.systemText}>{world.thinketh === "comparing" ? "Thinketh is comparing both Minds" : "Thinketh is grading the answer"}</T>
         </View>
       ) : null}

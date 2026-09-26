@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Mark } from "@/components/Logo";
+import { Wordmark } from "@/components/Logo";
 import { Redirect, router } from "expo-router";
 import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -217,8 +217,7 @@ function HomeTopBar() {
     <Gutter style={[styles.topBar, { paddingTop: top }]}>
       {/* Long-press opens dev-only demo controls (reset, adapter health). */}
       <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false} style={styles.brand}>
-        <Mark size={23} />
-        <T style={styles.brandName}>Thinketh</T>
+        <Wordmark height={22} />
       </Pressable>
       <View style={{ flexDirection: "row", gap: space.s }}>
         <Pressable onPress={() => router.push("/ask")} accessibilityRole="button" accessibilityLabel="Search and ask" style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}>
@@ -256,7 +255,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: space.s },
   brand: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44 },
-  brandName: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 27, letterSpacing: -0.6, color: color.ink },
   roundButton: {
     width: 44,
     height: 44,
