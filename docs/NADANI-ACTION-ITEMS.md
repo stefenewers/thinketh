@@ -2,6 +2,21 @@
 
 Stefen's earlier changes are in `docs/STEFEN-CHANGES.md`. Temporary security trade-offs to undo after the event are in `docs/POST-HACKATHON-CLEANUP.md`.
 
+## Update: demo audit (2026-09-26, 20:15Z)
+
+Full report: `docs/demo-audit/latest.md`. The demo is **ready with caveats**: 29 of 29 browser steps passed against live sponsors, with mock fallback off. Nothing was tested on a phone yet; the report has a manual checklist for that.
+
+### Before judging (your side)
+1. **Reset `demo-user` and `nadani` on the demo API** (`POST /demo/reset` with each user id). Tiger has 2 recent `diagnostic_incorrect` rows for `demo-user` from live use (20:09Z). They change the Playground's scripted "0.30 → 0.43". Earlier, an audit smoke run wrote 4 rows as `nadani` (19:48Z), which flipped the Playground plan. Someone has since reset `nadani`; confirm she has 0 rows.
+2. **Catch Me Up says "Good morning, Jordan"**, while the rest of the app says Stefen. The seeded profile name is `displayName: "Jordan"` at `packages/intelligence/src/seed/corpus.ts:585`, and the app uses "Stefen" (`apps/mobile/src/content/demo.ts:12`). Changing it is a seed change, so it's yours to decide.
+3. **Backboard memory writes returned HTTP 500 twice in 22 calls**, one of them during Ask. The fallback worked. The error text labels every write as `POST /assistants`, which is misleading when you debug.
+4. **Don't restart :8787 during judging.** The audit saw it restarted mid-run; every restart clears saved resources and Playground rooms, and a tunnel restart changes the URL.
+
+### Running the auditor
+`.claude/agents/thinketh-demo-auditor.md` explains how to run it. The harness is in `scripts/demo-audit/` and runs on its own ports (API :8797, web :8091) as an isolated `audit-*` user. It never calls :8787, :8081 or the tunnel, and it blocks answers and resets sent as `demo-user` or `nadani`.
+- **Don't run `check:golden` with `API_URL` set against a Tiger-connected API.** It resets `demo-user`.
+- **`apps/mobile/.env.local` overrides the command-line `EXPO_PUBLIC_*` values** from the README, at least on web. Edit the file, then restart with `--clear`.
+
 ## Update: API and ElevenLabs protection (2026-09-26)
 
 The demo API is on a public tunnel URL, so it's now locked down. **Ask Stefen privately for any key you need. Never commit key values.**
