@@ -116,6 +116,8 @@ export type AskContext = {
 
 export type AskResult = { thinkethInfers: string[] };
 
+import type { TransferContext, TransferDraft } from "../engine/transfer.ts";
+
 export type ShortAnswerGrade = { coveredIdeaIndices: number[]; misconception?: string; feedback: string };
 
 export interface IntelligenceModel {
@@ -124,6 +126,11 @@ export interface IntelligenceModel {
   /** Rephrase a deterministic delta. Must keep ids and structure; never touches numbers. */
   explainDelta(input: DeltaPhrasingContext): Promise<DeltaExplanation>;
   generateDiagnostic(input: LearningContext): Promise<DiagnosticItem>;
+  /**
+   * A transfer challenge after peer teaching (prompt + rubric only). Validated server-side before use;
+   * grading still goes through gradeShortAnswer and the ordinary evidence path.
+   */
+  generateTransferChallenge(input: TransferContext): Promise<TransferDraft>;
   gradeShortAnswer(input: { item: DiagnosticItem; answer: string }): Promise<ShortAnswerGrade>;
   makeItStick(input: LearningContext): Promise<MemoryAid>;
   visualize(input: LearningContext): Promise<DiagramSpec>;

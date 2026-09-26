@@ -10,6 +10,8 @@
  */
 /** The seeded demo learner (the API's demo user). Shown on Today and as the Playground host. */
 export const DEMO_LEARNER_NAME = "Stefen";
+/** The seeded Playground partner (the server's Nadani persona). */
+export const DEMO_PARTNER_NAME = "Nadani";
 
 export const agentMemoryStoryline = {
   id: "agent-memory",

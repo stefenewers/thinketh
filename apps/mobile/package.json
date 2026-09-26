@@ -55,7 +55,7 @@
     "start:dev-client": "expo start --dev-client",
     "ios:device": "expo run:ios --device",
     "build:dev:ios": "npx eas-cli@latest build --profile development --platform ios",
-    "test": "vitest run src/voice"
+    "test": "vitest run src"
   },
   "private": true
 }

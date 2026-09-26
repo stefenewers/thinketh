@@ -22,7 +22,7 @@ export function TextureHeader({ source, onBack, hero }: { source: ImageSourcePro
   const { width, height } = useWindowDimensions();
   const h = hero ? Math.round(height * 0.36) + insets.top : BAND_H + insets.top;
   return (
-    <View style={{ height: h }}>
+    <View style={{ height: h, overflow: "hidden" }}>
       <Texture source={source} style={[StyleSheet.absoluteFill, { opacity: hero ? 0.92 : 0.55 }]} />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg width={width} height={h}>

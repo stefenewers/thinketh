@@ -41,7 +41,7 @@ Muse chooses **what the room looks at next**, and nothing else. Its entire world
 
 - **What it sees:** a minimized view of the room: names, the concepts in play, and flags showing progress. It never sees numbers, memories or Ask history.
 - **What it cannot change:** there is **no** tool that sets mastery, marks something understood, changes uncertainty or verifies anything.
-- **Validation:** every proposed call is checked server-side against the room, twice (in the Muse adapter and again before it's applied). Only known tools and known arguments are accepted, strings are capped at 280 characters, and a teacher/learner/concept can be assigned only if it came from the computed delta. Transfer questions must follow an explanation.
+- **Validation:** every proposed call is checked server-side against the room, twice (in the Muse adapter and again before it's applied). Only known tools and known arguments are accepted, strings are capped at 280 characters, and a teacher/learner/concept can be assigned only if it came from the computed delta, Thinketh can verify it (`assessmentAvailable`), and it is an unfinished item of the session plan. A shared gap must also be in the plan unless the people in the room asked for it. Transfer questions must follow an explanation.
 - **Fallback:** on a timeout, an error or an invalid call, the deterministic conductor decides from the same view, and the room keeps working.
 - **Integration:** Meta Model API's OpenAI-compatible chat completions (`MUSE_API_BASE`, `MUSE_API_KEY`, `MUSE_MODEL`, all server-side only). Muse Spark reasons before it answers, so the call uses `reasoning_effort: "low"` and a 1,500-token budget (reasoning counts against it), and `tool_choice: "auto"` (the only value the API accepts); a reply without a tool call falls back. Verified live 2026-09-26: Muse chose `assign_peer_teacher` (Nadani → Stefen, Evaluator Architectures) in about 4 s, then `ask_transfer_question` after the explanation in about 3 s. Both passed validation and were recorded with `actor: "muse"`.
 
@@ -50,11 +50,41 @@ Muse chooses **what the room looks at next**, and nothing else. Its entire world
 Only the evidence engine changes a Mind, and only through the path every diagnostic uses:
 
 1. The teacher explains in their own words. That is **not** evidence for anyone.
-2. The learner answers a **transfer question** in a new context (for example, "Apply that idea to an autonomous coding agent. Where should evaluation happen, and why?"). It is a Playground-only rubric item that normal adaptive selection never picks.
+2. The learner answers a **transfer question** in a new context (for example, "An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?"). It is a Playground-only rubric item that normal adaptive selection never picks.
 3. `service.answerDiagnostic(learner, questionId, answer)` runs. Claude reports which rubric ideas the answer covered; `scoreRubric` scores them deterministically; and `kindForCorrectness` turns the score into an observation.
-4. `transition()` applies the deterministic update rule and writes a reason ("Updated because you correctly answered a transfer question applying peer-taught evaluator design to a coding agent. Mastery rose 0.30 → 0.43 …"). The previous state, observation, resulting state and timestamp are stored.
+4. `transition()` applies the deterministic update rule and writes a reason ("Updated because you correctly answered a transfer question applying peer-taught evaluator design to a refund-approving agent. Mastery rose 0.30 → 0.43 …"). The previous state, observation, resulting state and timestamp are stored.
 5. Tiger records the transition (`appendObservation` + `appendTransition`), exactly as for any diagnostic.
 6. The room shows "Knowledge moved" only if the observation was `diagnostic_correct`. Otherwise it says "Not yet" and shows what the answer did show.
+
+## Dynamic transfer challenges
+
+Peer teaching is no longer limited to concepts with a prepared question. Any teaching move the collaborative delta finds can be verified, as long as Thinketh can build a fair challenge for it.
+
+1. **Seeded first.** Evaluator Architectures keeps its hand-written question (`dq-evaluators-transfer-coding-agent`). It's the golden demo fixture.
+2. **Generated.** For any other concept, `service.transferChallenge` asks Claude (the existing model adapter, server-side) for a structured challenge built only from trusted Thinketh data: the concept's definition, its related concepts, the claims Thinketh holds about it, and the teacher's explanation (treated as data). The output is validated on the server:
+   - 3–5 rubric ideas, each with grounding keywords;
+   - a prompt that tests application in a genuinely new context rather than recall;
+   - no rubric idea and no stretch of the teacher's words in the prompt;
+   - it must assess the taught concept.
+3. **Grounded fallback.** If Claude times out, errors or fails validation, a deterministic challenge is built from the concept's definition and its claims. For example: "Picture a customer-support agent… Using what you just learned about when AI should use a tool, what would you do differently, and why?"
+4. **Fail closed.** If there isn't enough grounding for at least three rubric ideas (today: MCP, memory consolidation and context compaction), the concept is not assessable. It's never assigned, so nobody is handed a question Thinketh can't grade fairly.
+
+The challenge is registered as a Playground-only diagnostic, and the room stores its id. The learner sees exactly that item's prompt, and `answerDiagnostic` grades exactly that item, with no regeneration in between. It then follows the same steps as every diagnostic: grader → `scoreRubric` → observation → deterministic update → Tiger. Claude creates assessment structure; Thinketh evaluates the evidence.
+
+## Session planner
+
+"Start session" runs a real plan. The time budget (7 minutes by default) is a planning constraint, not a countdown. Thinketh uses it to decide which learning moves are worth doing. The plan is computed immediately, "Start session" begins the first move at once, and people can do one move, several or all of them, or end early. After the delta is computed, `planSession` (`engine/sessionPlan.ts`) chooses the most valuable valid moves that fit the time budget. It's deterministic.
+
+- **Candidates:**
+  - the best assessable peer-teaching move in each direction;
+  - the strongest shared gap;
+  - the shared source.
+- **Value:** the delta's own evidence scores. Peer teaching is scored as gap × teacher certainty × (verified ? 1 : 0.8) × (0.5 + importance). A shared gap is scored as (1 − best mastery) × (0.5 + importance). The source has a small fixed value.
+- **Durations:** planning estimates kept in one place (`ACTIVITY_MINUTES`): peer teaching 2.5 min, shared gap 2 min, source 2 min.
+- **Selection:** highest value first while it fits the budget, then run in teachable order (peer teaching, then the shared gap, then the source). Any positive budget works.
+- **Seeded demo plan (7 min):** Nadani → Stefen on Evaluator Architectures (2.5 min), Stefen → Nadani on Agent Tool Use (2.5 min), then Muse → both on Memory Consolidation (2 min).
+
+Muse receives the plan and its next step, and conducts it. It can't replace it with an unplanned or unverifiable move; the validation above rejects that. The deterministic conductor follows the same plan. Under "Start session", the overview says what was computed ("3 learning moves planned for the next 7 minutes", from the real plan), and "View learning plan" shows only the planned moves. Each move lists its estimate, who teaches whom, the concept and its reason in plain language ("Nadani has strong verified evidence here while Stefen is only starting out.").
 
 ## Supabase Realtime
 
@@ -75,11 +105,14 @@ The coral trace runs from the teacher's concept to the learner's while they teac
 
 ## Resource dual delta
 
-Muse brings one source into the room. Thinketh runs its normal resource pipeline once per participant: read, map concepts, compare with **that** person's Mind, then compute the delta. Each person gets their own useful minutes, new ideas and focus, and the stages (SOURCE → CONCEPTS → YOUR MIND → DELTA) show live. The conductor's note is deterministic from the two deltas ("Stefen: focus on evaluator architectures … Nadani: …"). The page says "Different delta" only when the two deltas actually differ.
+Muse brings one source into the room: the known-safe default, or **any** link someone pastes with "Use another source" (article, docs page, PDF or YouTube). It goes through the same hardened resource pipeline as everywhere else: URL validation, SSRF checks, redirect validation, size and PDF limits, YouTube transcripts, reader fallback, prompt-injection handling and timeouts. The page is fetched and extracted **once**, then personalized separately against each participant's Mind: read, map concepts, compare with **that** person's Mind, then compute the delta. A blocked or unreadable source fails honestly ("I couldn't read it for you"), and the session and the safe default stay available.
+
+The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry.mjs` read all 11 known-safe sources against both demo Minds through the live pipeline, and this one gave the clearest real difference. It measured the same twice: Stefen ~3 useful minutes (focus: agent memory), Nadani ~5 (focus: agent tool use). The previous default, "Building effective agents", gave both ~5–6 minutes and 5 ideas. The numbers are always computed and never adjusted. Each person gets their own useful minutes, new ideas and focus, and the stages (SOURCE → CONCEPTS → YOUR MIND → DELTA) show live. The conductor's note is deterministic from the two deltas ("Stefen: focus on evaluator architectures … Nadani: …"). The page says "Different delta" only when the two deltas actually differ.
 
 ## Demo fallback
 
-- **One-device mode:** "Bring in Nadani" seats the seeded Nadani persona, and the host phone types what she says. It's clearly labelled, and her explanation still isn't evidence. The whole flow works on one phone.
+- **One-device mode:** "Bring in Nadani" seats the seeded Nadani persona, and the host phone types what she says. Her explanation still isn't evidence for anyone; the transfer question is. (This is documented here and no longer printed in the product.) The whole flow works on one phone.
+- **Diagnostics:** the room's provenance (who conducted, how it syncs, the room code) is hidden from the normal UI. Long-press the "Playground" title to show it.
 - **Two phones:** the second phone taps "Have a code? Join a Playground" and joins as Nadani.
 - **Conductor:** Muse if configured, otherwise the deterministic fallback. The same flow either way.
 - **Realtime:** if the socket is down, polling carries the room.
@@ -88,3 +121,45 @@ Muse brings one source into the room. Thinketh runs its normal resource pipeline
 ## API
 
 `POST /playground/rooms` · `POST /playground/join` · `GET /playground/rooms/:id` · `POST …/demo-guest` · `…/compare` · `…/conduct` · `…/explain` · `…/answer` · `…/resource` · `…/leave`. All require the app key. Rooms are visible only to their participants, and only the host can act for a seeded demo persona in their own room.
+
+## Presentation labels (simple outside, deep inside)
+
+Concept wording lives in one place, `packages/contracts/src/presentation.ts`, with three levels. Each surface uses the one that fits it:
+
+| Level | Example | Where |
+|---|---|---|
+| Canonical | Evaluator Architectures | Concept inspector, evidence, "Why Thinketh changed its model", delta details ("Technical concept: …"), docs |
+| Graph | Evaluators | Compact Mindprint node labels |
+| Narrative | AI checking its own work | Headlines in the live learning flow: overview, plan, peer teaching, shared gap, Not yet |
+
+A fourth form, `topic` ("how AI should check its own work"), is the narrative idea as a phrase inside a sentence: Muse's lines, the plan rationale, "Next: …", "Strengthened your thinking on …", the shared-source focus. Muse's room view carries the topic, and its system prompt asks for plain language.
+
+| Concept id | Canonical | Graph | Narrative |
+|---|---|---|---|
+| evaluator-architectures | Evaluator Architectures | Evaluators | AI checking its own work |
+| agent-tool-use | Agent Tool Use | Tool Use | When should AI use a tool? |
+| agent-memory | Agent Memory | Agent Memory | What should AI remember? |
+| retrieval | Retrieval (RAG) | Retrieval | When should AI look something up? |
+| context-windows | Context Windows | Context | How much can AI keep in mind? |
+| memory-consolidation | Memory Consolidation | Consolidation | What is worth remembering long-term? |
+| long-running-agents | Long-running Agents | Long-running | How can AI keep working without losing the plot? |
+| context-compaction | Context Compaction | Compaction | How does AI keep the important parts? |
+| mcp | Model Context Protocol | MCP | How does AI connect to tools? |
+
+This is wording only. Concept ids, the graph, knowledge state, the update math, Tiger history, diagnostic ids and the collaborative delta are unchanged. The golden transfer question was reworded from a coding agent to a refund agent, but it keeps the id `dq-evaluators-transfer-coding-agent` and the same four rubric ideas; keywords were only added, so strong answers grade correct in either register (`test/presentation.test.ts`). Claude's transfer-challenge and teach prompts get the same plain-language instruction. It's never applied to source quotes, source titles, stored evidence or canonical names.
+
+## Demo
+
+### Safe golden path
+
+1. Reset (Demo controls: long-press the Thinketh mark on Today → Reset demo).
+2. Today → Catch Me Up: captions and the Mind react; interrupt; ask; say "I'm done".
+3. Playground → Invite a collaborator → Bring in Nadani → Compare our Minds. "3 learning moves planned for the next 7 minutes" appears; "View learning plan" shows them.
+4. Start session. Muse: "Nadani, teach Stefen how AI should check its own work." Nadani answers the prompt "Why shouldn't an AI always be the final judge of its own output?" in about ten seconds. Thinketh: "Apply it somewhere new." Transfer question: "An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?" Stefen answers (a strong answer names a separate check, where it sits, why self-checking misses mistakes, and what happens when the check fails). Knowledge moved: "Strengthened your thinking on how AI should check its own work", recorded in Tiger.
+5. "Next: the shared gap" → Teach us the delta → Bring in a shared source (the safe default) → two personal deltas → End session.
+
+### Judge challenges
+
+1. **"Give us another concept."** After the first knowledge moved, take the plan's next move ("Next: Stefen teaches Nadani when AI should use a tool"). Thinketh generates a grounded transfer challenge for Agent Tool Use and grades Nadani's answer through the same evidence path. A weak answer shows "Not yet" and verifies nothing.
+2. **"Give us another article."** On the shared-gap or shared-source screen, tap "Use another source" and paste any article, PDF, docs page or YouTube link. It's fetched once, and each Mind gets its own useful minutes, new ideas and focus. "Different delta" appears only if they really differ.
+3. **"Why did Muse choose this?"** Open "View learning plan" on the overview. Every move comes from Thinketh's deterministic plan over the evidence asymmetry, with its reason; Muse only conducts it, and validation rejects anything outside the plan.

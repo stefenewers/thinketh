@@ -185,7 +185,52 @@ export const RoomTransferSchema = z.object({
   /** True only when the evidence engine recorded a correct diagnostic. */
   verified: z.boolean().optional(),
   transition: KnowledgeStateTransitionSchema.optional(),
+  /**
+   * Where the challenge came from. The rubric never leaves the server; the learner sees the prompt,
+   * and the answer is graded against the exact stored item this prompt came from.
+   */
+  source: z.enum(["seeded", "generated", "fallback"]).optional(),
+  /** The new context the learner applies the concept to ("an autonomous coding agent"). */
+  applicationContext: z.string().optional(),
+  /** Why this tests application rather than recall. */
+  rationale: z.string().optional(),
 });
+
+/** A peer teaching that has finished (answered), kept so a session can hold several. */
+export const RoomCompletedTeachingSchema = z.object({
+  conceptId: z.string(),
+  conceptName: z.string(),
+  teacherId: z.string(),
+  learnerId: z.string(),
+  verified: z.boolean(),
+});
+
+/**
+ * Session plan: Thinketh's deterministic choice of the most valuable valid learning moves that fit
+ * the time budget. Muse conducts it; it cannot replace it. Durations are planning estimates.
+ */
+export const SessionPlanItemSchema = z.object({
+  id: z.string(),
+  type: z.enum(["peer_teach", "shared_gap", "resource"]),
+  conceptId: z.string().optional(),
+  conceptName: z.string().optional(),
+  teacherId: z.string().optional(),
+  learnerId: z.string().optional(),
+  estimatedMinutes: z.number(),
+  /** One human sentence, from the evidence ("Nadani has strong verified evidence here…"). */
+  rationale: z.string(),
+  /** 1 = first. */
+  priority: z.number(),
+  done: z.boolean(),
+});
+export type SessionPlanItem = z.infer<typeof SessionPlanItemSchema>;
+
+export const SessionPlanSchema = z.object({
+  budgetMinutes: z.number(),
+  estimatedMinutes: z.number(),
+  items: z.array(SessionPlanItemSchema),
+});
+export type SessionPlan = z.infer<typeof SessionPlanSchema>;
 
 export const RoomResourceSideSchema = z.object({
   userId: z.string(),
@@ -224,6 +269,9 @@ export const PlaygroundRoomSchema = z.object({
   delta: CollaborativeDeltaSchema.optional(),
   teaching: RoomTeachingSchema.optional(),
   transfer: RoomTransferSchema.optional(),
+  /** Peer teachings already answered this session (the current one is `teaching`). */
+  completedTeachings: z.array(RoomCompletedTeachingSchema).optional(),
+  plan: SessionPlanSchema.optional(),
   sharedGap: z.object({ conceptId: z.string(), conceptName: z.string(), lesson: TeachDeltaResponseSchema.shape.sections.optional() }).optional(),
   resource: RoomResourceSchema.optional(),
   /** Last thing the conductor said. */
