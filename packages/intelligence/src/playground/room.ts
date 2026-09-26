@@ -67,12 +67,15 @@ export class PlaygroundService {
   private readonly conductor: Conductor;
   private readonly realtime: RoomRealtime;
   private readonly now: () => Date;
+  /** Where clients subscribe (public anon key only; never the service key). */
+  private readonly subscribe: { url: string; key: string } | undefined;
 
-  constructor(svc: ThinkethService, conductor: Conductor, realtime: RoomRealtime, now: () => Date = () => new Date()) {
+  constructor(svc: ThinkethService, conductor: Conductor, realtime: RoomRealtime, now: () => Date = () => new Date(), subscribe?: { url: string; key: string }) {
     this.svc = svc;
     this.conductor = conductor;
     this.realtime = realtime;
     this.now = now;
+    this.subscribe = subscribe;
   }
 
   // -------------------------------------------------------------------------
@@ -476,7 +479,11 @@ export class PlaygroundService {
     return {
       ...structuredClone(room),
       conductor: { mode: this.conductor.mode, detail: this.conductor.detail },
-      realtime: { channel: this.channel(room), mode: this.realtime.mode },
+      realtime: {
+        channel: this.channel(room),
+        mode: this.realtime.mode,
+        ...(this.realtime.mode === "broadcast" && this.subscribe ? { url: this.subscribe.url, key: this.subscribe.key } : {}),
+      },
     };
   }
 }

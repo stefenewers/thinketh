@@ -229,7 +229,13 @@ export const PlaygroundRoomSchema = z.object({
   /** Last thing the conductor said. */
   museLine: z.string().optional(),
   conductor: z.object({ mode: z.enum(["muse", "fallback"]), detail: z.string() }),
-  realtime: z.object({ channel: z.string(), mode: z.enum(["broadcast", "polling"]) }),
+  realtime: z.object({
+    channel: z.string(),
+    mode: z.enum(["broadcast", "polling"]),
+    /** Supabase Realtime endpoint + public anon key (RLS-protected; the channel carries only {seq, type}). */
+    url: z.string().optional(),
+    key: z.string().optional(),
+  }),
   seq: z.number(),
   events: z.array(RoomEventSchema),
 });

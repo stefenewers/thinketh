@@ -16,9 +16,9 @@ export function createThinketh(overrides: { config?: ThinkethConfig; now?: () =>
   const seed = buildSeed(overrides.now?.() ?? new Date());
   const adapters = buildAdapters(config, seed);
   const service = new ThinkethService(config, seed, adapters, overrides.now);
-  const { url, serviceRoleKey } = config.supabase;
+  const { url, serviceRoleKey, anonKey } = config.supabase;
   const realtime = url && serviceRoleKey ? new SupabaseBroadcast(url, serviceRoleKey) : new PollingOnly();
-  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, overrides.now);
+  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, overrides.now, url && anonKey ? { url, key: anonKey } : undefined);
   const app = createApp({ service, config, supabase: adapters.supabase, playground });
   return { config, seed, adapters, service, playground, app };
 }

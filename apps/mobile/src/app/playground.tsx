@@ -13,6 +13,7 @@ import { T } from "@/components/Text";
 import { StageSteps } from "@/components/StageSteps";
 import { Button, Divider } from "@/components/ui";
 import { useApi, useReducedMotion } from "@/lib/hooks";
+import { useRoomChannel } from "@/lib/roomChannel";
 import { fmt2 } from "@/lib/knowledge";
 import { DuoMind } from "@/mindprint/DuoMind";
 import { Mindprint } from "@/mindprint/Mindprint";
@@ -65,6 +66,12 @@ export default function PlaygroundScreen() {
     }, POLL_MS);
     return () => clearInterval(t);
   }, [roomId, me, room?.scene, seq]);
+
+  // Realtime makes the other device's actions land immediately; polling stays as the floor.
+  const live = useRoomChannel(room?.realtime, (e) => {
+    if (!roomId || (seq !== undefined && e.seq <= seq)) return;
+    playground.get(roomId, me).then(setRoom, () => {});
+  });
 
   // Deep link from a second device: /playground?code=ABC123&as=nadani
   const joinedFromLink = useRef(false);
@@ -123,7 +130,16 @@ export default function PlaygroundScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: space.x5 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {scene === "waiting" ? (
-            <Waiting room={room} busy={busy} onInvite={() => run("invite", () => playground.create(HOST_NAME))} onDemoGuest={() => room && run("invite", () => playground.demoGuest(room.id))} />
+            <Waiting
+              room={room}
+              busy={busy}
+              onInvite={() => run("invite", () => playground.create(HOST_NAME))}
+              onDemoGuest={() => room && run("invite", () => playground.demoGuest(room.id))}
+              onJoin={(code, as) => {
+                setMe(as);
+                run("join", () => playground.join(code, as === "nadani" ? "Nadani" : "Guest", as));
+              }}
+            />
           ) : null}
           {room && scene === "arrival" ? <Arrival room={room} me={me} busy={busy === "compare"} onCompare={compare} /> : null}
           {room && scene === "comparing" ? <Comparing room={room} me={me} /> : null}
@@ -143,7 +159,7 @@ export default function PlaygroundScreen() {
               {error}
             </T>
           ) : null}
-          {room ? <Provenance room={room} /> : null}
+          {room ? <Provenance room={room} live={live} /> : null}
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -195,7 +211,21 @@ function Pill({ label, onPress, busy, kind = "primary" }: { label: string; onPre
 // Scenes
 
 /** Figma 1:65: your Mind, alone; nothing is shared until you invite someone. */
-function Waiting({ room, busy, onInvite, onDemoGuest }: { room: PlaygroundRoom | null; busy: Busy; onInvite: () => void; onDemoGuest: () => void }) {
+function Waiting({
+  room,
+  busy,
+  onInvite,
+  onDemoGuest,
+  onJoin,
+}: {
+  room: PlaygroundRoom | null;
+  busy: Busy;
+  onInvite: () => void;
+  onDemoGuest: () => void;
+  onJoin: (code: string, as: string) => void;
+}) {
+  const [joining, setJoining] = useState(false);
+  const [code, setCode] = useState("");
   const { width } = useWindowDimensions();
   const { data } = useApi(() => api.getKnowledge(), []);
   const w = width - 64;
@@ -227,6 +257,28 @@ function Waiting({ room, busy, onInvite, onDemoGuest }: { room: PlaygroundRoom |
           <T variant="meta" style={{ marginTop: space.x3, color: color.ink3 }}>
             Nothing is shared until you invite someone.
           </T>
+          {joining ? (
+            <View style={styles.joinBox}>
+              <TextInput
+                value={code}
+                onChangeText={(v) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                placeholder="Room code"
+                placeholderTextColor={color.ink3}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.codeInput}
+                accessibilityLabel="Room code"
+              />
+              {/* A second demo phone joins as Nadani so her seeded Mind is the one in the room. */}
+              <Pill label="Join as Nadani" busy={busy === "join"} onPress={() => code.length === 6 && onJoin(code, "nadani")} />
+            </View>
+          ) : (
+            <Pressable onPress={() => setJoining(true)} accessibilityRole="button" style={{ marginTop: space.l, minHeight: 44, justifyContent: "center" }}>
+              <T variant="meta" style={{ color: color.ink }}>
+                Have a code? Join a Playground
+              </T>
+            </Pressable>
+          )}
         </View>
       ) : (
         <View style={styles.inviteCard}>
@@ -696,10 +748,10 @@ function Ended({ room, me }: { room: PlaygroundRoom; me: string }) {
 }
 
 /** Honest provenance: who conducted, how the room syncs. */
-function Provenance({ room }: { room: PlaygroundRoom }) {
+function Provenance({ room, live }: { room: PlaygroundRoom; live: boolean }) {
   return (
     <T variant="meta" style={{ marginHorizontal: gutter, marginTop: space.x3, color: color.ink3, fontSize: 11 }}>
-      Conductor: {room.conductor.mode === "muse" ? room.conductor.detail : "deterministic fallback"} · Sync: {room.realtime.mode === "broadcast" ? "server events + polling" : "polling"} · Room {room.code}
+      Conductor: {room.conductor.mode === "muse" ? room.conductor.detail : "deterministic fallback"} · Sync: {live ? "Supabase Realtime + polling" : "polling"} · Room {room.code}
     </T>
   );
 }
@@ -722,6 +774,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
   soloName: { fontFamily: font.serif, fontSize: 22, lineHeight: 28, color: color.ink, textAlign: "center", marginTop: space.x3 },
+  joinBox: { marginTop: space.l, alignSelf: "stretch", alignItems: "center" },
+  codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.serif, fontSize: 28, letterSpacing: 6, color: color.ink, borderBottomWidth: 1, borderBottomColor: color.edge, paddingVertical: space.s },
   plus: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel, alignItems: "center", justifyContent: "center" },
   inviteCard: { marginTop: space.xl, padding: space.xl, backgroundColor: color.panel, borderRadius: radius.feature, borderWidth: StyleSheet.hairlineWidth, borderColor: color.edge },
   pill: { alignSelf: "flex-start", marginTop: space.xl, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 52 },

@@ -185,6 +185,16 @@ describe("Playground golden path (HTTP)", () => {
     expect((await call("POST", `/playground/rooms/${room.id}/demo-guest`, undefined, "someone-else")).status).toBe(404);
   });
 
+  it("rooms expose only the public anon key for realtime, never the service key", async () => {
+    const cfg = offlineConfig();
+    const t = createThinketh({ config: { ...cfg, supabase: { url: "https://example.invalid", anonKey: "anon-public", serviceRoleKey: "service-secret" } }, now: () => NOW });
+    const res = await t.app.request("/playground/rooms", { method: "POST", headers: { "content-type": "application/json", "x-thinketh-user": "demo-user" }, body: JSON.stringify({ displayName: "Stefen" }) });
+    const text = await res.text();
+    expect(text).toContain("anon-public");
+    expect(text).not.toContain("service-secret");
+    expect(PlaygroundRoomSchema.parse(JSON.parse(text)).realtime.mode).toBe("broadcast");
+  });
+
   it("the transfer question is never picked by normal adaptive selection", async () => {
     for (let i = 0; i < 3; i++) {
       const res = await app.request("/diagnostics/select", { method: "POST", headers: { "content-type": "application/json", "x-thinketh-user": "demo-user" }, body: JSON.stringify({ conceptId: "evaluator-architectures" }) });
