@@ -7,14 +7,20 @@ import { createApp } from "./api/app.ts";
 import { loadConfig, type ThinkethConfig } from "./config.ts";
 import { buildSeed } from "./seed/corpus.ts";
 import { ThinkethService } from "./service.ts";
+import { createConductor } from "./playground/conductor.ts";
+import { PollingOnly, SupabaseBroadcast } from "./playground/realtime.ts";
+import { PlaygroundService } from "./playground/room.ts";
 
 export function createThinketh(overrides: { config?: ThinkethConfig; now?: () => Date } = {}) {
   const config = overrides.config ?? loadConfig();
   const seed = buildSeed(overrides.now?.() ?? new Date());
   const adapters = buildAdapters(config, seed);
   const service = new ThinkethService(config, seed, adapters, overrides.now);
-  const app = createApp({ service, config, supabase: adapters.supabase });
-  return { config, seed, adapters, service, app };
+  const { url, serviceRoleKey, anonKey } = config.supabase;
+  const realtime = url && serviceRoleKey ? new SupabaseBroadcast(url, serviceRoleKey) : new PollingOnly();
+  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, overrides.now, url && anonKey ? { url, key: anonKey } : undefined);
+  const app = createApp({ service, config, supabase: adapters.supabase, playground });
+  return { config, seed, adapters, service, playground, app };
 }
 
 export { ThinkethService } from "./service.ts";

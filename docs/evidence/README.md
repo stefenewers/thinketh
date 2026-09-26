@@ -8,15 +8,17 @@ curl "http://localhost:8787/health?probe=true"
 
 `probe=true` makes one cheap real call to each configured service. `live` means the call succeeded, `error` means credentials exist but the call failed, and `not_configured` means the backend is using its local fallback.
 
-## Status (2026-09-25, latest main; public demo API = the Node server via Cloudflare tunnel)
+## Status (updated 2026-09-26; public demo API = the Node server via Cloudflare tunnel)
+
+All six integrations were live in the 2026-09-26 probe (`GET /health?probe=1`): Tiger, MongoDB, Backboard, Claude, ElevenLabs and Supabase. Supabase now also carries the Playground's Realtime channel (Broadcast for room events, Presence for who's here). See `docs/PLAYGROUND.md`.
 
 | Service | Status | Proof |
 |---|---|---|
 | Tiger Data | **live** | Probe: `6 transitions stored (348ms)`. Golden loop writes and reads Tiger (below). |
 | MongoDB Atlas | **live** | Probe: `7 developments stored (493ms)`. `/ask` retrieves through Atlas Search: 26 calls, 0 fallbacks during the golden loop. |
 | Backboard | **live** | Probe: `assistant ab52d134…, 6 memories (242ms)`. `/ask` recalls from Backboard: 21 calls, 0 fallbacks during the golden loop. |
-| Claude | not configured | Needs `ANTHROPIC_API_KEY` |
-| ElevenLabs | not configured | Needs `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` |
+| Claude | **live** | Probe (2026-09-26): `model claude-opus-5 available (199ms)`. Grades short answers (including the Playground transfer question), writes Ask inferences, deltas and resource analysis. |
+| ElevenLabs | **live** | Probe (2026-09-26): `agent thinketh reachable (200ms)`. `/voice/session` returns `mode: "elevenlabs"`. |
 | Supabase | **live** | Probe: `5 feature flags readable (163ms)`. `/config` serves flags from the `feature_flags` table. Migration tables (profiles, feature_flags, integration_ids) exist. (The Edge Function is deployed but isn't the demo API; see `docs/DEPLOY.md`.) |
 
 The mobile golden check passes against the real backend with Tiger, Mongo, Backboard and Supabase live:

@@ -1,13 +1,17 @@
-import { useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import Svg, { Circle, Polyline } from "react-native-svg";
 import type { Concept, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
-import { MasteryBar, MindGraph } from "@/components/MindGraph";
+import { MasteryBar } from "@/components/MindGraph";
+import { layoutMind } from "@thinketh/mindprint";
+import { MindCanvas } from "@/mindprint/MindCanvas";
+import { Mindprint } from "@/mindprint/Mindprint";
+import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
 import { T } from "@/components/Text";
-import { BackBar, Divider, ErrorState, Gutter, LoadingState, SectionLabel } from "@/components/ui";
+import { BackBar, Button, Divider, ErrorState, Gutter, LoadingState, SectionLabel } from "@/components/ui";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { evidenceLabel, fmt2, improved, improvedTodayIds, levelLabel, misconceptionLabel, observationLabel, relativeTime, shortDate, todaysTransitions } from "@/lib/knowledge";
@@ -34,20 +38,24 @@ export default function MindScreen() {
 const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];
 
 function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConceptId?: string }) {
-  const { items, edges } = data;
+  const { items } = data;
   const concepts = items.map((i) => i.concept);
   const states = items.map((i) => i.state);
   const levelOfConcept = new Map(items.map((i) => [i.concept.id, i.level]));
   const updatedIds = improvedTodayIds(items);
-  const [selectedId, setSelectedId] = useState<string>(
-    initialConceptId ?? todaysTransitions(items).find(improved)?.conceptId ?? concepts[0]?.id,
-  );
+  const changedToday = todaysTransitions(items).find(improved);
+  // Resting (Figma 1:6) until a concept is tapped (1:34); a deep link opens selected.
+  const [selectedId, setSelectedId] = useState<string | null>(initialConceptId ?? null);
+  const [detailY, setDetailY] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const stateOf = new Map(states.map((s) => [s.conceptId, s]));
   const selected = concepts.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateOf.get(selectedId) : undefined;
+  const panelId = selectedId ?? changedToday?.conceptId ?? concepts[0]?.id;
+  const panelConcept = concepts.find((c) => c.id === panelId);
+  const panelState = panelId ? stateOf.get(panelId) : undefined;
 
-  const select = (id: string, scroll = false) => {
+  const select = (id: string | null, scroll = false) => {
     setSelectedId(id);
     if (scroll) scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
@@ -58,29 +66,46 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
         <T variant="display" accessibilityRole="header">
           Your Mind
         </T>
-        <T variant="support" style={{ marginTop: space.s }}>
-          Thinketh&apos;s current model of what you understand, and how it&apos;s changing.
-        </T>
-        <View style={{ marginTop: space.xl }}>
-          <MindGraph
-            concepts={concepts}
-            states={states}
-            edges={edges}
-            selectedId={selectedId}
-            updatedIds={updatedIds}
-            onSelect={(id) => select(id)}
-          />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.s }}>
+          <T variant="support">A living map of what you understand.</T>
+          <Pressable onPress={() => router.push("/playground")} accessibilityRole="button" accessibilityLabel="Learn together in the Playground" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+            <T variant="meta" style={{ color: color.ink }}>
+              Learn together
+            </T>
+          </Pressable>
         </View>
       </Gutter>
 
-      {selected && selectedState ? (
-        <Gutter style={{ marginTop: space.xl }}>
-          <ConceptPanel
+      <MindMap items={items} edges={data.edges} changedIds={updatedIds} selectedId={selectedId} onSelect={(id) => select(id)} />
+
+      <Gutter>
+        {selected && selectedState ? (
+          <SelectedSheet
             concept={selected}
             state={selectedState}
             level={levelOfConcept.get(selected.id) ?? "weak"}
-            justImproved={updatedIds.has(selected.id)}
+            transition={todaysTransitions(items).find((t) => t.conceptId === selected.id)}
+            onMore={() => scrollRef.current?.scrollTo({ y: detailY, animated: true })}
           />
+        ) : changedToday ? (
+          <ChangedCard transition={changedToday} name={concepts.find((c) => c.id === changedToday.conceptId)?.name ?? ""} onPress={() => select(changedToday.conceptId)} />
+        ) : (
+          <T variant="meta" style={{ textAlign: "center" }}>
+            Pinch to explore · tap a concept
+          </T>
+        )}
+      </Gutter>
+
+      {panelConcept && panelState ? (
+        <Gutter style={{ marginTop: space.x3 }}>
+          <View onLayout={(e) => setDetailY(e.nativeEvent.layout.y)}>
+            <ConceptPanel
+              concept={panelConcept}
+              state={panelState}
+              level={levelOfConcept.get(panelConcept.id) ?? "weak"}
+              justImproved={updatedIds.has(panelConcept.id)}
+            />
+          </View>
         </Gutter>
       ) : null}
 
@@ -130,11 +155,117 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
       <Gutter>
         <T variant="support" style={{ fontSize: 13, lineHeight: 19 }}>
           This is an estimate built from evidence: what you read, what you tell Thinketh, and how you answer checks. Checks count
-          far more than reading. The bar shows mastery; the soft band around it shows how unsure Thinketh still is.
+          far more than reading. Filled concepts have strong evidence, hollow ones are still developing, and coral marks what changed.
         </T>
       </Gutter>
     </ScrollView>
   );
+}
+
+/** The Mindprint: semantic layout, pan and pinch, tap a concept. */
+function MindMap({
+  items,
+  edges,
+  changedIds,
+  selectedId,
+  onSelect,
+}: {
+  items: KnowledgeResponse["items"];
+  edges: KnowledgeResponse["edges"];
+  changedIds: Set<string>;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const height = Math.min(440, Math.round(width * 1.02));
+  const [lod, setLod] = useState<"overview" | "normal">("normal");
+  const nodes = useMemo(() => nodesFromKnowledge(items, changedIds), [items, changedIds]);
+  const layout = useMemo(
+    () =>
+      layoutMind(nodes, layoutEdges(edges), { x: 14, y: 0, w: width - 28, h: height }, {
+        focusId: selectedId,
+        lod: selectedId ? "focus" : lod,
+        changedIds: [...changedIds],
+      }),
+    [nodes, edges, width, height, selectedId, lod, changedIds],
+  );
+  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  return (
+    <View style={{ marginTop: space.l }} accessible accessibilityLabel={`Map of ${nodes.length} concepts. Filled: strong evidence. Hollow: developing.`}>
+      <MindCanvas
+        width={width}
+        height={height}
+        hits={layout.nodes}
+        onTapNode={(id) => onSelect(id === selectedId ? null : id)}
+        onTapEmpty={() => onSelect(null)}
+        onZoomSettled={(sc) => setLod(sc < 0.95 ? "overview" : "normal")}
+      >
+        <Mindprint width={width} height={height} regions={[{ layout, nodes: byId, focusId: selectedId, dim: !!selectedId, stubs: true }]} />
+      </MindCanvas>
+    </View>
+  );
+}
+
+/** Figma 1:6: what changed today, in a sentence you can check. */
+function ChangedCard({ transition, name, onPress }: { transition: KnowledgeStateTransition; name: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Opens this concept" style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
+      <T variant="meta" tone="coral">
+        {name} changed today
+      </T>
+      <T variant="section" style={{ marginTop: space.s, fontFamily: font.serifRegular, fontSize: 21, lineHeight: 28 }}>
+        {changeSentence(transition)}
+      </T>
+      <View style={styles.pill}>
+        <T variant="meta" style={{ color: color.onInk }}>
+          Explore this concept
+        </T>
+      </View>
+    </Pressable>
+  );
+}
+
+/** Figma 1:34: the selected concept, what changed, one clear next step. */
+function SelectedSheet({
+  concept,
+  state,
+  level,
+  transition,
+  onMore,
+}: {
+  concept: Concept;
+  state: KnowledgeState;
+  level: KnowledgeLevel;
+  transition: KnowledgeStateTransition | undefined;
+  onMore: () => void;
+}) {
+  return (
+    <View style={styles.card}>
+      <T variant="title">{concept.name}</T>
+      <T variant="meta" tone={transition ? "coral" : undefined} style={{ marginTop: space.xs }}>
+        {levelLabel[level]} · {transition ? "evidence strengthened today" : evidenceLabel(state.uncertainty).toLowerCase()}
+      </T>
+      <Divider style={{ marginVertical: space.l }} />
+      <T variant="label">{transition ? "What changed" : "What it is"}</T>
+      <T variant="body" style={{ marginTop: space.s }}>
+        {transition ? changeSentence(transition) : concept.description}
+      </T>
+      <Button
+        label="Ask Thinketh"
+        style={{ marginTop: space.xl }}
+        onPress={() => router.push({ pathname: "/ask", params: { q: `Explain ${concept.name} based on what I already know.` } })}
+      />
+      <Pressable onPress={onMore} accessibilityRole="button" hitSlop={8} style={{ marginTop: space.m, alignSelf: "center", minHeight: 44, justifyContent: "center" }}>
+        <T variant="meta">History · sources · related concepts</T>
+      </Pressable>
+    </View>
+  );
+}
+
+/** The engine's own reason, told as what changed (no invented claims). */
+function changeSentence(t: KnowledgeStateTransition): string {
+  const first = t.reason.split(/(?<=\.)\s/)[0] ?? t.reason;
+  return first.replace(/^Updated because you /, "You ").replace(/^Updated because /, "");
 }
 
 function ConceptPanel({
@@ -287,6 +418,14 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  card: {
+    backgroundColor: color.panel,
+    borderRadius: radius.feature,
+    padding: space.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.edge,
+  },
+  pill: { alignSelf: "flex-start", marginTop: space.l, backgroundColor: color.ink, borderRadius: radius.pill, paddingHorizontal: space.l, paddingVertical: space.s + 2 },
   panel: {
     backgroundColor: color.panel,
     borderRadius: radius.surface,

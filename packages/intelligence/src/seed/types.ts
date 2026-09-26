@@ -13,6 +13,7 @@ import type {
   Source,
   Storyline,
 } from "../contracts.ts";
+import type { Persona } from "./personas.ts";
 
 /** Server-only development metadata that the public Development contract does not carry. */
 export type DevelopmentMeta = {
@@ -42,6 +43,8 @@ export type DiagnosticItem = Omit<DiagnosticQuestion, "selectionDebug"> & {
   evidencePhrase?: string;
   /** Misconception this question is designed to probe (cleared on a correct answer). */
   targetsMisconception?: string;
+  /** Only asked inside a Playground session (never by adaptive selection). */
+  playgroundOnly?: boolean;
 };
 
 export type IngestionStats = {
@@ -65,6 +68,8 @@ export type SeedCorpus = {
   history: KnowledgeStateTransition[];
   diagnostics: DiagnosticItem[];
   memories: MemoryItem[];
+  /** Other seeded learners (Playground), keyed by user id. */
+  personas: Record<string, Persona>;
   diagrams: Record<string, DiagramSpec>;
   memoryAids: Record<string, MemoryAid>;
   ingestion: IngestionStats;

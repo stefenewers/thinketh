@@ -2,3 +2,4 @@
 // canonical HTTP envelopes. Change only via SHARED-INTEGRATION-RULES.md.
 export * from "./domain.ts";
 export * from "./api.ts";
+export * from "./playground.ts";

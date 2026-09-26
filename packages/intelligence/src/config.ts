@@ -83,6 +83,16 @@ export function loadConfig() {
       apiKey: env("ELEVENLABS_API_KEY"),
       agentId: env("ELEVENLABS_AGENT_ID"),
     },
+    /**
+     * Muse conducts Playground rooms (server-side only). Without a key, or if a
+     * call fails or proposes an invalid action, the deterministic conductor runs.
+     */
+    muse: {
+      apiKey: env("MUSE_API_KEY"),
+      baseUrl: (env("MUSE_API_BASE") ?? "https://api.llama.com/compat/v1").replace(/\/+$/, ""),
+      model: env("MUSE_MODEL"),
+      timeoutMs: Number(env("MUSE_TIMEOUT_MS") ?? 4000),
+    },
     port: Number(env("PORT") ?? 8787),
   };
 }

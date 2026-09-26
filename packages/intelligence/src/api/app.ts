@@ -27,6 +27,13 @@ import {
   TeachDeltaResponseSchema,
   SourceSchema,
   VoiceSessionSchema,
+  CreateRoomRequestSchema,
+  JoinRoomRequestSchema,
+  PlaygroundRoomSchema,
+  RoomAnswerRequestSchema,
+  RoomConductRequestSchema,
+  RoomExplainRequestSchema,
+  RoomResourceRequestSchema,
 } from "../contracts.ts";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
@@ -38,6 +45,7 @@ import { env } from "../config.ts";
 import { logEvent } from "../log.ts";
 import { MAX_ANSWER_CHARS, MAX_BODY_BYTES, MAX_QUESTION_CHARS, rateLimit, requireAppKey, safeEqual } from "./protect.ts";
 import { BadRequestError, InvalidAnswerError, NotFoundError, type ThinkethService } from "../service.ts";
+import { ForbiddenError, type PlaygroundService } from "../playground/room.ts";
 
 type Vars = { Variables: { userId: string } };
 
@@ -69,8 +77,8 @@ async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
   return parsed.data;
 }
 
-export function createApp(deps: { service: ThinkethService; config: ThinkethConfig; supabase?: SupabaseBackend | undefined }) {
-  const { service, config, supabase } = deps;
+export function createApp(deps: { service: ThinkethService; config: ThinkethConfig; supabase?: SupabaseBackend | undefined; playground?: PlaygroundService }) {
+  const { service, config, supabase, playground } = deps;
   const requireAuth = env("THINKETH_REQUIRE_AUTH") === "true";
   const app = new Hono<Vars>();
 
@@ -172,6 +180,40 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.post("/voice/session", async (c) => c.json(VoiceSessionSchema.parse(await service.voiceSession(c.get("userId")))));
 
+  // Playground: two Minds, one learning space. The server owns every room.
+  if (playground) {
+    const room = (r: unknown) => PlaygroundRoomSchema.parse(r);
+    app.post("/playground/rooms", async (c) => {
+      const { displayName } = await body(c, CreateRoomRequestSchema);
+      return c.json(room(playground.create(c.get("userId"), displayName)));
+    });
+    app.post("/playground/join", async (c) => {
+      const { code, displayName } = await body(c, JoinRoomRequestSchema);
+      return c.json(room(await playground.join(c.get("userId"), code, displayName)));
+    });
+    app.get("/playground/rooms/:id", async (c) => c.json(room(await playground.get(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/demo-guest", async (c) => c.json(room(await playground.addDemoGuest(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/compare", async (c) => c.json(room(await playground.compare(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/conduct", async (c) => {
+      const { intent } = await body(c, RoomConductRequestSchema);
+      return c.json(room(await playground.conduct(c.req.param("id"), c.get("userId"), intent)));
+    });
+    app.post("/playground/rooms/:id/explain", async (c) => {
+      const { text, asUserId } = await body(c, RoomExplainRequestSchema);
+      return c.json(room(await playground.explain(c.req.param("id"), c.get("userId"), text, asUserId)));
+    });
+    app.post("/playground/rooms/:id/answer", async (c) => {
+      const { answer, asUserId } = await body(c, RoomAnswerRequestSchema);
+      if (answer.length > MAX_ANSWER_CHARS) throw new BadRequestError("Answer is too long");
+      return c.json(room(await playground.answer(c.req.param("id"), c.get("userId"), answer, asUserId)));
+    });
+    app.post("/playground/rooms/:id/resource", async (c) => {
+      const { url } = await body(c, RoomResourceRequestSchema);
+      return c.json(room(await playground.resource(c.req.param("id"), c.get("userId"), url)));
+    });
+    app.post("/playground/rooms/:id/leave", (c) => c.json(room(playground.leave(c.req.param("id"), c.get("userId")))));
+  }
+
   app.post("/demo/reset", async (c) => {
     if (!config.allowReset) return c.json({ error: { code: "forbidden", message: "Reset disabled" } }, 403);
     await service.reset(c.get("userId"));
@@ -194,6 +236,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     if (err instanceof BadRequestError || err instanceof InvalidAnswerError) {
       return c.json({ error: { code: "bad_request", message: err.message } }, 400);
     }
+    if (err instanceof ForbiddenError) return c.json({ error: { code: "forbidden", message: err.message } }, 403);
     if (err instanceof UnauthorizedError) return c.json({ error: { code: "unauthorized", message: err.message } }, 401);
     logEvent("api.error", { path: c.req.path, error: err instanceof Error ? (err.stack ?? err.message) : String(err) }, "error");
     // Never expose a stack trace to the client (or to judges).
