@@ -40,7 +40,7 @@ const pre = {
     rootEnvFile: existsSync(join(ROOT, ".env")),
     required: Object.fromEntries(REQUIRED.map((k) => [k, !!env[k]])),
     optional: Object.fromEntries(OPTIONAL.map((k) => [k, !!env[k]])),
-    // The app's own .env.local may point at a tunnel; the audit overrides it on the command line.
+    // An existing .env.local can be baked into the Expo bundle despite shell overrides.
     mobileEnvLocal: existsSync(join(ROOT, "apps/mobile/.env.local")),
   },
   otherServices: { demoApi8787: listening(8787).length > 0, metro8081: listening(8081).length > 0, note: "left untouched" },
@@ -49,6 +49,16 @@ const pre = {
 };
 
 const pids = existsSync(PIDS) ? JSON.parse(readFileSync(PIDS, "utf8")) : {};
+if (pre.env.mobileEnvLocal) {
+  const local = readFileSync(join(ROOT, "apps/mobile/.env.local"), "utf8");
+  const match = local.match(/^EXPO_PUBLIC_API_URL=(.*)$/m);
+  const mock = local.match(/^EXPO_PUBLIC_USE_MOCK_API=(.*)$/m)?.[1]?.trim();
+  const fallback = local.match(/^EXPO_PUBLIC_API_FALLBACK_TO_MOCK=(.*)$/m)?.[1]?.trim();
+  if (match?.[1]?.trim() !== API_URL || mock !== "false" || fallback !== "false") {
+    console.error("Audit preflight stopped: apps/mobile/.env.local conflicts with the audit API or mock settings. Run from an isolated checkout configured for the audit URL; shell overrides are not reliable.");
+    process.exit(2);
+  }
+}
 // Server logs stay out of docs/ (gitignored): they are for debugging, not for publishing.
 const logDir = join(HARNESS_DIR, ".logs", runId);
 mkdirSync(logDir, { recursive: true });
@@ -66,9 +76,8 @@ else {
 }
 
 // Web: live backend only. USE_MOCK=false and FALLBACK_TO_MOCK=false so a failure shows instead of seeded data.
-// --clear matters: Metro's cache is shared with the phone's Metro, and a cached bundle keeps the
-// EXPO_PUBLIC_API_URL from apps/mobile/.env.local (the public tunnel). EXPO_NO_DOTENV=1 stops Expo
-// loading .env.local at all, which otherwise overrides these values.
+// --clear matters: Metro can retain an old embedded URL. Preflight above rejects a conflicting
+// .env.local, because EXPO_NO_DOTENV and process env alone did not override it in the audit.
 if (listening(WEB_PORT).length) pre.started.web = "already running (verify it was started with mock fallback off)";
 else {
   const p = spawn("npx", ["expo", "start", "--web", "--clear", "--port", String(WEB_PORT)], {

@@ -400,7 +400,12 @@ export class PlaygroundService {
       }),
     );
     const first = this.svc.getResource(sides[0]!.userId, sides[0]!.resourceId);
-    room.resource = { url: first.url, title: first.title, sides };
+    // Say why this source is here: the measured default (scripts/resource-asymmetry.mjs) or a person's own link.
+    const chosenBecause =
+      url === DEFAULT_ROOM_RESOURCE
+        ? "Thinketh's default: in tests with these two Minds, it gave the clearest difference."
+        : `${actor === "muse" ? "Muse" : this.name(room, actor)} chose this source.`;
+    room.resource = { url: first.url, title: first.title, sides, chosenBecause };
     this.markDone(room, (i) => i.type === "resource");
     room.scene = "resource";
     room.spotlight = null;

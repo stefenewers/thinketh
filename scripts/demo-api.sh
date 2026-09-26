@@ -39,10 +39,8 @@ THINKETH_APP_KEY=$APP_KEY node supabase/verify-remote.mjs "$URL" || true
 cat <<EOF
 
 Mobile (.env for the Expo app):
-  EXPO_PUBLIC_API_URL=$URL
-  EXPO_PUBLIC_THINKETH_APP_KEY=${APP_KEY:-<THINKETH_APP_KEY from .env>}
-  EXPO_PUBLIC_USE_MOCK_API=false
-  EXPO_PUBLIC_API_FALLBACK_TO_MOCK=false   # set true for judging
+  node scripts/configure-demo-mobile.mjs $URL
+  cd apps/mobile && npx expo start --clear
 
 Logs: $LOG_DIR   (Ctrl-C stops the API and the tunnel)
 EOF

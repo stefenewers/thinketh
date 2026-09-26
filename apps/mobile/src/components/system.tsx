@@ -176,7 +176,7 @@ export function ActionTile({ icon, tint, ink, title, subtitle, accent, onPress }
         </View>
         <Icon name="arrow" size={14} color={color.ink3} />
       </View>
-      <T style={styles.tileTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+      <T style={styles.tileTitle} numberOfLines={2}>
         {title}
       </T>
       <T style={[styles.tileSub, accent && { color: color.coral }]} numberOfLines={2}>

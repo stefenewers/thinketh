@@ -17,7 +17,7 @@ type Props = {
  * The Knowledge Update moment. Still until the model changes; then a single
  * coral knowledge trace on the concept, and only what the transition actually
  * contains: level, a resolved misconception, connected concepts that moved,
- * the evidence added. Raw numbers sit one tap away.
+ * the evidence added. The measured change stays visible at the moment of proof.
  */
 export function KnowledgeStateTransitionView({ transition, concepts, onDone }: Props) {
   const reduced = useReducedMotion();
@@ -115,6 +115,11 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
         )}
       </Animated.View>
 
+      <Animated.View style={[styles.measurements, rise(level)]}>
+        <Num label="Mastery" from={before.mastery} to={after.mastery} />
+        <Num label="Uncertainty" from={before.uncertainty} to={after.uncertainty} />
+      </Animated.View>
+
       <Animated.View style={[{ marginTop: space.xl, gap: space.l }, rise(details)]}>
         {resolved.length ? (
           <Fact label="No longer flagged" accent>
@@ -137,12 +142,10 @@ export function KnowledgeStateTransitionView({ transition, concepts, onDone }: P
         </Fact>
 
         <Pressable onPress={() => setNumbersOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: numbersOpen }} hitSlop={8} style={styles.numbersToggle}>
-          <T variant="meta">{numbersOpen ? "Hide the numbers" : "See the numbers"}</T>
+          <T variant="meta">{numbersOpen ? "Hide evidence details" : "Evidence details"}</T>
         </Pressable>
         {numbersOpen ? (
           <View style={styles.numbers}>
-            <Num label="Mastery" from={before.mastery} to={after.mastery} />
-            <Num label="Uncertainty" from={before.uncertainty} to={after.uncertainty} />
             <T variant="meta" style={{ marginTop: space.s }}>
               Evidence {before.evidenceCount} → {after.evidenceCount} · signal weight {fmt2(transition.observation.weight)}
             </T>
@@ -196,6 +199,7 @@ const styles = StyleSheet.create({
   ring: { position: "absolute", width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.coral },
   fact: { borderLeftWidth: 2, paddingLeft: space.l },
   numbersToggle: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center" },
+  measurements: { marginTop: space.l, padding: space.m, gap: space.xs, borderRadius: 14, backgroundColor: color.surfaceMuted },
   numbers: { paddingTop: space.s },
   numRow: { flexDirection: "row", alignItems: "baseline" },
   tabular: { fontFamily: font.sansMedium, fontVariant: ["tabular-nums"] },

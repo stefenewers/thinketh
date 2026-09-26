@@ -18,7 +18,7 @@ import { color, font } from "@/theme/tokens";
 const AnimatedLine = Animated.createAnimatedComponent(Line);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-const MAX_NODES = 9;
+const MAX_NODES = 7;
 /** Where the transfer checkpoint sits on the path (fraction from teacher to learner). */
 const GATE_AT = 0.68;
 /** Verified moments already celebrated on this device (room + event seq): never twice. */
@@ -43,7 +43,7 @@ export function MindVenn({
   celebrateKey?: string;
 }) {
   const reduced = useReducedMotion();
-  const head = 32;
+  const head = 38;
   const h = height - head;
   const r = Math.min(h / 2 - 6, width * 0.3);
   const cy = head + h / 2;
@@ -167,14 +167,18 @@ export function MindVenn({
     >
       <Svg width={width} height={height}>
         {placed.map((p) => (
-          <Circle key={`c-${p.snap.userId}`} cx={p.cx} cy={cy} r={r} fill={p.tone.tint} fillOpacity={0.55} stroke={p.tone.ink} strokeOpacity={0.14} strokeWidth={1} />
+          <G key={`c-${p.snap.userId}`}>
+            <Circle cx={p.cx} cy={cy} r={r} fill={p.tone.tint} fillOpacity={0.62} stroke={p.tone.ink} strokeOpacity={0.26} strokeWidth={1.2} />
+            <Circle cx={p.cx} cy={cy} r={r * 0.77} fill="none" stroke={p.tone.ink} strokeOpacity={0.1} strokeWidth={1} strokeDasharray={[2, 6]} />
+          </G>
         ))}
         {placed.map((p) => (
           <G key={`e-${p.snap.userId}`}>
             {p.edges.map((e) => {
               const s = p.pts.get(e.fromConceptId)!;
               const t = p.pts.get(e.toConceptId)!;
-              return <Line key={`${e.fromConceptId}-${e.toConceptId}`} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={color.ink} strokeOpacity={0.1} strokeWidth={0.8} />;
+              const lit = stage.beat === "verified" && p === learner && (e.fromConceptId === focus || e.toConceptId === focus);
+              return <Line key={`${e.fromConceptId}-${e.toConceptId}`} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={lit ? p.tone.ink : color.ink} strokeOpacity={lit ? 0.6 : 0.14} strokeWidth={lit ? 1.8 : 1} />;
             })}
           </G>
         ))}
@@ -184,7 +188,7 @@ export function MindVenn({
             {/* The route the knowledge could take: faint until something travels it. */}
             <Line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color.ink} strokeOpacity={0.22} strokeWidth={1} strokeDasharray={[3, 4]} />
             {/* Coral while knowledge is in motion; gray once an answer didn't verify (nothing moved). */}
-            <AnimatedLine x1={a.x} y1={a.y} stroke={stage.beat === "not_yet" ? color.ink3 : color.coral} strokeOpacity={stage.beat === "not_yet" ? 0.6 : 1} strokeWidth={2.2} strokeLinecap="round" animatedProps={lineProps} />
+            <AnimatedLine x1={a.x} y1={a.y} stroke={stage.beat === "not_yet" ? color.ink3 : color.coral} strokeOpacity={stage.beat === "not_yet" ? 0.6 : 1} strokeWidth={3.2} strokeLinecap="round" animatedProps={lineProps} />
             {/* Direction: teacher to learner. */}
             <Path d={chevron(a, b)} stroke={color.ink} strokeOpacity={0.35} strokeWidth={1.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </G>
@@ -195,6 +199,8 @@ export function MindVenn({
           <G>
             <Line {...gateBar(a, b, gate)} stroke={gateInk} strokeWidth={2} strokeLinecap="round" />
             <Circle cx={gate.x} cy={gate.y} r={4} fill={color.canvas} stroke={gateInk} strokeWidth={1.4} />
+            {/* Above the path, clear of the concept rings and their level words below. */}
+            <SvgText x={gate.x} y={gate.y - 14} fontSize={9.5} letterSpacing={0.8} fontFamily={font.sansSemibold} fill={gateInk} textAnchor="middle">CHECK</SvgText>
           </G>
         ) : null}
 
@@ -207,9 +213,9 @@ export function MindVenn({
               const moved = stage.beat === "verified" && isFocus && p === learner;
               return (
                 <G key={c.conceptId}>
-                  {isFocus ? <Circle cx={x} cy={y} r={moved ? 11 : 9} fill="none" stroke={p.tone.ink} strokeOpacity={moved ? 0.6 : 0.32} strokeWidth={moved ? 1.4 : 1} /> : null}
+                  {isFocus ? <Circle cx={x} cy={y} r={moved ? 25 : 19} fill={p.tone.tint} fillOpacity={moved ? 1 : 0.86} stroke={p.tone.ink} strokeOpacity={moved ? 0.9 : 0.5} strokeWidth={moved ? 2.4 : 1.5} /> : null}
                   {strong || isFocus ? (
-                    <Circle cx={x} cy={y} r={isFocus ? 5 : 3.2} fill={isFocus ? p.tone.ink : color.ink} fillOpacity={isFocus ? (p === learner && !moved ? 0.55 : 1) : 0.78} />
+                    <Circle cx={x} cy={y} r={isFocus ? (moved ? 10 : 8) : 3.2} fill={isFocus ? p.tone.ink : color.ink} fillOpacity={isFocus ? (p === learner && !moved ? 0.55 : 1) : 0.78} />
                   ) : (
                     <Circle cx={x} cy={y} r={3} fill={color.canvas} stroke={p.tone.ink} strokeOpacity={0.6} strokeWidth={1.1} />
                   )}
@@ -222,14 +228,15 @@ export function MindVenn({
         {hasPath && b ? <AnimatedCircle cx={b.x} cy={b.y} fill="none" stroke={color.coral} strokeWidth={1.4} animatedProps={haloProps} /> : null}
         {hasPath && inMotion ? <AnimatedCircle r={4.5} fill={color.coral} animatedProps={headProps} /> : null}
 
-        {/* The difference, in one word per side: why one can teach the other. */}
-        {stage.beat === "found" && teacher?.focusConcept && learner?.focusConcept && a && b ? (
+        {/* The evidence level stays legible as the path moves and after the result. */}
+        {hasPath && teacher?.focusConcept && learner?.focusConcept && a && b ? (
           <G>
-            <SvgText x={a.x} y={a.y + 24} fontSize={10.5} fontFamily={font.sansSemibold} fill={teacher.tone.ink} textAnchor="middle">
+            {/* Below the focus rings (radius 19-25), never inside them. */}
+            <SvgText x={a.x} y={a.y + 36} fontSize={10.5} fontFamily={font.sansSemibold} fill={teacher.tone.ink} textAnchor="middle">
               {levelWord(teacher.focusConcept)}
             </SvgText>
-            <SvgText x={b.x} y={b.y + 24} fontSize={10.5} fontFamily={font.sansSemibold} fill={color.ink2} textAnchor="middle">
-              {levelWord(learner.focusConcept)}
+            <SvgText x={b.x} y={b.y + (stage.beat === "verified" ? 42 : 36)} fontSize={10.5} fontFamily={font.sansSemibold} fill={stage.beat === "verified" ? learner.tone.ink : color.ink2} textAnchor="middle">
+              {stage.beat === "verified" ? "verified" : levelWord(learner.focusConcept)}
             </SvgText>
           </G>
         ) : null}

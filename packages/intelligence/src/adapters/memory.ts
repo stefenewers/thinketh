@@ -9,6 +9,7 @@ import type { MemoryItem } from "../contracts.ts";
 import { MemoryItemSchema } from "../contracts.ts";
 import { lexicalScore } from "./model/deterministic.ts";
 import { ensureOk } from "./guard.ts";
+import { logEvent } from "../log.ts";
 import type { MemoryProvider } from "./types.ts";
 
 const RECALL_LIMIT = 5;
@@ -126,7 +127,8 @@ export class BackboardMemory implements MemoryProvider {
     const headers: Record<string, string> = { "X-API-Key": this.opts.apiKey };
     if (typeof init.body === "string") headers["Content-Type"] = "application/json";
     const res = await fetch(`${this.opts.baseUrl}${path}`, { ...init, headers });
-    return ensureOk(res, `backboard ${init.method ?? "GET"} ${path.split("/").slice(0, 2).join("/")}`);
+    const route = path.replace(/\/(assistants|memories|threads)\/[^/?]+/g, "/$1/:id");
+    return ensureOk(res, `backboard ${init.method ?? "GET"} ${route}`);
   }
 
   async createAssistant(name: string): Promise<string> {
@@ -247,10 +249,23 @@ export class BackboardMemory implements MemoryProvider {
     const stored = await this.stored(assistantId);
     const pending = (this.recentWrites.get(item.content) ?? 0) > Date.now() - RECENT_WRITE_MS;
     if (stored.contents.has(item.content) || pending) return; // already remembered
-    await this.call(`/assistants/${assistantId}/memories`, {
-      method: "POST",
-      body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
-    });
+    const write = () =>
+      this.call(`/assistants/${assistantId}/memories`, {
+        method: "POST",
+        body: JSON.stringify({ content: item.content, metadata: { kind: item.kind, thinkethId: item.id } }),
+      });
+    try {
+      await write();
+    } catch (err) {
+      // A failed POST may still have been committed (Backboard returns 500 on some writes). Never
+      // retry blindly: re-read what is stored, and retry once only if the content really isn't there.
+      this.metadataCache.delete(assistantId);
+      const fresh = await this.stored(assistantId);
+      if (!fresh.contents.has(item.content)) {
+        logEvent("backboard.memory_retry", { reason: err instanceof Error ? err.message.slice(0, 120) : "error" }, "warn");
+        await write();
+      }
+    }
     stored.contents.add(item.content);
     this.recentWrites.set(item.content, Date.now());
   }
