@@ -20,20 +20,22 @@ export function Screen({
   scroll = true,
   topInset = true,
   contentStyle,
+  background,
 }: {
   children: ReactNode;
   scroll?: boolean;
   topInset?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
+  background?: string;
 }) {
   const insets = useSafeAreaInsets();
   const pad = { paddingTop: topInset ? insets.top + layout.pageTop : layout.pageTop };
   if (!scroll) {
-    return <View style={[styles.screen, pad, contentStyle]}>{children}</View>;
+    return <View style={[styles.screen, background ? { backgroundColor: background } : null, pad, contentStyle]}>{children}</View>;
   }
   return (
     <ScrollView
-      style={styles.screen}
+      style={[styles.screen, background ? { backgroundColor: background } : null]}
       contentContainerStyle={[pad, { paddingBottom: space.x4 }, contentStyle]}
       showsVerticalScrollIndicator={false}
     >

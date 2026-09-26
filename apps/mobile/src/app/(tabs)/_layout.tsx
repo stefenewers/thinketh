@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { T } from "@/components/Text";
-import { color, font, space } from "@/theme/tokens";
+import { color, font, shadow, space } from "@/theme/tokens";
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: "Today", icon: "today" },
@@ -11,6 +11,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   explore: { label: "Explore", icon: "explore" },
   ask: { label: "Ask", icon: "ask" },
 };
+
 
 export default function TabsLayout() {
   return (
@@ -23,39 +24,45 @@ export default function TabsLayout() {
   );
 }
 
-// Quiet, native-feeling bar: active tab is marked by weight, ink, and a rule — not color alone.
+// Native-feeling bar: Today · Mind · Ask · Library · Explore. Mind opens the Mind screen (not a tab route);
+// Ask is the raised coral action. Active tabs are marked by weight and ink, not color alone.
+const ORDER = ["index", "mind", "ask", "library", "explore"] as const;
+
 function TabBar({ state, navigation, insets }: BottomTabBarProps) {
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.m) }]} accessibilityRole="tablist">
-      {state.routes.map((route, index) => {
-        const tab = TABS[route.name];
-        if (!tab) return null;
+      {ORDER.map((name) => {
+        if (name === "mind") {
+          return (
+            <Pressable key="mind" accessibilityRole="button" accessibilityLabel="Your Mind" onPress={() => router.push("/mind")} style={styles.tab}>
+              <Icon name="mind" size={22} color={color.ink3} />
+              <T style={[styles.label, { color: color.ink3 }]}>Mind</T>
+            </Pressable>
+          );
+        }
+        const index = state.routes.findIndex((r) => r.name === name);
+        const route = state.routes[index];
+        const tab = TABS[name];
+        if (!route || !tab) return null;
         const focused = state.index === index;
+        const onPress = () => {
+          const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+          if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+        };
+        if (name === "ask") {
+          return (
+            <Pressable key={route.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={tab.label} onPress={onPress} style={styles.tab}>
+              <View style={styles.askButton}>
+                <Icon name="sparkle" size={22} color={color.onInk} />
+              </View>
+              <T style={[styles.label, { color: color.coral, fontFamily: font.sansSemibold }]}>{tab.label}</T>
+            </Pressable>
+          );
+        }
         return (
-          <Pressable
-            key={route.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={tab.label}
-            onPress={() => {
-              const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-              if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
-            }}
-            style={styles.tab}
-          >
-            <View style={[styles.rule, focused && { backgroundColor: color.ink }]} />
+          <Pressable key={route.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={tab.label} onPress={onPress} style={styles.tab}>
             <Icon name={tab.icon} size={22} color={focused ? color.ink : color.ink3} />
-            <T
-              style={{
-                fontFamily: focused ? font.sansSemibold : font.sans,
-                fontSize: 11,
-                lineHeight: 14,
-                marginTop: 3,
-                color: focused ? color.ink : color.ink3,
-              }}
-            >
-              {tab.label}
-            </T>
+            <T style={[styles.label, { fontFamily: focused ? font.sansSemibold : font.sans, color: focused ? color.ink : color.ink3 }]}>{tab.label}</T>
           </Pressable>
         );
       })}
@@ -66,10 +73,25 @@ function TabBar({ state, navigation, insets }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
-    backgroundColor: color.ground,
+    backgroundColor: color.canvas,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: color.edge,
   },
-  tab: { flex: 1, alignItems: "center", paddingTop: space.s, minHeight: 52 },
-  rule: { position: "absolute", top: 0, width: 20, height: 2, borderRadius: 1, backgroundColor: "transparent" },
+  tab: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingTop: space.s, minHeight: 52 },
+  label: { fontSize: 11, lineHeight: 14, marginTop: 3 },
+  askButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginTop: -26,
+    backgroundColor: color.coral,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: color.canvas,
+    ...shadow.raised,
+    shadowColor: color.coral,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
 });
