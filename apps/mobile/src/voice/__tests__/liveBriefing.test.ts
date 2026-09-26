@@ -57,6 +57,26 @@ describe("captions", () => {
     expect(lastCompleteSentence(s, 1_000)).toBe("Done here.");
   });
 
+  it("queues chunks that arrive early: the second starts when the first chunk's audio ends", () => {
+    // Two 1-second chunks arrive 50 ms apart (ElevenLabs sends audio ahead of playback).
+    const s = run([align("One two. ", 1000, 100), align("Three four.", 1050, 100)]);
+    // Chunk one is 9 chars x 100 ms: it plays until 1900. Chunk two must not start before that.
+    expect(shownText(s, 1850)).toBe("One two.");
+    expect(shownText(s, 1900 + 4 * 100)).toBe("One two. Three");
+    expect(shownText(s, 1900 + 11 * 100)).toBe("One two. Three four.");
+  });
+
+  it("a chunk that arrives late starts when it arrives", () => {
+    const s = run([align("Hi. ", 0, 100), align("Later.", 5000, 100)]);
+    expect(shownText(s, 4999)).toBe("Hi.");
+    expect(shownText(s, 5000 + 6 * 100)).toBe("Hi. Later.");
+  });
+
+  it("an interruption correction never cuts a word in half", () => {
+    const s = run([align("Scoped  recall matters here.", 0, 10), { type: "correction", text: "Scoped recall matters" }]);
+    expect(shownText(s, 10_000)).toBe("Scoped recall matters");
+  });
+
   it("keeps the user's last utterance for the listening state", () => {
     expect(run([{ type: "user_message", text: "  what about MCP? " }]).lastUser).toBe("what about MCP?");
   });

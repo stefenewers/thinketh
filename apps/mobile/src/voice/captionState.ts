@@ -3,7 +3,8 @@
 //
 // Truthfulness rules:
 // - With audio alignment (chars + char_start_times_ms per audio chunk), text is revealed on
-//   ElevenLabs' own timings, measured from when that chunk arrived. Never on invented timers.
+//   ElevenLabs' own timings. Chunks arrive faster than they play, so each chunk starts where the
+//   previous chunk's audio ends (or when it arrived, if later). Never on invented timers.
 // - Without alignment, the agent's transcript for the turn is shown whole: the real words, not
 //   presented as word-synchronized.
 // - An interruption correction replaces the turn with what was actually said.
@@ -17,6 +18,8 @@ export type CaptionState = {
   turnText: string;
   /** Characters with the wall-clock time they are spoken (from alignment). */
   timed: TimedChar[];
+  /** When the audio scheduled so far in this turn finishes playing (wall clock). */
+  cursor: number;
   /** The turn has ended (Thinketh stopped speaking). The next agent event starts a new one. */
   closed: boolean;
   /** The last sentence of the previous turn, briefly kept above the current one. */
@@ -25,7 +28,7 @@ export type CaptionState = {
   lastUser: string;
 };
 
-export const initialCaption: CaptionState = { turnText: "", timed: [], closed: true, previous: "", lastUser: "" };
+export const initialCaption: CaptionState = { turnText: "", timed: [], cursor: 0, closed: true, previous: "", lastUser: "" };
 
 export type CaptionEvent =
   | { type: "agent_message"; text: string }
@@ -40,7 +43,7 @@ function openTurn(s: CaptionState, now: number): CaptionState {
   if (!s.closed) return s;
   const said = shownText(s, now);
   const last = sentences(said).at(-1) ?? "";
-  return { ...s, turnText: "", timed: [], closed: false, previous: last || s.previous };
+  return { ...s, turnText: "", timed: [], cursor: 0, closed: false, previous: last || s.previous };
 }
 
 export function reduceCaption(s: CaptionState, e: CaptionEvent): CaptionState {
@@ -52,17 +55,22 @@ export function reduceCaption(s: CaptionState, e: CaptionEvent): CaptionState {
       return { ...next, turnText: next.turnText ? `${next.turnText} ${text}` : text };
     }
     case "alignment": {
-      const { chars, char_start_times_ms: starts } = e.chunk;
+      const { chars, char_start_times_ms: starts, char_durations_ms: durations } = e.chunk;
       if (!chars?.length) return s;
       const next = openTurn(s, e.receivedAt);
-      const add: TimedChar[] = chars.map((ch, i) => ({ ch, at: e.receivedAt + (starts[i] ?? 0) }));
-      return { ...next, timed: [...next.timed, ...add] };
+      // This chunk plays after the audio already queued, not the moment it arrived.
+      const start = Math.max(e.receivedAt, next.cursor);
+      const add: TimedChar[] = chars.map((ch, i) => ({ ch, at: start + (starts[i] ?? 0) }));
+      const last = chars.length - 1;
+      const end = start + (starts[last] ?? 0) + (durations?.[last] ?? 0);
+      return { ...next, timed: [...next.timed, ...add], cursor: Math.max(next.cursor, end) };
     }
     case "correction": {
       const text = clean(e.text);
       if (!text) return s;
-      // Keep only what was actually spoken before the interruption.
-      return { ...s, turnText: text, timed: s.timed.slice(0, text.length) };
+      // What was actually spoken before the interruption, shown whole: slicing the timed characters
+      // by length could cut a word in half (their spacing differs from the corrected text's).
+      return { ...s, turnText: text, timed: [] };
     }
     case "user_message": {
       const text = clean(e.text);
