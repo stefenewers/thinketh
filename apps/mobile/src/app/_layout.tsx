@@ -42,7 +42,6 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="development/[id]" />
-        <Stack.Screen name="mind" />
         <Stack.Screen name="diagnostic" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="visualize/[id]" options={{ presentation: "modal" }} />
         <Stack.Screen name="make-it-stick/[id]" options={{ presentation: "modal" }} />

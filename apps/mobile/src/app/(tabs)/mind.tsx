@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { Concept, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
+import type { Concept, Development, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
@@ -22,28 +22,19 @@ import { color, font, space } from "@/theme/tokens";
 export default function MindScreen() {
   const { concept } = useLocalSearchParams<{ concept?: string }>();
   const { data, error, loading, reload } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
+  // Developments and sources for "What's changed for you" and the Sources tab. Optional: Mind never waits on it.
+  const brief = useApi(() => api.getTodayBrief(), []);
 
-  return (
-    <View style={{ flex: 1, backgroundColor: color.canvas }}>
-      <AppTopBar
-        title="Your Mind"
-        onBack={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-        right={
-          <>
-            <IconButton icon="people" accessibilityLabel="Learn together in the Playground" onPress={() => router.push("/playground")} />
-            <IconButton icon="search" accessibilityLabel="Ask about your Mind" onPress={() => router.push("/ask")} />
-          </>
-        }
-      />
-      {loading && !data ? (
-        <LoadingState message="Loading your knowledge state…" />
-      ) : error || !data ? (
-        <ErrorState onRetry={reload} />
-      ) : (
-        <Mind data={data} initialConceptId={concept} />
-      )}
-    </View>
-  );
+  if ((loading && !data) || error || !data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: color.canvas }}>
+        <AppTopBar title="Your Mind" />
+        {loading && !data ? <LoadingState message="Loading your knowledge state…" /> : <ErrorState onRetry={reload} />}
+      </View>
+    );
+  }
+  // Mind is a tab now: a new deep link (?concept=) remounts it with that concept selected.
+  return <Mind key={concept ?? "mind"} data={data} initialConceptId={concept} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
 }
 
 const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];
@@ -60,7 +51,7 @@ function recentTransitions(data: KnowledgeResponse): KnowledgeStateTransition[] 
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConceptId?: string }) {
+function Mind({ data, initialConceptId, developments, sources }: { data: KnowledgeResponse; initialConceptId?: string; developments: Development[]; sources: Source[] }) {
   const { items } = data;
   const concepts = items.map((i) => i.concept);
   const conceptById = new Map(concepts.map((c) => [c.id, c]));
@@ -98,12 +89,27 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
   };
 
   const totalSignals = items.reduce((n, i) => n + i.state.evidenceCount, 0);
+  const sourceById = new Map(sources.map((x) => [x.id, x]));
+  const touching = (id: string) => developments.filter((d) => d.conceptIds.includes(id));
+  const sourcesFor = (id: string) => [...new Set(touching(id).flatMap((d) => d.sourceIds))].map((x) => sourceById.get(x)).filter((x): x is Source => !!x);
 
   return (
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <AppTopBar
+        title={selected ? selected.name : "Your Mind"}
+        // A selected concept is an object you can put back; the tab itself has no back.
+        onBack={selected ? () => select(null) : undefined}
+        right={
+          <>
+            <IconButton icon="people" accessibilityLabel="Learn together in the Playground" onPress={() => router.push("/playground")} />
+            <IconButton icon="search" accessibilityLabel="Ask about your Mind" onPress={() => router.push("/ask")} />
+          </>
+        }
+      />
     <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 }} showsVerticalScrollIndicator={false}>
       <Gutter>
         <SegmentedTabs
-          style={{ justifyContent: "space-around" }}
+          variant="pill"
           value={tab}
           onChange={setTab}
           tabs={[
@@ -128,8 +134,11 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
                 justImproved={updatedIds.has(selected.id)}
                 transition={today.find((t) => t.conceptId === selected.id)}
                 related={related(selected.id)}
+                developments={touching(selected.id)}
+                sources={sourcesFor(selected.id)}
                 onSelectConcept={(id) => select(id)}
                 onClose={() => select(null)}
+                onExploreChanges={() => setTab("changes")}
               />
             ) : (
               <>
@@ -242,6 +251,7 @@ function Mind({ data, initialConceptId }: { data: KnowledgeResponse; initialConc
         </Gutter>
       ) : null}
     </ScrollView>
+    </View>
   );
 }
 

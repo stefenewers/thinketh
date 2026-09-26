@@ -8,6 +8,9 @@
  * the current phase always attaches today's hero when it belongs to a storyline.
  * The user's side of the story comes from their real knowledge history.
  */
+/** The seeded demo learner (the API's demo user). Shown on Today and as the Playground host. */
+export const DEMO_LEARNER_NAME = "Stefen";
+
 export const agentMemoryStoryline = {
   id: "agent-memory",
   title: "Persistent Agent Memory",

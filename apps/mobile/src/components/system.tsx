@@ -82,8 +82,22 @@ export function SectionHeader({ title, action, style }: { title: string; action?
   );
 }
 
-/** Underlined segment control (Map · Concepts · Changes; Overview · Evidence · Sources). */
-export function SegmentedTabs<K extends string>({ tabs, value, onChange, style }: { tabs: { key: K; label: string }[]; value: K; onChange: (k: K) => void; style?: StyleProp<ViewStyle> }) {
+/** Segment control. "underline" for in-page sections; "pill" for view switches (Map · Concepts · Changes). */
+export function SegmentedTabs<K extends string>({ tabs, value, onChange, style, variant = "underline" }: { tabs: { key: K; label: string }[]; value: K; onChange: (k: K) => void; style?: StyleProp<ViewStyle>; variant?: "underline" | "pill" }) {
+  if (variant === "pill") {
+    return (
+      <View style={[styles.pillTrack, style]} accessibilityRole="tablist">
+        {tabs.map((t) => {
+          const on = t.key === value;
+          return (
+            <Pressable key={t.key} onPress={() => onChange(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={[styles.pillSeg, on && styles.pillSegOn]}>
+              <T style={[styles.tabText, on && { color: color.ink, fontFamily: font.sansSemibold }]}>{t.label}</T>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
   return (
     <View style={[styles.tabs, style]} accessibilityRole="tablist">
       {tabs.map((t) => {
@@ -94,6 +108,28 @@ export function SegmentedTabs<K extends string>({ tabs, value, onChange, style }
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+// Portraits are local-only (gitignored src/content/portraits.local.ts + assets/people/).
+// Without them (a fresh clone), everyone gets a quiet initial instead.
+let PORTRAITS: Record<string, ImageSourcePropType> = {};
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  PORTRAITS = (require("@/content/portraits.local") as { PORTRAITS: Record<string, ImageSourcePropType> }).PORTRAITS;
+} catch {
+  PORTRAITS = {};
+}
+
+/** A person: portrait if we have one, else their initial on a soft tint. */
+export function Avatar({ name, size = 32, tint, ink }: { name: string; size?: number; tint?: string; ink?: string }) {
+  const portrait = PORTRAITS[name.trim().toLowerCase()];
+  const box = { width: size, height: size, borderRadius: size / 2 };
+  if (portrait) return <Texture source={portrait} style={[box, { backgroundColor: color.surfaceMuted }]} />;
+  return (
+    <View style={[box, { backgroundColor: tint ?? color.surfaceMuted, alignItems: "center", justifyContent: "center" }]} accessible={false}>
+      <T style={{ fontFamily: font.sansSemibold, fontSize: size * 0.42, lineHeight: size * 0.5, color: ink ?? color.ink2 }}>{name.trim().slice(0, 1).toUpperCase()}</T>
     </View>
   );
 }
@@ -328,6 +364,9 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: "row", gap: space.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   tab: { minHeight: 40, justifyContent: "center", borderBottomWidth: 2, borderBottomColor: "transparent", marginBottom: -StyleSheet.hairlineWidth },
   tabOn: { borderBottomColor: color.ink },
+  pillTrack: { flexDirection: "row", padding: 3, borderRadius: radius.pill, backgroundColor: color.surfaceMuted },
+  pillSeg: { flex: 1, minHeight: 34, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  pillSegOn: { backgroundColor: color.canvas, ...shadow.soft, shadowOpacity: 0.08 },
   tabText: { fontFamily: font.sansMedium, fontSize: 14, lineHeight: 18, color: color.ink3 },
   metrics: { flexDirection: "row" },
   metric: { paddingHorizontal: space.s },

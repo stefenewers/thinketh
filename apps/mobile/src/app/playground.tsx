@@ -10,6 +10,7 @@ import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { StageSteps } from "@/components/StageSteps";
 import { MindVenn } from "@/components/playground/MindVenn";
+import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { CardTitle, Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, TwoMinds, type DotTone } from "@/components/playground/pieces";
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
@@ -21,7 +22,7 @@ import { MindCanvas } from "@/mindprint/MindCanvas";
 import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
 
 /** The device owner's name in the room (the demo persona's human). */
-const HOST_NAME = "Stefen";
+const HOST_NAME = DEMO_LEARNER_NAME;
 const POLL_MS = 1500;
 /** Muse's "comparing" beat is shown at least this long, even when the server is instant. */
 const COMPARE_MS = 2600;

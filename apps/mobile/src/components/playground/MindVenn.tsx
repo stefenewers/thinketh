@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import Svg, { Circle, G, Line } from "react-native-svg";
 import type { MindSnapshot } from "@thinketh/contracts";
+import { Avatar } from "@/components/system";
 import { T } from "@/components/Text";
 import { color, font } from "@/theme/tokens";
 
@@ -31,7 +32,7 @@ export function MindVenn({
   trace?: VennTrace | null;
   muse?: boolean;
 }) {
-  const head = 30;
+  const head = 32;
   const h = height - head;
   const r = Math.min(h / 2 - 6, width * 0.3);
   const cy = head + h / 2;
@@ -117,7 +118,9 @@ export function MindVenn({
       </Svg>
       {placed.map((p, i) => (
         <View key={`h-${p.snap.userId}`} style={[styles.head, { left: p.cx - 60 }]}>
-          <View style={[styles.headDot, { backgroundColor: p.tone.ink }]} />
+          <View style={[styles.headRing, { borderColor: p.tone.ink }]}>
+            <Avatar name={p.snap.displayName} size={20} tint={p.tone.tint} ink={p.tone.ink} />
+          </View>
           <T style={styles.headName} numberOfLines={1}>
             {names[i]}
           </T>
@@ -134,7 +137,7 @@ export function MindVenn({
 
 const styles = StyleSheet.create({
   head: { position: "absolute", top: 0, width: 120, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  headDot: { width: 6, height: 6, borderRadius: 3 },
+  headRing: { borderWidth: 1.5, borderRadius: 12, padding: 0.5 },
   headName: { fontFamily: font.sansSemibold, fontSize: 14, lineHeight: 18, letterSpacing: -0.2, color: color.ink },
   muse: { position: "absolute", width: 24, height: 24, borderRadius: 12, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
   museText: { fontFamily: font.sansSemibold, fontSize: 11, lineHeight: 13, color: color.onInk },

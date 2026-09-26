@@ -9,3 +9,7 @@ node_modules/
 
 # Supabase CLI local link state
 supabase/.temp/
+
+# Local-only demo portraits (not published)
+apps/mobile/assets/people/
+apps/mobile/src/content/portraits.local.ts

@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import Svg, { Circle, Polyline } from "react-native-svg";
-import type { Concept, KnowledgeLevel, KnowledgeState, KnowledgeStateTransition } from "@thinketh/contracts";
+import type { Concept, Development, KnowledgeLevel, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
-import { ConceptChip, IconButton, Kicker, SegmentedTabs, SignalPill } from "@/components/system";
+import { ConceptChip, IconButton, InsightRow, Kicker, ListCard, SegmentedTabs, SignalPill, SourceCard } from "@/components/system";
+import { imageFor } from "@/content/imagery";
 import { T } from "@/components/Text";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
@@ -16,7 +17,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 // Storyboard 03 "Mind — Concept": the selected concept as an object inspector.
 // Same data and actions as the old ConceptPanel/SelectedSheet, reorganised into tabs.
 
-type InspectorTab = "overview" | "evidence" | "history";
+type InspectorTab = "overview" | "evidence" | "sources" | "related";
 
 export function ConceptInspector({
   concept,
@@ -25,8 +26,11 @@ export function ConceptInspector({
   justImproved,
   transition,
   related,
+  developments = [],
+  sources = [],
   onSelectConcept,
   onClose,
+  onExploreChanges,
 }: {
   concept: Concept;
   state: KnowledgeState;
@@ -35,8 +39,13 @@ export function ConceptInspector({
   /** Today's direct transition for this concept, if any. */
   transition: KnowledgeStateTransition | undefined;
   related: Concept[];
+  /** Developments in today's brief that touch this concept (storyboard 03 "What's changed for you"). */
+  developments?: Development[];
+  /** The sources behind those developments. */
+  sources?: Source[];
   onSelectConcept: (id: string) => void;
   onClose: () => void;
+  onExploreChanges?: () => void;
 }) {
   const [tab, setTab] = useState<InspectorTab>("overview");
   const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
@@ -69,7 +78,8 @@ export function ConceptInspector({
         tabs={[
           { key: "overview", label: "Overview" },
           { key: "evidence", label: "Evidence" },
-          { key: "history", label: "History" },
+          { key: "sources", label: "Sources" },
+          { key: "related", label: "Related" },
         ]}
       />
 
@@ -94,20 +104,38 @@ export function ConceptInspector({
             </T>
           )}
 
+          {developments.length ? (
+            <>
+              <T variant="support" style={{ marginTop: space.s }}>
+                {developments.length} development{developments.length === 1 ? "" : "s"} {developments.length === 1 ? "touches" : "touch"} this in your brief.
+              </T>
+              <ListCard style={{ marginTop: space.m }}>
+                {developments.slice(0, 3).map((d, i, arr) => (
+                  <InsightRow
+                    key={d.id}
+                    thumb={imageFor(d.conceptIds)}
+                    title={d.title}
+                    meta={relativeTime(d.happenedAt)}
+                    summary={`${d.sourceIds.length} source${d.sourceIds.length === 1 ? "" : "s"}`}
+                    last={i === arr.length - 1}
+                    onPress={() => router.push({ pathname: "/development/[id]", params: { id: d.id } })}
+                  />
+                ))}
+              </ListCard>
+            </>
+          ) : null}
+          {onExploreChanges ? (
+            <Pressable onPress={onExploreChanges} accessibilityRole="button" style={({ pressed }) => [styles.softPill, pressed && { opacity: 0.7 }]}>
+              <T variant="meta" style={{ color: color.ink }}>
+                Explore all changes
+              </T>
+              <Icon name="arrow" size={13} color={color.ink} />
+            </Pressable>
+          ) : null}
+
           <View style={{ marginTop: space.l }}>
             <MasteryBar mastery={state.mastery} uncertainty={state.uncertainty} highlight={justImproved} />
           </View>
-
-          {related.length ? (
-            <View style={{ marginTop: space.xl }}>
-              <T style={styles.h}>Related concepts</T>
-              <View style={styles.chips}>
-                {related.map((r) => (
-                  <ConceptChip key={r.id} label={r.name} onPress={() => onSelectConcept(r.id)} />
-                ))}
-              </View>
-            </View>
-          ) : null}
 
           <View style={{ marginTop: space.l }}>
             <Pressable
@@ -119,18 +147,16 @@ export function ConceptInspector({
               <T style={styles.primaryLabel}>Ask Thinketh</T>
               <Icon name="arrow" size={15} color={color.onInk} />
             </Pressable>
-            <LinkRow label="Evidence · history · how it changed" onPress={() => setTab("history")} />
+            <LinkRow label="Evidence · history · how it changed" onPress={() => setTab("evidence")} />
             <StorylineLink conceptId={concept.id} />
           </View>
         </View>
       ) : null}
 
       {tab === "evidence" ? (
-        <EvidenceTab state={state} level={level} justImproved={justImproved} />
-      ) : null}
-
-      {tab === "history" ? (
-        <View style={{ marginTop: space.l }}>
+        <>
+          <EvidenceTab state={state} level={level} justImproved={justImproved} />
+        <View style={{ marginTop: space.xl }}>
           <T style={[styles.h, { marginBottom: space.s }]}>How it changed</T>
           {loading && !history ? (
             <T variant="support">Loading history…</T>
@@ -141,6 +167,41 @@ export function ConceptInspector({
           )}
           <LinkRow label="Ask Thinketh about this" onPress={() => router.push({ pathname: "/ask", params: { q: askQ } })} />
           <StorylineLink conceptId={concept.id} />
+        </View>
+        </>
+      ) : null}
+
+      {tab === "sources" ? (
+        <View style={{ marginTop: space.l }}>
+          <T style={[styles.h, { marginBottom: space.s }]}>Where the evidence comes from</T>
+          {sources.length ? (
+            sources.map((src) => (
+              <SourceCard
+                key={src.id}
+                title={src.title}
+                meta={[src.publisher, src.sourceType, src.publishedAt ? shortDate(src.publishedAt) : undefined].filter(Boolean).join(" · ")}
+                thumb={imageFor([concept.id])}
+                onPress={src.url ? () => Linking.openURL(src.url!).catch(() => {}) : undefined}
+              />
+            ))
+          ) : (
+            <T variant="support">No sources in today&apos;s brief touch this concept yet. Its evidence comes from your reading and checks.</T>
+          )}
+        </View>
+      ) : null}
+
+      {tab === "related" ? (
+        <View style={{ marginTop: space.l }}>
+          <T style={[styles.h, { marginBottom: space.s }]}>Connected in your Mind</T>
+          {related.length ? (
+            <View style={styles.chips}>
+              {related.map((c) => (
+                <ConceptChip key={c.id} label={c.name} onPress={() => onSelectConcept(c.id)} />
+              ))}
+            </View>
+          ) : (
+            <T variant="support">No mapped connections yet.</T>
+          )}
         </View>
       ) : null}
     </View>
@@ -283,6 +344,7 @@ export function direction(t: KnowledgeStateTransition): string {
 }
 
 const styles = StyleSheet.create({
+  softPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, marginTop: space.m, paddingHorizontal: space.m, minHeight: 36, borderRadius: radius.pill, backgroundColor: color.surfaceMuted },
   headRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginRight: -space.s, minHeight: 44 },
   levelLine: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.s },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.coral },

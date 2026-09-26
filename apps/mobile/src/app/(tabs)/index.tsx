@@ -6,7 +6,8 @@ import type { BriefResponse, Concept, Development, KnowledgeResponse } from "@th
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
-import { ActionTile, InsightRow, ListCard, MetricStrip, MindprintPreview, SectionHeader } from "@/components/system";
+import { ActionTile, Avatar, InsightRow, ListCard, MetricStrip, MindprintPreview, SectionHeader } from "@/components/system";
+import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { Texture } from "@/components/Texture";
 import { imageFor } from "@/content/imagery";
 import { Sheet } from "@/components/Sheet";
@@ -221,7 +222,7 @@ function HomeTopBar() {
           <Icon name="search" size={19} color={color.ink} />
         </Pressable>
         <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Your learning profile" style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}>
-          <Icon name="person" size={19} color={color.ink2} />
+          <Avatar name={DEMO_LEARNER_NAME} size={40} />
         </Pressable>
       </View>
     </Gutter>

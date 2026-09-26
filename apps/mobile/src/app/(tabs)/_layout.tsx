@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { router, Tabs } from "expo-router";
+import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { T } from "@/components/Text";
@@ -7,6 +7,7 @@ import { color, font, shadow, space } from "@/theme/tokens";
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: "Today", icon: "today" },
+  mind: { label: "Mind", icon: "mind" },
   library: { label: "Library", icon: "library" },
   explore: { label: "Explore", icon: "explore" },
   ask: { label: "Ask", icon: "ask" },
@@ -17,6 +18,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="mind" />
       <Tabs.Screen name="library" />
       <Tabs.Screen name="explore" />
       <Tabs.Screen name="ask" />
@@ -24,22 +26,13 @@ export default function TabsLayout() {
   );
 }
 
-// Native-feeling bar: Today · Mind · Ask · Library · Explore. Mind opens the Mind screen (not a tab route);
-// Ask is the raised coral action. Active tabs are marked by weight and ink, not color alone.
+// Native-feeling bar: Today · Mind · Ask · Library · Explore. Ask is the raised action. Active tabs are marked by weight and ink, not color alone.
 const ORDER = ["index", "mind", "ask", "library", "explore"] as const;
 
 function TabBar({ state, navigation, insets }: BottomTabBarProps) {
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.m) }]} accessibilityRole="tablist">
       {ORDER.map((name) => {
-        if (name === "mind") {
-          return (
-            <Pressable key="mind" accessibilityRole="button" accessibilityLabel="Your Mind" onPress={() => router.push("/mind")} style={styles.tab}>
-              <Icon name="mind" size={22} color={color.ink3} />
-              <T style={[styles.label, { color: color.ink3 }]}>Mind</T>
-            </Pressable>
-          );
-        }
         const index = state.routes.findIndex((r) => r.name === name);
         const route = state.routes[index];
         const tab = TABS[name];
