@@ -17,6 +17,7 @@ import { useReducedMotion, useSharedValue, withTiming } from "react-native-reani
 import { color, space } from "@/theme/tokens";
 import { captionLines, initialCaption, isAligned, lastCompleteSentence, pendingReveal, reduceCaption } from "./captionState";
 import { nextFocus, type FocusConcept } from "./conceptFocus";
+import { isEndIntent } from "./endIntent";
 import { LiveBriefingCanvas, type BriefingMind } from "./LiveBriefingCanvas";
 import { USER_HOLD_MS, USER_VAD_THRESHOLD, voicePhase } from "./voiceVisualState";
 
@@ -83,6 +84,9 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
   const level = useSharedValue(0);
   // Dev-only: note once per session which caption signals the device actually receives.
   const seen = useRef({ message: false, alignment: false });
+  // Saying "end", "finish", "that's enough"... closes the call like the End button (the agent may not hang up itself).
+  const [ending, setEnding] = useState(false);
+  const endByVoice = useRef<() => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +133,12 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
               console.log("[voice] agent transcript arriving");
             }
             dispatch(role === "agent" ? { type: "agent_message", text: message } : { type: "user_message", text: message });
+            if (role === "user" && isEndIntent(message)) {
+              if (__DEV__) console.log("[voice] end intent heard");
+              setEnding(true);
+              // A beat so the screen can say it is ending; then the same path as the End button.
+              setTimeout(() => endByVoice.current(), 900);
+            }
           },
           onAudioAlignment: (chunk) => {
             if (__DEV__ && !seen.current.alignment) {
@@ -222,6 +232,12 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
     }
     then();
   };
+  useEffect(() => {
+    // Only if nothing else has already ended or failed the session.
+    endByVoice.current = () => {
+      if (!settled.current) end(onEnded);
+    };
+  });
 
   if (!connected || status === "connecting") {
     return (
@@ -246,6 +262,7 @@ function LiveSession({ onFallback, onEnded, onShowTranscript, mind = null, conce
       announce={lastCompleteSentence(caption, now)}
       aligned={isAligned(caption)}
       lastUser={caption.lastUser}
+      ending={ending}
       isMuted={isMuted}
       level={level}
       reduceMotion={!!reduceMotion}

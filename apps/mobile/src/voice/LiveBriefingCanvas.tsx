@@ -24,6 +24,7 @@ export function LiveBriefingCanvas({
   announce,
   aligned,
   lastUser,
+  ending,
   isMuted,
   level,
   reduceMotion,
@@ -41,6 +42,8 @@ export function LiveBriefingCanvas({
   /** Captions are timed to the audio (alignment) rather than the turn transcript shown whole. */
   aligned: boolean;
   lastUser: string;
+  /** The user asked to end; the call is closing. */
+  ending?: boolean;
   isMuted: boolean;
   level: SharedValue<number>;
   reduceMotion: boolean;
@@ -94,7 +97,14 @@ export function LiveBriefingCanvas({
       </View>
 
       <View style={styles.stateBlock}>
-        {speaking ? (
+        {ending ? (
+          <>
+            <T style={styles.turn} accessibilityLiveRegion="polite">
+              Ending your catch-up…
+            </T>
+            <T variant="support">Heard you. Closing the call.</T>
+          </>
+        ) : speaking ? (
           <T variant="support">Interrupt any time. Just start talking.</T>
         ) : phase === "user" ? (
           <>
