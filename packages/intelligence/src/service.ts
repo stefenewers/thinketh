@@ -766,9 +766,8 @@ export class ThinkethService {
     const { brief, developments } = await this.brief(userId);
     const states = await this.statesFor(userId);
     const profile = this.profileFor(userId);
-    const major = developments.filter((d) => d.significance >= 0.75);
     const script = [
-      `Good morning, ${profile.displayName}. You have about ${Math.round(brief.estimatedMinutes)} minutes. ${major.length} developments materially changed topics you follow today.`,
+      `Good morning, ${profile.displayName}. You have about ${Math.round(brief.estimatedMinutes)} minutes. ${brief.meaningfulCount} developments materially changed topics you follow today.`,
       ...developments.slice(0, 3).map((d, i) => {
         const delta = this.deterministicDelta(userId, d, states);
         const changed = delta.whatChanged[0] ?? d.summaryBullets[0] ?? "";
