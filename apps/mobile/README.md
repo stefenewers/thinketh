@@ -54,7 +54,8 @@ API_URL=http://localhost:8787 npm run check:golden -w mobile     # against the r
 
 ## Layout
 
-- `src/app/`: routes. `(tabs)` holds Today, Library, Explore, and Ask. The other routes are `development/[id]`, `diagnostic`, `mind`, `visualize/[id]`, `make-it-stick/[id]`, and `voice`.
+- `src/app/`: routes. `(tabs)` holds Today (`index`), Learn (`library`), Mind, and Ask. The other routes include `development/[id]`, `diagnostic`, `explore`, `resource/[id]`, `storyline/[id]`, `visualize/[id]`, `make-it-stick/[id]`, and `voice`.
+- Tab bar: `(tabs)/_layout.tsx` draws one floating glass bar for all tabs, and the page scrolls underneath it. It reports the space it takes through `useTabBarInset()` (`src/lib/tabBarInset.ts`), so a tab screen that scrolls must add that to its bottom padding. `Screen` in `components/ui.tsx` already does this. The bar hides while the keyboard is open.
 - `src/api/`: `ThinkethApi` interface, the mock, the HTTP client, and fixtures. Response shapes come from `@thinketh/contracts`.
 - `src/components/`: design-system pieces, `KnowledgeStateTransitionView`, `MindGraph`, and `DiagramView`.
 - `src/theme/tokens.ts`: colors, spacing, radii, fonts, and motion.
