@@ -27,3 +27,22 @@ The Edge Function stays deployed (`https://mbfogczuvxqkrykwlrcp.supabase.co/func
 ## Atlas access
 
 The Atlas Network Access rule `0.0.0.0/0` is open for the event, which the tunnel setup doesn't strictly need but doesn't hurt. Remove it after HackGT (see `docs/POST-HACKATHON-CLEANUP.md`).
+
+## Real identity, profiles and discovery (branch `stefen-earn-the-promise`)
+
+The code is complete, but these steps need deployment access and are **not done yet**:
+
+1. **Anonymous sign-in (optional).** Supabase Dashboard → Authentication → Sign In / Providers → turn on "Allow anonymous sign-ins". It is off now (checked 2026-09-27), so the app asks for email and password. Email confirmation is on, so a new account confirms by email first.
+2. **Mobile env for personal mode.** Add to `apps/mobile/.env.local`, then restart Metro with `--clear`:
+   - `EXPO_PUBLIC_THINKETH_MODE=personal`
+   - `EXPO_PUBLIC_SUPABASE_URL=<SUPABASE_URL>`
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY=<SUPABASE_ANON_KEY>` (the public anon key, never the service key)
+
+   Without `EXPO_PUBLIC_THINKETH_MODE=personal`, the app stays in demo mode exactly as before. Demo controls can switch modes at runtime.
+3. **Scheduled discovery.** Nothing is scheduled. Pick one:
+   - Start the API with `THINKETH_DISCOVERY_EVERY_MINUTES=360` (in-process, Node server only).
+   - Run `npm run discover -w @thinketh/intelligence` from cron.
+   - Call `POST /admin/discovery/run` with `THINKETH_ADMIN_TOKEN`.
+
+   Runs never overlap (a storage lease), and a failed source never discards the corpus.
+4. **The public demo server** keeps its current behaviour: demo identities on, the trusted header off. Don't set `THINKETH_TRUST_USER_HEADER` on it.
