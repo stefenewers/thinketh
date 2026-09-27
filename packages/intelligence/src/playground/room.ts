@@ -118,7 +118,7 @@ export class PlaygroundService {
       grok: challenge?.grok,
       defender: () => this.exchange.agentModel,
       grader: exchange?.grader ?? { live: undefined, fallback: new DeterministicModel({ diagrams: {}, visualizations: {}, memoryAids: {} }) },
-      limits: challenge?.limits ?? { deadlineMs: 240_000, callTimeoutMs: 45_000, maxToolCalls: 14 },
+      limits: challenge?.limits ?? { deadlineMs: 240_000, callTimeoutMs: 45_000, maxToolCalls: 18 },
       host: this,
       now,
     });

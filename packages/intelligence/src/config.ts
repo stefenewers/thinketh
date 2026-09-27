@@ -154,7 +154,7 @@ export function loadConfig() {
       deadlineMs: Number(env("THINKETH_CHALLENGE_DEADLINE_MS") ?? 240_000),
       /** One model call (Grokbot or the defending agent); a turn may take a few. */
       callTimeoutMs: Number(env("THINKETH_CHALLENGE_CALL_TIMEOUT_MS") ?? 45_000),
-      maxToolCalls: Number(env("THINKETH_CHALLENGE_MAX_TOOL_CALLS") ?? 14),
+      maxToolCalls: Number(env("THINKETH_CHALLENGE_MAX_TOOL_CALLS") ?? 18),
     },
     port: Number(env("PORT") ?? 8787),
   };

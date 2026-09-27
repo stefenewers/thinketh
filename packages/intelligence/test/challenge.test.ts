@@ -291,6 +291,40 @@ describe("Grokbot takeaway challenge", () => {
     expect((await t.app.request(`/takeaways/${tk.id}`, { headers: { "x-thinketh-user": "nadani" } })).status).toBe(404);
   });
 
+  it("a turn always concludes: after reading one tool at a time, the last call offers only the ending tools", async () => {
+    const grok = new Fake("grok", (purpose, _messages, tools) => {
+      if (purpose.endsWith(":assessing")) return [{ name: "return_assessment", args: { stance: "satisfied", text: "ok", sourceRefs: [] } }];
+      // Keeps reading until reading is no longer offered (as live Grok did: one call per turn).
+      if (tools.includes("read_transcript")) return [{ name: "read_transcript", args: {} }];
+      return [{ name: "report_no_issue", args: { say: "Holds.", detail: "Nothing clear to challenge.", sourceRefs: [] } }];
+    });
+    const { t } = boot({ grok });
+    const room0 = await savedTakeawayRoom(t);
+    const room = await runChallenge(t, room0.id);
+    expect(room.challenge!.status).toBe("completed");
+    const examine = grok.calls.filter((c) => c.purpose.endsWith(":examining"));
+    expect(examine).toHaveLength(6);
+    expect(examine.at(-1)!.tools).toEqual(["request_clarification", "deliver_challenge", "report_insufficient_evidence", "report_no_issue"]);
+  });
+
+  it("an empty model reply is never replayed (the API rejects it); the agent is nudged and its turn continues", async () => {
+    const grok = new Fake("grok", grokScript(({ refs }) => ({ name: "deliver_challenge", args: { kind: "objection", say: "Hmm.", detail: "The passage is the takeaway restated.", sourceRefs: refs } })));
+    const { t, muse } = boot({ grok });
+    const room0 = await savedTakeawayRoom(t);
+    let first = true;
+    defenderScript = () => {
+      if (first) {
+        first = false;
+        return [];
+      }
+      return [{ name: "defend_takeaway", args: { text: "S1 states it.", sourceRefs: ["S1"] } }];
+    };
+    const room = await runChallenge(t, room0.id);
+    expect(room.challenge!.status).toBe("completed");
+    const second = muse.calls.filter((c) => c.purpose.startsWith("challenge:defender"))[1]!;
+    expect(second.messages.some((m) => m.role === "assistant" && !m.content && !(m.tool_calls ?? []).length)).toBe(false);
+  });
+
   it("one clarification round: the question reaches the agent and its answer reaches Grokbot", async () => {
     const grok = new Fake("grok", (purpose, messages) => {
       if (purpose.endsWith(":assessing")) return [{ name: "return_assessment", args: { stance: "satisfied", text: "ok", sourceRefs: [] } }];
