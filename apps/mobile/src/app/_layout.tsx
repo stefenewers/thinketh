@@ -11,6 +11,9 @@ import {
   PlayfairDisplay_400Regular_Italic,
   PlayfairDisplay_600SemiBold,
 } from "@expo-google-fonts/playfair-display";
+import { AgentDock } from "@/agent/AgentDock";
+import { AgentProvider } from "@/agent/AgentProvider";
+import { AgentSheet } from "@/agent/AgentSheet";
 import { color } from "@/theme/tokens";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -39,6 +42,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
+      {/* One personal agent for the whole app: its conversation survives every route change. */}
+      <AgentProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground } }}>
         <Stack.Screen name="(tabs)" />
@@ -57,6 +62,9 @@ export default function RootLayout() {
         <Stack.Screen name="playground" />
         <Stack.Screen name="explore" />
       </Stack>
+      <AgentDock />
+      <AgentSheet />
+      </AgentProvider>
     </SafeAreaProvider>
     </GestureHandlerRootView>
   );

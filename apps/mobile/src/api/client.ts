@@ -16,6 +16,7 @@ import type {
   Resource,
   TeachDeltaResponse,
   VoiceSession,
+  AgentActivity,
 } from "@thinketh/contracts";
 
 /** A question this backend never issued (e.g. served by the live API before it dropped): pick a new one. */
@@ -35,7 +36,8 @@ export interface ThinkethApi {
   ask(req: AskRequest): Promise<AskResponse>; // POST /ask
   visualize(req: LearningRequest): Promise<VisualizationSpec>; // POST /visualize
   makeItStick(req: LearningRequest): Promise<MemoryAid>; // POST /make-it-stick
-  createVoiceSession(): Promise<VoiceSession>; // POST /voice/session
+  /** `activity` absent = Catch Me Up. */
+  createVoiceSession(activity?: AgentActivity): Promise<VoiceSession>; // POST /voice/session
   resetDemo(): Promise<void>; // POST /demo/reset
   listResources(): Promise<Resource[]>; // GET  /resources
   addResource(url: string): Promise<Resource>; // POST /resources

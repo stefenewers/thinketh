@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useAgentScreen } from "@/agent/screenContext";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Wordmark } from "@/components/Logo";
 import { Redirect, router, useFocusEffect } from "expo-router";
@@ -54,6 +55,13 @@ export default function Today() {
   // Done on leave, not on return, so the reset is never seen.
   const [visit, setVisit] = useState(0);
   useFocusEffect(useCallback(() => () => setVisit((v) => v + 1), []));
+  const lead = data ? data.today.developments.find((d) => d.id === data.today.brief.heroDevelopmentId) : undefined;
+  useAgentScreen({
+    screen: "today",
+    route: "/",
+    title: "Today",
+    ...(lead ? { visible: [`Lead story: ${lead.title} (development id ${lead.id})`, `${data!.today.developments.length} developments in today's brief`] } : {}),
+  });
 
   // Your own Mind needs a verified session before anything else.
   if (session.mode === "personal" && session.status === "signed_out" && !session.anonymousAvailable) return <Redirect href="/account" />;

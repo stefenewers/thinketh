@@ -27,6 +27,7 @@ import {
   TeachDeltaResponseSchema,
   SourceSchema,
   VoiceSessionSchema,
+  VoiceSessionRequestSchema,
   CreateRoomRequestSchema,
   JoinRoomRequestSchema,
   PlaygroundRoomSchema,
@@ -230,7 +231,11 @@ export function createApp(deps: {
     c.json(TeachDeltaResponseSchema.parse(await service.teachResource(c.get("userId"), c.req.param("id")))),
   );
 
-  app.post("/voice/session", async (c) => c.json(VoiceSessionSchema.parse(await service.voiceSession(c.get("userId")))));
+  app.post("/voice/session", async (c) => {
+    // One agent, two activities: general assistance or Catch Me Up. No body = Catch Me Up (older builds).
+    const { activity } = await body(c, VoiceSessionRequestSchema);
+    return c.json(VoiceSessionSchema.parse(await service.voiceSession(c.get("userId"), activity)));
+  });
 
   // Playground: two Minds, one learning space. The server owns every room.
   if (playground) {

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AgentComposerButton } from "@/agent/AgentDock";
+import { useAgentControls } from "@/agent/agentContext";
+import { useAgentScreen } from "@/agent/screenContext";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +56,7 @@ export default function Ask() {
   const session = useSession();
   const profile = useProfile();
   const name = session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME;
+  const voice = useAgentControls();
   // Names for related concepts.
   const lookup = useApi(async () => (await api.getKnowledge()).items.map((i) => i.concept), []);
 
@@ -91,6 +95,18 @@ export default function Ask() {
   }, [q]);
 
   const conceptName = (id: string) => lookup.data?.find((c) => c.id === id)?.name;
+
+  // For the voice agent: the question and answer on screen. Ask hosts its own voice entry.
+  useAgentScreen(
+    {
+      screen: "ask",
+      route: "/ask",
+      title: "Ask",
+      ...(answer?.developmentId ? { focus: { kind: "development" as const, id: answer.developmentId, label: answer.question } } : {}),
+      ...(answer ? { visible: [`Question: ${answer.question.slice(0, 200)}`, `Answer: ${answer.answer.slice(0, 220)}`] } : {}),
+    },
+    "inline",
+  );
 
   const changeMode = (k: AskMode) => {
     setModeMenu(false);
@@ -226,18 +242,23 @@ export default function Ask() {
             editable={!asking}
             accessibilityLabel="Question"
           />
-          <Pressable
-            onPress={() => ask(input)}
-            disabled={!input.trim() || asking}
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            hitSlop={6}
-            style={[styles.send, (!input.trim() || asking) && { opacity: 0.3 }]}
-          >
-            <View style={{ transform: [{ rotate: "-90deg" }] }}>
-              <Icon name="send" size={16} color={color.onInk} />
-            </View>
-          </Pressable>
+          {/* Empty composer: talk instead (the same agent, with this answer as context). */}
+          {!input.trim() && voice.supported ? (
+            <AgentComposerButton />
+          ) : (
+            <Pressable
+              onPress={() => ask(input)}
+              disabled={!input.trim() || asking}
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              hitSlop={6}
+              style={[styles.send, (!input.trim() || asking) && { opacity: 0.3 }]}
+            >
+              <View style={{ transform: [{ rotate: "-90deg" }] }}>
+                <Icon name="send" size={16} color={color.onInk} />
+              </View>
+            </Pressable>
+          )}
         </View>
       </View>
       )}

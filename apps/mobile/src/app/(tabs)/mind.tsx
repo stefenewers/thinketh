@@ -6,7 +6,10 @@ import { api } from "@/api";
 import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
-import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
+import { useDockSpace } from "@/agent/dockLayout";
+import { useAgentScreen } from "@/agent/screenContext";
+import { SOURCES_TAB } from "@/agent/tools";
+import { ConceptInspector, changeSentence, direction, type InspectorTab } from "@/components/mind/ConceptInspector";
 import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, SectionHeader, SegmentedTabs } from "@/components/system";
 import { FocusLabel, LibraryLegend, MindLibrary, playedHighlights } from "@/components/mind/world/MindLibrary";
 import { BookGlyph } from "@/components/mind/world/Book";
@@ -18,7 +21,7 @@ import { evidenceLabel, improvedTodayIds, isToday, levelLabel, relativeTime, tod
 import { color, depth, font, space, warm } from "@/theme/tokens";
 
 export default function MindScreen() {
-  const { concept, from } = useLocalSearchParams<{ concept?: string; from?: string }>();
+  const { concept, from, tab } = useLocalSearchParams<{ concept?: string; from?: string; tab?: string }>();
   const { data, error, loading, reload } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
   // Developments and sources for "What's changed for you" and the Sources tab. Optional: Mind never waits on it.
   const brief = useApi(() => api.getTodayBrief(), []);
@@ -35,7 +38,7 @@ export default function MindScreen() {
     );
   }
   // Mind is a tab now: a new deep link (?concept=) remounts it with that concept selected.
-  return <Mind key={`${concept ?? "mind"}:${visit}`} data={data} initialConceptId={concept} from={from} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
+  return <Mind key={`${concept ?? "mind"}:${tab ?? ""}:${visit}`} data={data} initialConceptId={concept} initialTab={tab === "sources" ? "sources" : undefined} from={from} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
 }
 
 const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];
@@ -52,7 +55,21 @@ function recentTransitions(data: KnowledgeResponse): KnowledgeStateTransition[] 
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-function Mind({ data, initialConceptId, from, developments, sources }: { data: KnowledgeResponse; initialConceptId?: string; from?: string; developments: Development[]; sources: Source[] }) {
+function Mind({
+  data,
+  initialConceptId,
+  initialTab,
+  from,
+  developments,
+  sources,
+}: {
+  data: KnowledgeResponse;
+  initialConceptId?: string;
+  initialTab?: InspectorTab;
+  from?: string;
+  developments: Development[];
+  sources: Source[];
+}) {
   const { items } = data;
   const concepts = items.map((i) => i.concept);
   const conceptById = new Map(concepts.map((c) => [c.id, c]));
@@ -66,8 +83,21 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
   const [selectedId, setSelectedId] = useState<string | null>(initialConceptId ?? null);
   const [tab, setTab] = useState<ViewTab>("map");
   const scrollRef = useRef<ScrollView>(null);
+  const dock = useDockSpace();
+  const scrolledToInspector = useRef(false);
   const selected = selectedId ? conceptById.get(selectedId) : undefined;
   const selectedState = selectedId ? stateOf.get(selectedId) : undefined;
+
+  // For the voice agent: the open book is what "this" means here.
+  useAgentScreen({
+    screen: "mind",
+    route: "/mind",
+    title: selected ? selected.name : "Your Mind",
+    ...(selected ? { focus: { kind: "concept" as const, id: selected.id, label: selected.name } } : {}),
+    visible: selected
+      ? [`Level: ${levelOfConcept.get(selected.id) ?? "unknown"}`, ...(selected.id === initialConceptId && initialTab === "sources" ? [SOURCES_TAB] : [])]
+      : [`${items.length} books in the library`, `View: ${tab}`],
+  });
 
   const select = (id: string | null) => setSelectedId(id);
   /** From a list: back to the map with the concept open. */
@@ -109,7 +139,7 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
           </>
         }
       />
-    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 }} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 + dock }} showsVerticalScrollIndicator={false}>
       <Gutter>
         <SegmentedTabs
           variant="pill"
@@ -141,6 +171,14 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
             </Gutter>
           ) : null}
 
+          {/* Opened on a tab (e.g. "show me its sources"): bring the inspector into view once. */}
+          <View
+            onLayout={(e) => {
+              if (!initialTab || scrolledToInspector.current) return;
+              scrolledToInspector.current = true;
+              scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: !reduced });
+            }}
+          >
           <Gutter>
             {selected && selectedState ? (
               <ConceptInspector
@@ -156,6 +194,7 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
                 onSelectConcept={(id) => select(id)}
                 onClose={() => select(null)}
                 onExploreChanges={() => setTab("changes")}
+                initialTab={selected.id === initialConceptId ? initialTab : undefined}
               />
             ) : (
               <>
@@ -184,6 +223,7 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
               </>
             )}
           </Gutter>
+          </View>
         </>
       ) : null}
 
@@ -428,7 +468,7 @@ function ArrivalNote({ from }: { from: string }) {
     check: "Opened from your check: the change and its reason are recorded below.",
     playground: "Opened from the Playground: your transfer answer was graded, and the recorded result is below.",
     today: "Opened from Today: the latest recorded change is below.",
-    voice: "Opened from Catch me up: listening adds context; a check is what changes this book.",
+    voice: "Opened from your conversation with Thinketh: talking adds context; a check is what changes this book.",
   };
   const t = text[from];
   if (!t) return null;

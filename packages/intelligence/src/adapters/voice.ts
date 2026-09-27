@@ -7,12 +7,21 @@ import type { VoiceSession } from "../contracts.ts";
 import { ensureOk } from "./guard.ts";
 import type { VoiceContext, VoiceProvider } from "./types.ts";
 
+/** The agent's opening per activity. Catch Me Up keeps the line the hosted agent has always used. */
+export const OPENING_LINES = {
+  catch_up: "You're caught up enough that we can skip most of the noise. I found a few things that actually change what you know. Want the quick version?",
+  assist: "I'm here. What would you like to look at?",
+} as const;
+
 function dynamicVariables(ctx: VoiceContext): VoiceSession["dynamicVariables"] {
+  const activity = ctx.activity ?? "catch_up";
   return {
     user_name: ctx.displayName,
     brief_date: ctx.briefDate,
     brief_minutes: ctx.minutes,
     brief_script: ctx.script.join("\n"),
+    activity,
+    opening_line: OPENING_LINES[activity],
   };
 }
 

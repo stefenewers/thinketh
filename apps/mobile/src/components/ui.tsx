@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useDockSpace } from "@/agent/dockLayout";
 import {
   ActivityIndicator,
   Pressable,
@@ -30,6 +31,7 @@ export function Screen({
   background?: string;
 }) {
   const insets = useSafeAreaInsets();
+  const dock = useDockSpace();
   const pad = { paddingTop: topInset ? insets.top + layout.pageTop : layout.pageTop };
   if (!scroll) {
     return <View style={[styles.screen, background ? { backgroundColor: background } : null, pad, contentStyle]}>{children}</View>;
@@ -37,7 +39,7 @@ export function Screen({
   return (
     <ScrollView
       style={[styles.screen, background ? { backgroundColor: background } : null]}
-      contentContainerStyle={[pad, { paddingBottom: space.x4 }, contentStyle]}
+      contentContainerStyle={[pad, { paddingBottom: space.x4 + dock }, contentStyle]}
       showsVerticalScrollIndicator={false}
     >
       {children}

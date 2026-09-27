@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
+import { useAgentScreen } from "@/agent/screenContext";
 import { router } from "expo-router";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
@@ -30,6 +31,7 @@ export default function Explore() {
     [],
     { refetchOnFocus: true },
   );
+  useAgentScreen({ screen: "explore", route: "/explore", title: "Explore related ideas" });
 
   return (
     <Screen background={warm.ground}>
