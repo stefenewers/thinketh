@@ -16,14 +16,14 @@ import { color, font, space } from "@/theme/tokens";
  * the title below names the source). It replaces the old full-width photograph with something that says
  * what the source is about, at the scale of the rest of the pixel vocabulary.
  */
-export function ArtHeader({ conceptIds, fallback, onBack }: { conceptIds: readonly string[]; fallback?: TopicArtKind; onBack: () => void }) {
+export function ArtHeader({ conceptIds, fallback, onBack, art = true }: { conceptIds: readonly string[]; fallback?: TopicArtKind; onBack: () => void; /** false: the back control only. */ art?: boolean }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top + space.xs, paddingHorizontal: space.m }}>
+    <View style={{ paddingTop: insets.top + space.xs, paddingHorizontal: space.m, paddingBottom: art ? 0 : space.l }}>
       <View style={{ alignSelf: "flex-start" }}>
         <IconButton icon="back" round accessibilityLabel="Back" onPress={onBack} />
       </View>
-      <TopicArt conceptIds={conceptIds} fallback={fallback} unit={2.5} style={styles.artTile} />
+      {art ? <TopicArt conceptIds={conceptIds} fallback={fallback} unit={2.5} style={styles.artTile} /> : null}
     </View>
   );
 }
