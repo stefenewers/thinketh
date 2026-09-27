@@ -20,7 +20,7 @@ export function offlineConfig(): ThinkethConfig {
     elevenlabs: { apiKey: undefined, agentId: undefined },
     muse: { ...c.muse, apiKey: undefined },
     dataDir: undefined,
-    identity: { demoIdentities: true, trustUserHeader: true },
+    identity: { demoIdentities: true, trustUserHeader: true, demoAliasPrefix: undefined },
     discovery: { ...c.discovery, everyMinutes: 0 },
   };
 }

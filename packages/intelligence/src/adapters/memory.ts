@@ -22,18 +22,18 @@ export class LocalMemory implements MemoryProvider {
   readonly name = "local" as const;
   private readonly items = new Map<string, MemoryItem[]>();
   private readonly seed: MemoryItem[];
-  private readonly seededUsers: Set<string>;
+  private readonly seeded: (userId: string) => boolean;
 
   /** Seeded memories belong to the demo persona only; everyone else starts with none. */
-  constructor(seed: MemoryItem[], seededUsers: Iterable<string>) {
+  constructor(seed: MemoryItem[], seeded: (userId: string) => boolean) {
     this.seed = seed;
-    this.seededUsers = new Set(seededUsers);
+    this.seeded = seeded;
   }
 
   private forUser(userId: string): MemoryItem[] {
     let list = this.items.get(userId);
     if (!list) {
-      list = this.seededUsers.has(userId) ? this.seed.map((m) => ({ ...m })) : [];
+      list = this.seeded(userId) ? this.seed.map((m) => ({ ...m })) : [];
       this.items.set(userId, list);
     }
     return list;

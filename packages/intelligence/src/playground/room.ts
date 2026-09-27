@@ -262,6 +262,11 @@ export class PlaygroundService {
     logEvent("playground.delta", { roomId, a: a.userId, b: b.userId, aTeachesB: d.aTeachesB.map((i) => i.conceptId), bTeachesA: d.bTeachesA.map((i) => i.conceptId), sharedGaps: d.sharedGaps.map((i) => i.conceptId), conflicts: d.conflicts.map((i) => i.conceptId) });
   }
 
+  /** Seeded (illustrative) sources ground a room only when everyone in it is a seeded demo persona. */
+  private corpusScope(room: Room): "demo" | "live" {
+    return room.participants.every((p) => this.svc.isDemoIdentity(p.userId)) ? "demo" : "live";
+  }
+
   /** Concepts both Minds hold (a demo persona's seeded graph may be smaller than a live account's). */
   private sharedConceptIds(room: Room): Set<string> {
     const sets = room.participants.map((p) => new Set(this.svc.conceptsFor(p.userId).map((c) => c.id)));
@@ -413,7 +418,7 @@ export class PlaygroundService {
       }
       case "teach_shared_gap": {
         const concept = this.svc.conceptList().find((c) => c.id === s("conceptId"))!;
-        const lesson = this.svc.conceptLesson(concept.id);
+        const lesson = this.svc.conceptLesson(concept.id, this.corpusScope(room));
         room.sharedGap = { conceptId: concept.id, conceptName: concept.name, lesson: lesson.sections };
         this.markDone(room, (i) => i.type === "shared_gap");
         room.scene = "shared_gap";
@@ -537,6 +542,7 @@ export class PlaygroundService {
         learnerName: this.name(snapshotRoom, key.learnerId),
         gap: { level: learnerSnap?.level ?? "weak", verified: !!learnerSnap?.verified, hasMisconception: !!learnerSnap?.hasMisconception },
         shareSavedSources: !!teacher?.shares?.savedSources,
+        corpus: this.corpusScope(snapshotRoom),
         whyRelevant: item?.reason ?? `${this.name(snapshotRoom, key.teacherId)} has stronger evidence on ${this.topic(key.conceptId)}.`,
       });
     } catch (err) {

@@ -194,7 +194,22 @@ export class ThinkethService {
 
   /** Seeded demo personas: explicit, resettable, with a fixed profile and seeded history. */
   isDemoIdentity(userId: string): boolean {
-    return userId === this.config.demoUserId || !!this.seed.personas[userId];
+    return this.isDemoLearner(userId) || !!this.seed.personas[userId];
+  }
+
+  /** The demo learner (Stefen), or an explicitly configured rehearsal clone of it. */
+  private isDemoLearner(userId: string): boolean {
+    const prefix = this.config.identity.demoAliasPrefix;
+    return userId === this.config.demoUserId || (!!prefix && userId.startsWith(prefix));
+  }
+
+  /**
+   * Claims this person's answers may draw on. The seeded corpus is illustrative demo data, so it
+   * grounds only the demo personas; everyone else is grounded in what discovery actually read.
+   */
+  claimsFor(scope: string | "live" | "demo"): Claim[] {
+    const demo = scope === "demo" || (scope !== "live" && this.isDemoIdentity(scope));
+    return [...this.claims.values()].filter((c) => this.discoveredClaimIds.has(c.id) !== demo);
   }
 
   /** The concepts in this person's Mind: demo personas keep the seeded graph; everyone else also gets discovered concepts. */
@@ -205,7 +220,7 @@ export class ThinkethService {
 
   profileFor(userId: string): PersonaProfile {
     const persona = this.seed.personas[userId];
-    if (persona || userId === this.config.demoUserId) {
+    if (persona || this.isDemoLearner(userId)) {
       return { ...this.seed.profile, id: userId, ...(persona ? { displayName: persona.displayName } : {}) };
     }
     // Loaded by prepareUser()/loadProfile() before any request uses it; empty until onboarding is saved.
@@ -218,7 +233,7 @@ export class ThinkethService {
    */
   private baselineFor(userId: string): KnowledgeState[] {
     if (this.seed.personas[userId]) return this.seed.personas[userId]!.baselineStates;
-    return userId === this.config.demoUserId ? this.seed.baselineStates : [];
+    return this.isDemoLearner(userId) ? this.seed.baselineStates : [];
   }
 
   /** Baseline (demo personas) or the no-evidence prior, overlaid with temporal history. */
@@ -536,6 +551,7 @@ export class ThinkethService {
 
   private readonly discoveredConceptIds = new Set<string>();
   private readonly discoveredDevelopmentIds = new Set<string>();
+  private readonly discoveredClaimIds = new Set<string>();
   private corpusLoad: Promise<void> | undefined;
 
   /** Load the stored corpus once (retried on the next request if the store was unreachable). */
@@ -569,7 +585,10 @@ export class ThinkethService {
       this.concepts.set(c.id, c);
       this.discoveredConceptIds.add(c.id);
     }
-    for (const c of claims) this.claims.set(c.id, c);
+    for (const c of claims) {
+      this.claims.set(c.id, c);
+      this.discoveredClaimIds.add(c.id);
+    }
     for (const x of sources) this.sources.set(x.id, x);
     for (const { developmentId, ...m } of metas) this.meta[developmentId] = m;
     for (const d of developments) {
@@ -596,6 +615,7 @@ export class ThinkethService {
     }
     for (const c of value.claims) {
       this.claims.set(c.id, c);
+      this.discoveredClaimIds.add(c.id);
       await this.store.put("corpus_claims", c.id, c);
     }
     for (const x of value.sources) {
@@ -929,7 +949,7 @@ export class ThinkethService {
   /** The persona's seeded prior history, re-addressed to this user. */
   private seedHistory(userId: string, conceptId?: string): KnowledgeStateTransition[] {
     const readdress = (s: KnowledgeState) => ({ ...s, userId });
-    const history = this.seed.personas[userId]?.history ?? (userId === this.config.demoUserId ? this.seed.history : []);
+    const history = this.seed.personas[userId]?.history ?? (this.isDemoLearner(userId) ? this.seed.history : []);
     return history
       .filter((t) => !conceptId || t.conceptId === conceptId)
       .map((t) => ({ ...t, userId, before: readdress(t.before), after: readdress(t.after), observation: { ...t.observation, userId } }));
@@ -976,7 +996,7 @@ export class ThinkethService {
       if (e.fromConceptId === conceptId) relatedIds.add(e.toConceptId);
       if (e.toConceptId === conceptId) relatedIds.add(e.fromConceptId);
     }
-    const claims = [...this.claims.values()].filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6);
+    const claims = this.claimsFor(userId).filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6);
     return {
       concept,
       state: states.get(conceptId),
@@ -1075,14 +1095,16 @@ export class ThinkethService {
     // Expand search hits into candidate claims: claims directly, developments/concepts via their claims.
     const devClaimIds = new Set(input.developmentId ? (await this.getDevelopment(input.developmentId)).claimIds : []);
     const candidateIds = new Set(devClaimIds);
-    for (const c of this.claims.values()) if (c.conceptIds.some((id) => namedIds.has(id))) candidateIds.add(c.id);
+    const allowed = this.claimsFor(userId);
+    const allowedIds = new Set(allowed.map((c) => c.id));
+    for (const c of allowed) if (c.conceptIds.some((id) => namedIds.has(id))) candidateIds.add(c.id);
     for (const h of hits) {
       if (h.kind === "claim") candidateIds.add(h.id);
       if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) candidateIds.add(id);
-      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
+      if (h.kind === "concept") for (const c of allowed) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
     }
     const ranked = [...candidateIds]
-      .flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : []))
+      .flatMap((id) => (allowedIds.has(id) ? [this.claims.get(id)!] : []))
       .map((c) => ({ c, score: lexicalScore(query, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) + (c.conceptIds.some((id) => namedIds.has(id)) ? 0.5 : 0) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
@@ -1714,12 +1736,14 @@ export class ThinkethService {
     gap: ExchangeGap;
     shareSavedSources: boolean;
     whyRelevant: string;
+    /** "demo" only when every participant is a seeded persona; otherwise real, discovered sources only. */
+    corpus: "demo" | "live";
   }): Promise<PreparedLesson> {
     const concept = this.concepts.get(input.conceptId);
     if (!concept) throw new NotFoundError(`Concept not found: ${input.conceptId}`);
     const materials: ExchangeMaterial[] = [];
     const cited = new Map<string, NonNullable<PreparedLesson["sources"]>[number]>();
-    const claims = [...this.claims.values()]
+    const claims = this.claimsFor(input.corpus)
       .filter((c) => c.conceptIds.includes(concept.id) && c.sourceIds.some((id) => this.sources.has(id)))
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 6);
@@ -1796,10 +1820,10 @@ export class ThinkethService {
   }
 
   /** A short, sourced lesson on one concept for two people at once (shared gaps). */
-  conceptLesson(conceptId: string): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
+  conceptLesson(conceptId: string, corpus: "demo" | "live" = "demo"): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
     const concept = this.concepts.get(conceptId);
     if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
-    const claims = [...this.claims.values()].filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
+    const claims = this.claimsFor(corpus).filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
     const source = claims.flatMap((c) => c.sourceIds).map((id) => this.sources.get(id)).find(Boolean);
     const plain = CONCEPT_LABELS[conceptId]?.explanation;
     const sections = [

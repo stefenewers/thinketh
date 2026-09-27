@@ -35,7 +35,7 @@ import { NOW, offlineConfig } from "./helpers.ts";
 type T = ReturnType<typeof createThinketh>;
 const tmp = () => mkdtempSync(join(tmpdir(), "thinketh-test-"));
 /** A process on a data directory; call again with the same directory to "restart". */
-const boot = (dataDir: string, identity = { demoIdentities: true, trustUserHeader: true }) =>
+const boot = (dataDir: string, identity = { demoIdentities: true, trustUserHeader: true, demoAliasPrefix: undefined as string | undefined }) =>
   createThinketh({ config: { ...offlineConfig(), dataDir, identity }, now: () => NOW });
 
 const USER_A = "11111111-1111-4111-8111-111111111111";
@@ -44,7 +44,7 @@ const USER_B = "22222222-2222-4222-8222-222222222222";
 const fakeSupabase = { verifyUser: async (token: string) => ({ "tok-a": USER_A, "tok-b": USER_B })[token] } as unknown as SupabaseBackend;
 
 function appWithAuth(t: T) {
-  return createApp({ service: t.service, config: { ...t.config, identity: { demoIdentities: true, trustUserHeader: false } }, supabase: fakeSupabase, playground: t.playground, discovery: t.discovery });
+  return createApp({ service: t.service, config: { ...t.config, identity: { demoIdentities: true, trustUserHeader: false, demoAliasPrefix: undefined } }, supabase: fakeSupabase, playground: t.playground, discovery: t.discovery });
 }
 
 async function call(app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> }, method: string, path: string, opts: { token?: string; user?: string; body?: unknown } = {}) {
@@ -112,6 +112,20 @@ describe("identity", () => {
     // The demo persona still has its seeded Mind.
     const demo = KnowledgeResponseSchema.parse((await call(app, "GET", "/knowledge", { user: "demo-user" })).json);
     expect(demo.items.find((i) => i.concept.id === "agent-memory")!.state.mastery).toBeCloseTo(0.42, 2);
+  });
+});
+
+describe("rehearsal clones", () => {
+  it("gives an explicitly configured alias the demo persona's seeded Mind, isolated and resettable", async () => {
+    const t = boot(tmp(), { demoIdentities: true, trustUserHeader: true, demoAliasPrefix: "audit-" });
+    const agentMemory = async (user: string) => (await t.service.knowledge(user)).items.find((i) => i.concept.id === "agent-memory")!.state;
+    expect((await agentMemory("audit-1")).mastery).toBeCloseTo(0.42, 2);
+    expect((await agentMemory("someone-else")).mastery).toBe(0.2);
+    await t.service.answerDiagnostic("audit-1", "dq-agent-memory-persistence", "1");
+    expect((await agentMemory("demo-user")).mastery).toBeCloseTo(0.42, 2);
+    await t.service.reset("audit-1");
+    expect((await agentMemory("audit-1")).mastery).toBeCloseTo(0.42, 2);
+    await expect(t.service.reset("someone-else")).rejects.toThrow(/demo persona/);
   });
 });
 
@@ -288,7 +302,7 @@ describe("playground: agent-prepared lesson, durability and exactly-once evidenc
       extractedConcepts: [], matchedConceptIds: ["evaluator-architectures"], alreadyUnderstood: [], newToYou: [], relevantConnections: [],
     };
     await t.adapters.store.put("resources", saved.id, saved, "nadani");
-    const input = { conceptId: "evaluator-architectures", teacherId: "nadani", learnerId: "demo-user", teacherName: "Nadani", learnerName: "Stefen", gap: { level: "weak" as const, verified: false, hasMisconception: false }, whyRelevant: "why" };
+    const input = { conceptId: "evaluator-architectures", teacherId: "nadani", learnerId: "demo-user", teacherName: "Nadani", learnerName: "Stefen", gap: { level: "weak" as const, verified: false, hasMisconception: false }, whyRelevant: "why", corpus: "demo" as const };
     const closed = await t.service.prepareExchange({ ...input, shareSavedSources: false });
     expect(closed.sources!.some((s) => s.via === "shared_resource")).toBe(false);
     expect(closed.context!.join(" ")).not.toMatch(/saved/);
@@ -303,9 +317,26 @@ describe("playground: agent-prepared lesson, durability and exactly-once evidenc
     const fixture = corpusFixture("dev-x", "Something new", ["retrieval"], ["A claim about retrieval."]);
     fixture.newConcepts = [{ id: "unsourced-idea", name: "Unsourced Idea", description: "No source says anything about this.", domain: "AI agents", importance: 0.5 }];
     await t.service.addToCorpus(fixture, NOW.toISOString());
-    const lesson = await t.service.prepareExchange({ conceptId: "unsourced-idea", teacherId: "nadani", learnerId: "demo-user", teacherName: "Nadani", learnerName: "Stefen", gap: { level: "weak", verified: false, hasMisconception: false }, shareSavedSources: false, whyRelevant: "why" });
+    const lesson = await t.service.prepareExchange({ conceptId: "unsourced-idea", teacherId: "nadani", learnerId: "demo-user", teacherName: "Nadani", learnerName: "Stefen", gap: { level: "weak", verified: false, hasMisconception: false }, shareSavedSources: false, whyRelevant: "why", corpus: "live" });
     expect(lesson.status).toBe("unavailable");
     expect(lesson.message).toMatch(/own words/);
+  });
+
+  it("never grounds a real account's lesson or Ask in the illustrative seed corpus", async () => {
+    const t = boot(tmp());
+    const base = { conceptId: "evaluator-architectures", teacherId: "nadani", learnerId: "carol", teacherName: "Nadani", learnerName: "Carol", gap: { level: "weak" as const, verified: false, hasMisconception: false }, shareSavedSources: false, whyRelevant: "why" };
+    // Nothing discovered about evaluators yet: a live room says so instead of citing demo sources.
+    expect((await t.service.prepareExchange({ ...base, corpus: "live" })).status).toBe("unavailable");
+    const fixture = corpusFixture("dev-eval", "Independent graders catch more agent errors", ["evaluator-architectures"], ["A separate grader model caught more errors than self-review."]);
+    await t.service.addToCorpus(fixture, NOW.toISOString());
+    const live = await t.service.prepareExchange({ ...base, corpus: "live" });
+    expect(live.status).toBe("prepared");
+    expect(live.sources!.map((x) => x.id)).toEqual(["src-dev-eval"]);
+    // Ask for a real account cites only discovered sources; the demo persona keeps the seeded ones.
+    const ask = await t.service.ask("carol", { question: "Why use a separate grader for agents?" });
+    expect(ask.citations.every((c) => c.sourceId === "src-dev-eval")).toBe(true);
+    const demoAsk = await t.service.ask("demo-user", { question: "Why use a separate grader for agents?" });
+    expect(demoAsk.citations.some((c) => c.sourceId === "src-dev-eval")).toBe(false);
   });
 
   it("rejects an agent draft whose points cite nothing it was given", () => {

@@ -101,7 +101,10 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
     model,
     fallbackModel: new DeterministicModel({ diagrams: seed.diagrams, visualizations: seed.visualizations, memoryAids: seed.memoryAids }),
     memory,
-    localMemory: new LocalMemory(seed.memories, [config.demoUserId]),
+    localMemory: new LocalMemory(
+      seed.memories,
+      (id) => id === config.demoUserId || (!!config.identity.demoAliasPrefix && id.startsWith(config.identity.demoAliasPrefix)),
+    ),
     semantic,
     localSemantic: new LocalSemanticStore(seed),
     temporal,
