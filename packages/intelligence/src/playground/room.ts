@@ -23,7 +23,7 @@ import { knowledgeLevel } from "../engine/knowledgeState.ts";
 import { logEvent } from "../log.ts";
 import { nextPlanItem, planSession } from "../engine/sessionPlan.ts";
 import { NADANI_ID, PEER_PROMPTS } from "../seed/personas.ts";
-import { BadRequestError, ForbiddenError, NotFoundError, type ThinkethService } from "../service.ts";
+import { BadRequestError, ForbiddenError, NotFoundError, UnreadableSourceError, type ThinkethService } from "../service.ts";
 import type { DocStore } from "../store/docStore.ts";
 import { runInBackground } from "../adapters/guard.ts";
 import { newId } from "../util.ts";
@@ -621,11 +621,18 @@ export class PlaygroundService {
   private async introduceResource(room: Room, url: string, by: MuseAction["by"], actor = "muse"): Promise<void> {
     const sides = await Promise.all(
       room.participants.map(async (p) => {
-        const r = await this.svc.addResource(p.userId, url);
-        return { userId: p.userId, resourceId: r.id, status: r.status, stage: r.stage, newIdeas: r.newToYou.length };
+        try {
+          const r = await this.svc.addResource(p.userId, url);
+          return { userId: p.userId, resourceId: r.id, status: r.status, stage: r.stage, newIdeas: r.newToYou.length };
+        } catch (err) {
+          // Unreadable sources are never saved to anyone's queue; the room still says so honestly.
+          if (!(err instanceof UnreadableSourceError)) throw err;
+          return { userId: p.userId, resourceId: "", status: "failed" as const, stage: "done" as const, newIdeas: 0 };
+        }
       }),
     );
-    const first = await this.svc.getResource(sides[0]!.userId, sides[0]!.resourceId);
+    const readable = sides.find((side) => side.resourceId);
+    const first = readable ? await this.svc.getResource(readable.userId, readable.resourceId) : { url, title: new URL(url).hostname.replace(/^www\./, "") };
     // Say why this source is here: the measured default (scripts/resource-asymmetry.mjs) or a person's own link.
     const chosenBecause =
       url === DEFAULT_ROOM_RESOURCE

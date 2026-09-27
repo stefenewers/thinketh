@@ -87,6 +87,8 @@ const READ_FAILED = "Thinketh couldn't reliably read this source yet.";
 
 export class NotFoundError extends Error {}
 export class BadRequestError extends Error {}
+/** The link is fine but its content can't be read: the source is not added. */
+export class UnreadableSourceError extends Error {}
 /** Not allowed for this identity (e.g. resetting a real user, editing a demo persona's profile). */
 export class ForbiddenError extends Error {}
 /** The same operation is already in progress. */
@@ -1414,6 +1416,20 @@ export class ThinkethService {
     const q = await this.queue(userId);
     const same = [...q.values()].find((r) => r.url === url.toString() || r.canonicalUrl === url.toString());
     if (same && same.status !== "failed") return this.publicResource(same);
+    // Read before saving: a source Thinketh can't read is never added. A successful read stays in the
+    // shared page cache, so processing below reuses it instead of fetching twice.
+    const started = Date.now();
+    try {
+      await this.fetchShared(url.toString());
+    } catch (err) {
+      logEvent("resource.unreadable", { userId, url: url.toString(), ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) }, "warn");
+      // An old failed entry for a link that still can't be read goes too: the list only holds what can be read.
+      if (same) {
+        q.delete(same.id);
+        await this.forgetResource(same.id);
+      }
+      throw new UnreadableSourceError(err instanceof ResourceReadError ? err.message : READ_FAILED);
+    }
     if (same) {
       // Saving a failed source again retries it in place (same id, so links to it keep working).
       await this.updateResource(userId, same.id, { status: "processing", stage: "reading", attempts: 1, error: undefined });

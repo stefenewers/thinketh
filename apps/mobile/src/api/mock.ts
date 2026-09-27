@@ -18,6 +18,7 @@ import type {
 import { levelOf } from "@/lib/knowledge";
 import { DEMO_USER_ID, type ThinkethApi, UnknownQuestionError } from "./client";
 import * as fx from "./fixtures";
+import { ApiError } from "./http";
 import { OFFLINE_VISUALIZATIONS } from "./visualizations";
 
 const clamp = (n: number) => Math.min(1, Math.max(0, fx.round(n)));
@@ -316,25 +317,10 @@ function createMockApi(): ThinkethApi {
       return [...mockResources.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
 
+    // Mirrors the API: a source that can't be read is not added. Offline, nothing new can be read.
     async addResource(url) {
       await delay(300);
-      const r: Resource = {
-        id: `res-${mockResources.size + 1}`,
-        url,
-        title: hostOf(url),
-        sourceType: "article",
-        createdAt: new Date().toISOString(),
-        status: "failed",
-        stage: "done",
-        error: "Reading new sources needs the live Thinketh API. Connect it and try again.",
-        extractedConcepts: [],
-        matchedConceptIds: [],
-        alreadyUnderstood: [],
-        newToYou: [],
-        relevantConnections: [],
-      };
-      mockResources.set(r.id, r);
-      return r;
+      throw new ApiError(`POST /resources -> 422: Reading new sources needs the live Thinketh API (${hostOf(url)} wasn't added)`, 422);
     },
 
     async getResource(resId) {

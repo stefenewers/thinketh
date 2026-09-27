@@ -72,6 +72,11 @@ export default function AddResource() {
         <View style={{ marginTop: space.xl }}>
           <Button label="Read it" icon="arrow" disabled={!looksLikeUrl} loading={saving} onPress={save} />
         </View>
+        {saving ? (
+          <T variant="support" style={{ marginTop: space.m, textAlign: "center" }} accessibilityLiveRegion="polite">
+            Reading the page first. If Thinketh can&apos;t read it, it won&apos;t be added.
+          </T>
+        ) : null}
         <T variant="meta" style={{ marginTop: space.l, color: color.ink3, textAlign: "center" }}>
           Videos are read from their transcripts. Pages behind a sign-in can&apos;t be read.
         </T>
