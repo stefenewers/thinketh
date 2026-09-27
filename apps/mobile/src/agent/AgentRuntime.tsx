@@ -39,6 +39,13 @@ const CONTEXT_DEBOUNCE_MS = 600;
 const PREPARED_TTL_MS = 120_000;
 /** "Thinking" never lasts longer than this without a reply. */
 const THINKING_MAX_MS = 10_000;
+/**
+ * A dead microphone: on iOS a call sometimes starts with the mic capturing pure digital silence for the
+ * whole call (seen in recordings: exactly zero, where a quiet room still reads above zero). The input
+ * level is a plain RMS, so a live mic is never exactly 0 for long. After this long at zero (unmuted,
+ * agent not speaking, never heard anything), reconnect once for a fresh microphone.
+ */
+const DEAD_MIC_MS = 4000;
 const MAX_TURNS = 20;
 
 const log = (event: string, detail: Record<string, unknown> = {}) => {
@@ -96,7 +103,7 @@ export function AgentRuntime({ children }: { children: ReactNode }) {
 }
 
 function Controller({ children }: { children: ReactNode }) {
-  const { startSession, endSession, sendContextualUpdate, sendUserMessage, setVolume, getOutputVolume } = useConversationControls();
+  const { startSession, endSession, sendContextualUpdate, sendUserMessage, setVolume, getOutputVolume, getInputVolume } = useConversationControls();
   const { isSpeaking } = useConversationMode();
   const { isMuted, setMuted: sdkSetMuted } = useConversationInput();
 
@@ -133,6 +140,10 @@ function Controller({ children }: { children: ReactNode }) {
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
+  const isSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
 
   const setStatusBoth = useCallback((s: AgentStatus) => {
     statusRef.current = s;
@@ -450,6 +461,57 @@ function Controller({ children }: { children: ReactNode }) {
     lastIdentity.current = identity;
   }, [identity, settle]);
 
+  // Dead-mic watchdog (see DEAD_MIC_MS): one silent reconnect per call the user starts, then say so.
+  const connectRef = useRef<(a: AgentActivity) => Promise<void>>(async () => {});
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+  const micRecovered = useRef(false);
+  useEffect(() => {
+    if (status !== "live") return;
+    let heard = false;
+    let silentSince: number | null = null;
+    let lastLog = 0;
+    const mine = epoch.current;
+    const id = setInterval(() => {
+      if (epoch.current !== mine || heard) return;
+      let v = 0;
+      try {
+        v = getInputVolume();
+      } catch {
+        return;
+      }
+      const t = Date.now();
+      if (t - lastLog > 2000) {
+        lastLog = t;
+        log("mic level", { v: Number(v.toFixed(5)) });
+      }
+      if (v > 0) {
+        heard = true;
+        log("mic live");
+        return;
+      }
+      if (isMutedRef.current || isSpeakingRef.current) {
+        silentSince = null;
+        return;
+      }
+      silentSince ??= t;
+      if (t - silentSince < DEAD_MIC_MS) return;
+      clearInterval(id);
+      if (micRecovered.current) {
+        log("mic still silent after reconnect");
+        setNotice("Thinketh can't hear your microphone. Check that no Bluetooth headset has it, or type instead.");
+        return;
+      }
+      micRecovered.current = true;
+      const again = activityRef.current;
+      log("mic silent; reconnecting for a fresh microphone", { activity: again });
+      settle(null);
+      setTimeout(() => void connectRef.current(again), 600);
+    }, 250);
+    return () => clearInterval(id);
+  }, [status, getInputVolume, settle]);
+
   // End on unmount (app teardown / fast refresh).
   useEffect(() => () => settle(null), [settle]);
 
@@ -494,6 +556,7 @@ function Controller({ children }: { children: ReactNode }) {
       start: (next = "assist") => {
         const s = statusRef.current;
         if (s === "connecting") return; // one connection; a second tap never makes a second token
+        if (s !== "live") micRecovered.current = false; // a call the user starts gets its own one retry
         if (s === "live") {
           // Same agent, same call: only the activity changes.
           if (next === "catch_up" && activityRef.current !== "catch_up" && session.current) {
