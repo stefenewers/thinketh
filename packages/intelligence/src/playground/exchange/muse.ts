@@ -21,11 +21,13 @@ export type MuseChatConfig = { apiKey: string; baseUrl: string; model: string };
 
 export interface ExchangeModel {
   readonly label: string;
-  complete(messages: ChatMessage[], tools: ToolDef[], opts: { timeoutMs: number; maxTokens?: number; purpose: string }): Promise<{ message: Extract<ChatMessage, { role: "assistant" }>; ms: number }>;
+  /** `timeoutMs` bounds one attempt; `budgetMs` (default 2× timeout) bounds all attempts together. */
+  complete(messages: ChatMessage[], tools: ToolDef[], opts: { timeoutMs: number; budgetMs?: number; maxTokens?: number; purpose: string }): Promise<{ message: Extract<ChatMessage, { role: "assistant" }>; ms: number }>;
 }
 
 const TRANSIENT = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
-const RETRIES = 2;
+/** One retry: for a timeout, a transient status or a dropped connection. */
+const RETRIES = 1;
 
 export class MuseChat implements ExchangeModel {
   readonly label: string;
@@ -38,13 +40,14 @@ export class MuseChat implements ExchangeModel {
     this.label = `Muse (${cfg.model})`;
   }
 
-  async complete(messages: ChatMessage[], tools: ToolDef[], opts: { timeoutMs: number; maxTokens?: number; purpose: string }) {
+  async complete(messages: ChatMessage[], tools: ToolDef[], opts: { timeoutMs: number; budgetMs?: number; maxTokens?: number; purpose: string }) {
     const started = Date.now();
+    const budget = opts.budgetMs ?? opts.timeoutMs * 2;
     let lastError = "";
     for (let attempt = 0; attempt <= RETRIES; attempt++) {
-      if (attempt) await new Promise((r) => setTimeout(r, 700 * attempt));
-      const remaining = opts.timeoutMs - (Date.now() - started);
-      if (remaining < 2000) break;
+      if (attempt) await new Promise((r) => setTimeout(r, 700));
+      const remaining = Math.min(opts.timeoutMs, budget - (Date.now() - started));
+      if (remaining < 3000) break;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), remaining);
       try {

@@ -261,7 +261,7 @@ describe("agent exchange", () => {
     await req(t, "POST", `/playground/rooms/${r0.id}/exchange`, {});
     const ex = (await runToEnd(t, r0.id)).exchange!;
     expect(ex.status).toBe("failed");
-    expect(ex.outcome).toMatch(/Muse couldn't complete .*guided session still works/);
+    expect(ex.outcome).toMatch(/Muse didn't complete the step .*guided session still works/);
     expect(ex.messages).toHaveLength(0);
 
     // Coordinator returns no tool call: the deterministic planner decides, and says so.

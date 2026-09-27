@@ -105,7 +105,7 @@ export class PlaygroundService {
       store,
       model: exchange?.model,
       grader: exchange?.grader ?? { live: undefined, fallback: new DeterministicModel({ diagrams: {}, visualizations: {}, memoryAids: {} }) },
-      limits: exchange?.limits ?? { maxMessages: 6, maxToolCalls: 12, deadlineMs: 300_000, callTimeoutMs: 20_000 },
+      limits: exchange?.limits ?? { maxMessages: 6, maxToolCalls: 12, deadlineMs: 300_000, callTimeoutMs: 25_000 },
       host: this,
       now,
     });

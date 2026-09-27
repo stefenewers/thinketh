@@ -26,6 +26,7 @@ export type Phase =
   | "not_yet"
   | "shared_gap"
   | "resource"
+  | "exchange"
   | "ended";
 
 export type Tone = "coral" | "blue";
@@ -85,6 +86,10 @@ export type WorldView = {
   focus: Pt & { zoom: number };
   /** The ten-second read: who is teaching, what idea, what Thinketh waits for, verified or not. */
   now: { teaching: string | null; idea: string | null; waitingFor: string; verified: boolean | null };
+  /** Agent exchange: the latest delivered message, beside the agent that sent it. */
+  speech: { userId: string; text: string } | null;
+  /** Agent exchange: whose agent is working right now (only while that work is actually in flight). */
+  speaking: string | null;
 };
 
 export const PLACES = {
@@ -120,6 +125,7 @@ function phaseOf(room: PlaygroundRoom | null, pending: WorldPending): Phase {
   if (s === "knowledge_moved") return room.transfer?.verified ? "verified" : "not_yet";
   if (s === "shared_gap") return "shared_gap";
   if (s === "resource") return "resource";
+  if (s === "agent_exchange") return "exchange";
   return "ended";
 }
 
@@ -138,10 +144,12 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
   const stage = room ? stageState(room, pending === "compare" ? null : pending) : null;
 
   // Who teaches whom right now (never assumed: from the room's teaching, transfer or plan).
-  const inExchange = phase === "teaching" || phase === "checkpoint" || phase === "grading" || phase === "verified" || phase === "not_yet";
-  const teacherId = inExchange || phase === "overview" || phase === "choosing" ? stage?.teacherId : undefined;
-  const learnerId = inExchange || phase === "overview" || phase === "choosing" ? stage?.learnerId : undefined;
-  const conceptId = stage?.conceptId ?? null;
+  // The agent exchange positions the two agents like a teaching, from the exchange's own record.
+  const ex = phase === "exchange" ? room?.exchange : undefined;
+  const inExchange = phase === "teaching" || phase === "checkpoint" || phase === "grading" || phase === "verified" || phase === "not_yet" || phase === "exchange";
+  const teacherId = ex ? ex.teacherId : inExchange || phase === "overview" || phase === "choosing" ? stage?.teacherId : undefined;
+  const learnerId = ex ? ex.learnerId : inExchange || phase === "overview" || phase === "choosing" ? stage?.learnerId : undefined;
+  const conceptId = ex ? ex.conceptId : (stage?.conceptId ?? null);
 
   const home = (id: string) => (id === hostId ? PLACES.hostHome : PLACES.guestHome);
   const agents: WorldAgent[] = people.map((p) => {
@@ -195,12 +203,14 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
     const tp = { x: t.at.x, y: t.at.y - 0.02 };
     const lp = { x: l.at.x, y: l.at.y - 0.02 };
     const state: ConceptState =
-      phase === "teaching" ? "with_teacher" : phase === "checkpoint" ? "checkpoint" : phase === "grading" ? "grading" : phase === "verified" ? "verified" : phase === "not_yet" ? "not_yet" : "offered";
-    const along = state === "with_teacher" ? 0.22 : state === "checkpoint" || state === "grading" || state === "not_yet" ? CHECKPOINT_AT - 0.12 : state === "verified" ? 1 : 0.5;
+      // Exchange: the idea stays with the teaching agent until a takeaway is actually saved, then it's shared.
+      ex ? (ex.savedTakeawayId ? "shared" : "with_teacher") : phase === "teaching" ? "with_teacher" : phase === "checkpoint" ? "checkpoint" : phase === "grading" ? "grading" : phase === "verified" ? "verified" : phase === "not_yet" ? "not_yet" : "offered";
+    const along = ex && state === "shared" ? 0.8 : state === "with_teacher" ? 0.22 : state === "checkpoint" || state === "grading" || state === "not_yet" ? CHECKPOINT_AT - 0.12 : state === "verified" ? 1 : 0.5;
     const at = state === "offered" ? { x: (tp.x + lp.x) / 2, y: 0.5 } : lerp(tp, lp, along);
     concept = { conceptId, label: ideaLabel(conceptId, c?.name ?? room.teaching?.conceptName ?? conceptId), short: c?.short ?? c?.name ?? "", state, at, teacherId, learnerId };
-    if (state !== "offered" && state !== "with_teacher") checkpoint = lerp(tp, lp, CHECKPOINT_AT);
-    if (inExchange) learnerMind = { userId: learnerId, at: l.at, tone: l.tone };
+    if (!ex && state !== "offered" && state !== "with_teacher") checkpoint = lerp(tp, lp, CHECKPOINT_AT);
+    // An agent's takeaway lands in its library, not in the person's Mind: no Mind ring for an exchange.
+    if (inExchange && !ex) learnerMind = { userId: learnerId, at: l.at, tone: l.tone };
   } else if (room && phase === "shared_gap" && room.sharedGap) {
     const g = room.sharedGap;
     concept = { conceptId: g.conceptId, label: ideaLabel(g.conceptId, g.conceptName), short: snapConcept(g.conceptId)?.short ?? g.conceptName, state: "shared", at: { x: 0.5, y: 0.5 } };
@@ -264,6 +274,28 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
                             : "Session ended";
   }
 
+  // Agent exchange: what each agent is doing, from the recorded exchange and the work actually in flight.
+  const speaking = ex?.status === "running" && ex.pending?.actor.startsWith("agent:") ? ex.pending.actor.slice("agent:".length) : null;
+  const lastMsg = ex?.messages.at(-1);
+  if (ex) {
+    const verb: Record<string, string> = { explanation: "Explained", answer: "Answered", revision: "Revised the explanation", clarification: "Asked a question", evidence_request: "Asked for evidence", application: "Proposed an application", takeaway: "Proposed a takeaway" };
+    for (const a of agents) {
+      const mine = [...ex.messages].reverse().find((m) => m.from === a.userId);
+      a.doing =
+        a.userId === speaking
+          ? (ex.pending?.label ?? "Taking a turn")
+          : ex.status !== "running"
+            ? a.userId === ex.learnerId && ex.savedTakeawayId
+              ? "Its agent retained a sourced takeaway"
+              : mine
+                ? `Its agent: ${verb[mine.kind]!.toLowerCase()}`
+                : "In the room"
+            : mine
+              ? `Its agent: ${verb[mine.kind]!.toLowerCase()}`
+              : "Its agent is listening";
+    }
+  }
+
   // Muse conducts. It appears once there is a plan to conduct, and never compares or grades.
   const assigned = room ? lastOf(room.events, "teacher_assigned") : undefined;
   const moveEvent = phase === "shared_gap" ? (room ? lastOf(room.events, "shared_gap_taught") : undefined) : assigned;
@@ -278,8 +310,9 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
           : phase === "shared_gap" || phase === "resource"
             ? "directing"
             : "resting";
-  const museTarget = museState !== "directing" ? null : phase === "teaching" ? (teacherId ?? null) : phase === "checkpoint" ? (learnerId ?? null) : "concept";
-  const museLine = room && (phase === "teaching" || phase === "checkpoint" || phase === "shared_gap" || phase === "resource") ? (room.museLine ?? null) : null;
+  const exMuse = ex ? [...ex.actions].reverse().find((x) => x.actor === "coordinator") : undefined;
+  const museTarget = ex ? (speaking ?? "concept") : museState !== "directing" ? null : phase === "teaching" ? (teacherId ?? null) : phase === "checkpoint" ? (learnerId ?? null) : "concept";
+  const museLine = ex ? (exMuse?.summary ?? null) : room && (phase === "teaching" || phase === "checkpoint" || phase === "shared_gap" || phase === "resource") ? (room.museLine ?? null) : null;
 
   const thinketh: WorldView["thinketh"] = phase === "comparing" ? "comparing" : phase === "grading" ? "grading" : null;
 
@@ -305,6 +338,7 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
     not_yet: "Not verified: the answer didn't show it yet",
     shared_gap: "Muse is teaching the shared gap",
     resource: side?.some((s) => s.status === "processing") ? "Thinketh is reading the source against each Mind…" : "Each Mind got its own delta from the same source",
+    exchange: ex ? (ex.status === "running" ? (ex.pending ? `${ex.pending.label}…` : "Waiting for the next step") : (ex.outcome ?? "The exchange ended")) : "",
     ended: "Session ended",
   }[phase];
   const verified = phase === "verified" ? true : phase === "not_yet" ? false : null;
@@ -315,10 +349,12 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
     concept,
     checkpoint,
     learnerMind,
-    muse: { state: museState, by, target: museTarget, line: museLine },
+    muse: { state: ex ? (ex.status === "running" ? (ex.pending?.actor === "coordinator" ? "choosing" : "directing") : "resting") : museState, by: ex ? (exMuse?.by === "planner" ? "Planner" : "Muse") : by, target: museTarget, line: museLine },
     thinketh,
     focus,
-    now: { teaching, idea, waitingFor, verified },
+    now: { teaching: ex && t && l ? `${t.isMe ? "Your" : `${t.name}'s`} agent ${ex.mode === "explore" ? "and" : "is teaching"} ${l.isMe ? "your" : `${l.name}'s`} agent${ex.mode === "explore" ? " are exploring it" : ""}` : teaching, idea, waitingFor, verified },
+    speech: lastMsg ? { userId: lastMsg.from, text: lastMsg.text.length > 110 ? `${lastMsg.text.slice(0, 107).trimEnd()}…` : lastMsg.text } : null,
+    speaking,
   };
 }
 
