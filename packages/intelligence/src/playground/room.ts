@@ -383,6 +383,8 @@ export class PlaygroundService {
         };
         room.scene = "peer_teaching";
         room.spotlight = { conceptId: concept.id, participantId: s("teacherId") };
+        // Said the same way whoever conducts: the agents teach, not the people.
+        room.museLine = `${this.name(room, s("teacherId"))}'s agent will teach ${this.name(room, s("learnerId"))}'s agent ${this.topic(concept.id)}.`;
         this.emit(room, "teacher_assigned", "muse", `${this.name(room, s("teacherId"))} → ${this.name(room, s("learnerId"))}: ${narrativeLabel(concept.id, concept.name)}`, {
           conceptId: concept.id,
           teacherId: s("teacherId"),
