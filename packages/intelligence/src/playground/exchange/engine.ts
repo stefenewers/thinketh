@@ -17,7 +17,7 @@ import type { AgentExchange, ExchangeAvailability, ExchangeMessage, ExchangeSour
 import { guarded } from "../../adapters/guard.ts";
 import type { IntelligenceModel } from "../../adapters/types.ts";
 import type { DeterministicModel } from "../../adapters/model/deterministic.ts";
-import { lexicalScore } from "../../adapters/model/deterministic.ts";
+import { permittedMaterial } from "./material.ts";
 import { statementsOf, verdictOf, type SupportResult } from "../../engine/grounding.ts";
 import { logEvent } from "../../log.ts";
 import type { ThinkethService } from "../../service.ts";
@@ -190,6 +190,11 @@ export class AgentExchangeEngine {
 
   get providerLabel(): string | undefined {
     return this.model?.label;
+  }
+
+  /** The participants' agent model (also used when an agent answers a takeaway challenge). */
+  get agentModel(): ExchangeModel | undefined {
+    return this.model;
   }
 
   // -------------------------------------------------------------------------
@@ -640,29 +645,8 @@ export class AgentExchangeEngine {
   private async retrieve(rec: ExchangeRecord, role: Role, owner: string, query: string): Promise<ExchangeSource[]> {
     const p = rec.pub;
     const scope = Object.keys(rec.names).every((id) => this.svc.isDemoIdentity(id)) ? "demo" : "live";
-    const q = `${p.conceptName} ${query}`.trim();
-    const candidates: Array<Omit<ExchangeSource, "ref" | "retrievedBy">> = [];
-    const claims = this.svc
-      .claimsFor(scope)
-      .filter((c) => c.conceptIds.includes(p.conceptId))
-      .map((c) => ({ c, score: lexicalScore(q, c.text) + c.confidence * 0.2 }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4);
-    for (const { c } of claims) {
-      const src = c.sourceIds.map((id) => this.svc.sourceById(id)).find(Boolean);
-      if (!src) continue;
-      candidates.push({ sourceId: src.id, title: src.title, ...(src.url ? { url: src.url } : {}), ...(src.publisher ? { publisher: src.publisher } : {}), ...(src.publishedAt ? { publishedAt: src.publishedAt } : {}), via: "corpus", kind: "claim", text: c.text });
-    }
-    // Saved sources: only when their owner shared them (a message may pass them on to the other agent).
-    if (rec.shares[owner]) {
-      for (const r of (await this.svc.listResources(owner)).filter((x) => (x.status === "ready" || x.status === "learned") && x.summary && x.matchedConceptIds.includes(p.conceptId)).slice(0, 2)) {
-        candidates.push({ sourceId: `resource:${r.id}`, title: r.title, url: r.canonicalUrl ?? r.url, ...(r.publisher ? { publisher: r.publisher } : {}), via: "shared_resource", kind: "summary", text: r.summary! });
-      }
-    }
-    // This agent's own earlier takeaways (its owner's library): agent material, labeled as such.
-    for (const t of (await this.store.list<AgentTakeaway>("agent_takeaways", { ownerId: owner }, 50)).filter((x) => x.conceptId === p.conceptId).slice(0, 2)) {
-      candidates.push({ sourceId: `takeaway:${t.id}`, title: `Earlier takeaway from ${t.fromName}'s agent`, via: "agent_takeaway", kind: "takeaway", text: t.text });
-    }
+    // Saved sources only when their owner shared them (a message may pass them on to the other agent).
+    const candidates = await permittedMaterial(this.svc, this.store, { conceptId: p.conceptId, conceptName: p.conceptName, query, scope, owner: { userId: owner, sharesSavedSources: !!rec.shares[owner] } });
     const out: ExchangeSource[] = [];
     for (const c of candidates) {
       let s = p.sources.find((x) => x.sourceId === c.sourceId && x.text === c.text);

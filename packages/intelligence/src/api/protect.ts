@@ -41,7 +41,7 @@ export const DEFAULT_RATE_RULES: RateRule[] = [
     limit: 30,
     windowMs: 60_000,
     match: (m, p) =>
-      m === "POST" && (["/ask", "/visualize", "/make-it-stick", "/voice/session", "/resources"].includes(p) || /^\/resources\/[^/]+\/teach$/.test(p) || /^\/playground\/rooms\/[^/]+\/exchange(\/advance)?$/.test(p)),
+      m === "POST" && (["/ask", "/visualize", "/make-it-stick", "/voice/session", "/resources"].includes(p) || /^\/resources\/[^/]+\/teach$/.test(p) || /^\/playground\/rooms\/[^/]+\/(exchange|challenge)(\/advance)?$/.test(p)),
   },
   { name: "all", limit: 300, windowMs: 60_000, match: () => true },
 ];

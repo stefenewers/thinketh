@@ -169,6 +169,16 @@ export const RoomEventTypeSchema = z.enum([
   "exchange_completed",
   "exchange_stopped",
   "exchange_failed",
+  "challenge_started",
+  "challenge_clarification",
+  "challenge_delivered",
+  "challenge_response",
+  "challenge_checked",
+  "challenge_assessed",
+  "challenge_resolved",
+  "takeaway_revised",
+  "challenge_stopped",
+  "challenge_failed",
 ]);
 export type RoomEventType = z.infer<typeof RoomEventTypeSchema>;
 
@@ -372,7 +382,7 @@ export const ExchangeActionSchema = z.object({
   actor: z.string(),
   summary: z.string(),
   /** Who did it: Muse, the deterministic planner, Thinketh's code, or Claude (grounding check). */
-  by: z.enum(["muse", "planner", "thinketh", "claude", "deterministic"]),
+  by: z.enum(["muse", "planner", "thinketh", "claude", "deterministic", "grok"]),
 });
 export type ExchangeAction = z.infer<typeof ExchangeActionSchema>;
 
@@ -431,6 +441,122 @@ export const ExchangeAvailabilitySchema = z.object({
 });
 export type ExchangeAvailability = z.infer<typeof ExchangeAvailabilitySchema>;
 
+// ---------------------------------------------------------------------------
+// Takeaway challenge: an optional visiting challenger (Grokbot, on xAI) examines a saved takeaway and
+// its permitted material and raises one challenge, or reports that it found no clear issue. The agent
+// that wrote the takeaway defends, qualifies or revises it; Thinketh checks the result against the cited
+// material and settles an outcome. Agent activity only: nothing here is evidence of a person's
+// understanding, and "no clear issue found" is not proof that a takeaway is correct.
+
+export const ChallengeFindingSchema = z.object({
+  /** objection / qualification / counterexample: a challenge. insufficient_evidence: can't assess it from this material. no_issue: nothing clear to challenge. */
+  kind: z.enum(["objection", "qualification", "counterexample", "insufficient_evidence", "no_issue"]),
+  /** One short line (the speech bubble). */
+  say: z.string(),
+  /** The challenge itself, as delivered to the defending agent. */
+  detail: z.string(),
+  /** The takeaway statement it targets, when it targets one. */
+  targetStatement: z.string().optional(),
+  sourceRefs: z.array(z.string()),
+});
+export type ChallengeFinding = z.infer<typeof ChallengeFindingSchema>;
+
+export const ChallengeMessageSchema = z.object({
+  id: z.string(),
+  at: z.string(),
+  /** "grokbot", or the participant whose agent spoke. */
+  from: z.string(),
+  kind: z.enum(["clarification", "clarification_answer", "challenge", "no_issue", "insufficient_evidence", "defense", "revision", "concession", "assessment"]),
+  text: z.string(),
+  sourceRefs: z.array(z.string()),
+});
+export type ChallengeMessage = z.infer<typeof ChallengeMessageSchema>;
+
+export const ChallengeCheckSchema = z.object({
+  /** What was checked against its cited material: the challenge, a proposed revision, or the takeaway as defended. */
+  of: z.enum(["challenge", "revision", "takeaway"]),
+  verdict: z.enum(["supported", "partial", "unsupported"]),
+  supported: z.array(z.string()),
+  unsupported: z.array(z.string()),
+  /** Passages it was checked against. */
+  refs: z.array(z.string()),
+  checkedBy: z.enum(["claude", "deterministic"]),
+  at: z.string(),
+});
+export type ChallengeCheck = z.infer<typeof ChallengeCheckSchema>;
+
+export const ChallengeOutcomeSchema = z.object({
+  /** revised: a supported revision was saved. supported: the takeaway stands on its cited material. unresolved: kept, with the open challenge recorded. no_issue: Grokbot found no clear issue (not proof of correctness). */
+  state: z.enum(["revised", "supported", "unresolved", "no_issue"]),
+  headline: z.string(),
+  /** Why, in plain words, from the recorded checks. */
+  why: z.string(),
+  fromVersion: z.number(),
+  /** Set only when a revision was actually persisted. */
+  toVersion: z.number().optional(),
+  revisedText: z.string().optional(),
+  /** A revision the defending agent offered that was NOT applied, and why. */
+  declinedRevision: z.object({ text: z.string(), reason: z.string() }).optional(),
+});
+export type ChallengeOutcome = z.infer<typeof ChallengeOutcomeSchema>;
+
+export const TakeawayChallengeSchema = z.object({
+  id: z.string(),
+  roomId: z.string(),
+  exchangeId: z.string(),
+  takeawayId: z.string(),
+  /** The takeaway version this challenge is bound to; a result for any other version is rejected as stale. */
+  takeawayVersion: z.number(),
+  /** The takeaway as it was when challenged. */
+  takeawayText: z.string(),
+  conceptId: z.string(),
+  conceptName: z.string(),
+  /** The participant whose agent wrote the takeaway and answers the challenge. */
+  defenderId: z.string(),
+  requestedBy: z.string(),
+  status: z.enum(["running", "completed", "stopped", "timed_out", "unavailable", "failed", "stale", "interrupted"]),
+  phase: z.enum(["examining", "clarifying", "defending", "checking", "repairing", "assessing", "settling", "done"]),
+  /** Increments once per applied step; a stale step is ignored. */
+  step: z.number(),
+  /** The work actually in flight (only while it is): actor "grokbot", "agent:<userId>" or "thinketh". */
+  pending: z.object({ actor: z.string(), label: z.string() }).optional(),
+  startedAt: z.string(),
+  deadlineAt: z.string(),
+  finishedAt: z.string().optional(),
+  /** The challenger as it actually ran: the model id xAI reported, once a live call has returned. */
+  challenger: z.object({ name: z.string(), provider: z.literal("xai"), configuredModel: z.string(), model: z.string().optional() }),
+  finding: ChallengeFindingSchema.optional(),
+  messages: z.array(ChallengeMessageSchema),
+  sources: z.array(ExchangeSourceSchema),
+  checks: z.array(ChallengeCheckSchema),
+  assessment: z.object({ stance: z.enum(["satisfied", "maintains", "cannot_tell"]), text: z.string(), sourceRefs: z.array(z.string()) }).optional(),
+  actions: z.array(ExchangeActionSchema),
+  used: z.object({ grokCalls: z.number(), grokMs: z.number(), agentCalls: z.number(), toolCalls: z.number(), repairs: z.number() }),
+  budgets: z.object({ maxToolCalls: z.number() }),
+  outcome: ChallengeOutcomeSchema.optional(),
+  /** How it ended when it didn't complete (stopped, timed out, unavailable, stale). */
+  note: z.string().optional(),
+});
+export type TakeawayChallenge = z.infer<typeof TakeawayChallengeSchema>;
+
+export const ChallengeAvailabilitySchema = z.object({
+  available: z.boolean(),
+  reason: z.string().optional(),
+  takeawayId: z.string().optional(),
+  takeawayVersion: z.number().optional(),
+});
+export type ChallengeAvailability = z.infer<typeof ChallengeAvailabilitySchema>;
+
+export const TakeawayVersionSchema = z.object({
+  version: z.number(),
+  text: z.string(),
+  at: z.string(),
+  by: z.enum(["exchange", "challenge"]),
+  challengeId: z.string().optional(),
+  reason: z.string().optional(),
+});
+export type TakeawayVersion = z.infer<typeof TakeawayVersionSchema>;
+
 /** A takeaway an agent retained: agent-acquired material in its owner's library, not verified understanding. */
 export const AgentTakeawaySchema = z.object({
   id: z.string(),
@@ -450,6 +576,12 @@ export const AgentTakeawaySchema = z.object({
   checkedBy: z.enum(["claude", "deterministic"]),
   transcript: z.array(z.object({ from: z.string(), name: z.string(), kind: ExchangeMessageSchema.shape.kind, text: z.string(), sourceRefs: z.array(z.string()) })),
   createdAt: z.string(),
+  /** Absent means 1. Bumped only when a checked revision is persisted. */
+  version: z.number().optional(),
+  /** Every version, oldest first (present once the takeaway has been revised). */
+  history: z.array(TakeawayVersionSchema).optional(),
+  /** Challenges that settled on this takeaway, oldest first. */
+  challenges: z.array(TakeawayChallengeSchema).optional(),
 });
 export type AgentTakeaway = z.infer<typeof AgentTakeawaySchema>;
 export const AgentTakeawayListResponseSchema = z.object({ takeaways: z.array(AgentTakeawaySchema) });
@@ -476,6 +608,10 @@ export const PlaygroundRoomSchema = z.object({
   exchange: AgentExchangeSchema.optional(),
   /** Whether "Let our agents exchange" can start now, and on what. */
   exchangeAvailability: ExchangeAvailabilitySchema.optional(),
+  /** The current (or last) challenge of this room's saved takeaway. */
+  challenge: TakeawayChallengeSchema.optional(),
+  /** Whether "Challenge this idea" can start now (absent when no challenger is configured). */
+  challengeAvailability: ChallengeAvailabilitySchema.optional(),
   /** Last thing the conductor said. */
   museLine: z.string().optional(),
   conductor: z.object({ mode: z.enum(["muse", "fallback"]), detail: z.string() }),
@@ -510,3 +646,4 @@ export const RoomConductRequestSchema = z.object({ intent: z.enum(["next", "shar
 
 export const StartExchangeRequestSchema = z.object({ conceptId: z.string().max(120).optional() });
 export const AdvanceExchangeRequestSchema = z.object({ step: z.number().int().min(0) });
+export const AdvanceChallengeRequestSchema = z.object({ step: z.number().int().min(0) });

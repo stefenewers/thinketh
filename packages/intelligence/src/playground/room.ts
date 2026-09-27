@@ -31,6 +31,8 @@ import type { IntelligenceModel } from "../adapters/types.ts";
 import { DeterministicModel } from "../adapters/model/deterministic.ts";
 import { AgentExchangeEngine, type ExchangeLimits, type RoomEventOut } from "./exchange/engine.ts";
 import type { ExchangeModel } from "./exchange/muse.ts";
+import { TakeawayChallengeEngine, type ChallengeLimits } from "./exchange/challenge.ts";
+import type { ChallengerModel } from "./exchange/grok.ts";
 import { newId } from "../util.ts";
 import { validateAction, type Conductor, type ConductorView } from "./conductor.ts";
 import type { RoomRealtime } from "./realtime.ts";
@@ -93,6 +95,7 @@ export class PlaygroundService {
     now: () => Date = () => new Date(),
     subscribe?: { url: string; key: string },
     exchange?: { model: ExchangeModel | undefined; grader: { live: IntelligenceModel | undefined; fallback: DeterministicModel }; limits: ExchangeLimits },
+    challenge?: { grok: ChallengerModel | undefined; limits: ChallengeLimits },
   ) {
     this.svc = svc;
     this.conductor = conductor;
@@ -109,6 +112,34 @@ export class PlaygroundService {
       host: this,
       now,
     });
+    this.challenge = new TakeawayChallengeEngine({
+      svc,
+      store,
+      grok: challenge?.grok,
+      defender: () => this.exchange.agentModel,
+      grader: exchange?.grader ?? { live: undefined, fallback: new DeterministicModel({ diagrams: {}, visualizations: {}, memoryAids: {} }) },
+      limits: challenge?.limits ?? { deadlineMs: 240_000, callTimeoutMs: 45_000, maxToolCalls: 14 },
+      host: this,
+      now,
+    });
+  }
+
+  /** Grokbot: an optional visiting challenger for a saved takeaway (absent unless xAI is configured). */
+  readonly challenge: TakeawayChallengeEngine;
+
+  async startChallenge(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    await this.challenge.start(roomId, userId);
+    return this.get(roomId, userId);
+  }
+
+  async advanceChallenge(roomId: string, userId: string, step: number): Promise<PlaygroundRoom> {
+    await this.challenge.advance(roomId, userId, step);
+    return this.get(roomId, userId);
+  }
+
+  async stopChallenge(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    await this.challenge.stop(roomId, userId);
+    return this.get(roomId, userId);
   }
 
   /** The agent exchange (Muse agents in separate contexts). */
@@ -132,6 +163,9 @@ export class PlaygroundService {
   // Agent exchange: start / advance / stop, then the human's own check
 
   async startExchange(roomId: string, userId: string, conceptId?: string): Promise<PlaygroundRoom> {
+    await this.withRoom(roomId, (room) => {
+      if (room.challenge?.status === "running") throw new BadRequestError("Grokbot is still examining the last takeaway.");
+    });
     await this.exchange.start(roomId, userId, conceptId);
     return this.get(roomId, userId);
   }
@@ -150,6 +184,7 @@ export class PlaygroundService {
   async closeExchange(roomId: string, userId: string): Promise<PlaygroundRoom> {
     return this.mutate(roomId, userId, (room) => {
       if (room.exchange?.status === "running") throw new BadRequestError("Stop the exchange first.");
+      if (room.challenge?.status === "running") throw new BadRequestError("Stop the challenge first.");
       if (room.scene === "agent_exchange") room.scene = "overview";
     });
   }
@@ -320,6 +355,7 @@ export class PlaygroundService {
   async get(roomId: string, userId: string): Promise<PlaygroundRoom> {
     return this.mutate(roomId, userId, async (room) => {
       await this.exchange.reconcile(room);
+      await this.challenge.reconcile(room);
       await this.refreshResource(room);
       await this.markDelivered(room, userId);
     });
@@ -906,6 +942,7 @@ export class PlaygroundService {
       ...structuredClone(room),
       conductor: { mode: this.conductor.mode, detail: this.conductor.detail },
       exchangeAvailability: this.exchange.availability(room),
+      ...(this.challenge.configured ? { challengeAvailability: this.challenge.availability(room) } : {}),
       realtime: {
         channel: this.channel(room),
         mode: this.realtime.mode,

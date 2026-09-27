@@ -37,6 +37,7 @@ import {
   RoomShareRequestSchema,
   StartExchangeRequestSchema,
   AdvanceExchangeRequestSchema,
+  AdvanceChallengeRequestSchema,
   AgentTakeawaySchema,
   AgentTakeawayListResponseSchema,
   ProfileResponseSchema,
@@ -283,6 +284,13 @@ export function createApp(deps: {
     app.post("/playground/rooms/:id/exchange/stop", async (c) => c.json(room(await playground.stopExchange(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/exchange/close", async (c) => c.json(room(await playground.closeExchange(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/exchange/check", async (c) => c.json(room(await playground.exchangeCheck(c.req.param("id"), c.get("userId")))));
+    // Grokbot (optional): challenge the saved takeaway (idempotent per version), advance one step, stop.
+    app.post("/playground/rooms/:id/challenge", async (c) => c.json(room(await playground.startChallenge(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/challenge/advance", async (c) => {
+      const { step } = await body(c, AdvanceChallengeRequestSchema);
+      return c.json(room(await playground.advanceChallenge(c.req.param("id"), c.get("userId"), step)));
+    });
+    app.post("/playground/rooms/:id/challenge/stop", async (c) => c.json(room(await playground.stopChallenge(c.req.param("id"), c.get("userId")))));
     // What this person's agent has retained (their own library only).
     app.get("/takeaways", async (c) =>
       c.json(AgentTakeawayListResponseSchema.parse({ takeaways: await playground.takeaways(c.get("userId"), c.req.query("conceptId") || undefined) })),
