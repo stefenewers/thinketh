@@ -1,27 +1,35 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AskResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { rejectedInputReason } from "@/api/http";
 import { Icon } from "@/components/Icon";
-import { AppTopBar, ConceptChip, IconButton, InsightRow, ListCard, RaisedCard, ReasoningStep, SectionHeader, SegmentedTabs, SignalPill, SourceCard } from "@/components/system";
+import { AppTopBar, Avatar, ConceptChip, IconButton, RaisedCard, ReasoningStep, SignalPill, SourceCard } from "@/components/system";
 import { T } from "@/components/Text";
 import { Gutter, LoadingState } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
-import { color, font, layout, lift, radius, space } from "@/theme/tokens";
+import { AskScene } from "@/components/ask/AskScene";
+import { TopicArt, type TopicArtKind } from "@/components/TopicArt";
+import { DEMO_LEARNER_NAME } from "@/content/demo";
+import { useProfile } from "@/lib/profile";
+import { useSession } from "@/lib/session";
+import { color, depth, font, layout, lift, radius, space } from "@/theme/tokens";
 
-const SUGGESTED = [
-  "What changed in agent memory this week?",
-  "What am I weakest on?",
-  "Explain MCP based on what I already know.",
+// The same three questions, each with what it gets you and a pixel object from the topic art set.
+const SUGGESTED: { q: string; hint: string; art: TopicArtKind }[] = [
+  { q: "What changed in agent memory this week?", hint: "See what's new and why it matters.", art: "checklist" },
+  { q: "What am I weakest on?", hint: "Find gaps in your understanding.", art: "drawer" },
+  { q: "Explain MCP based on what I already know.", hint: "A personalized explanation from your Mind.", art: "connector" },
 ];
 
 type AskMode = "quick" | "teach" | "deep";
-const MODES: { key: AskMode; label: string; loading: string }[] = [
-  { key: "quick", label: "Quick answer", loading: "Grounding this in your sources…" },
-  { key: "teach", label: "Teach me", loading: "Finding what's new for you…" },
-  { key: "deep", label: "Go deep", loading: "Comparing sources and what's still uncertain…" },
+// `hint` restates what each mode asks the model for (the answer shapes in the Ask prompt).
+const MODES: { key: AskMode; label: string; hint: string; loading: string }[] = [
+  { key: "quick", label: "Quick answer", hint: "A direct answer in a sentence or two.", loading: "Grounding this in your sources…" },
+  { key: "teach", label: "Teach me", hint: "Starts from what you already understand.", loading: "Finding what's new for you…" },
+  { key: "deep", label: "Go deep", hint: "Mechanisms, caveats and what's still uncertain.", loading: "Comparing sources and what's still uncertain…" },
 ];
 
 type Answer = AskResponse & { question: string; developmentId?: string; mode?: AskMode };
@@ -38,14 +46,20 @@ export default function Ask() {
   const [rejected, setRejected] = useState<string | null>(null);
   // Storyboard 05: "Why this answer?" is its own view (not a route); null = the answer view.
   const [why, setWhy] = useState<null | { allSources: boolean }>(null);
+  const [modeMenu, setModeMenu] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
+  const session = useSession();
+  const profile = useProfile();
+  const name = session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME;
   // Names for related concepts.
   const lookup = useApi(async () => (await api.getKnowledge()).items.map((i) => i.concept), []);
 
-  const ask = async (question: string, developmentId?: string, asMode: AskMode = mode) => {
+  const ask = async (question: string, developmentId?: string, asMode: AskMode = mode, { keepInput = false } = {}) => {
     const text = question.trim();
     if (!text || asking) return;
-    setInput("");
+    if (!keepInput) setInput("");
     setAsking(true);
     setPending(text);
     setFailed(null);
@@ -79,20 +93,32 @@ export default function Ask() {
   const conceptName = (id: string) => lookup.data?.find((c) => c.id === id)?.name;
 
   const changeMode = (k: AskMode) => {
+    setModeMenu(false);
     if (k === mode) return;
     setMode(k);
-    if (answer && !asking) ask(answer.question, answer.developmentId, k);
+    // As before: an answer on screen is re-asked in the new mode. Whatever is being typed stays.
+    if (answer && !asking) ask(answer.question, answer.developmentId, k, { keepInput: true });
   };
+  const current = MODES.find((m) => m.key === mode)!;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {why && answer ? (
         <AppTopBar title="Why this answer?" onBack={() => setWhy(null)} />
       ) : (
-        <AppTopBar
-          title="Ask Thinketh"
-          right={answer && !asking ? <IconButton icon="plus" accessibilityLabel="Ask something new" onPress={() => setAnswer(null)} /> : null}
-        />
+        answer && !asking ? (
+          <AppTopBar right={<IconButton icon="plus" accessibilityLabel="Ask something new" onPress={() => setAnswer(null)} />} />
+        ) : (
+          // No page title: the scene says what Ask is. Search goes to the composer; the avatar to your profile.
+          <Gutter style={[styles.restBar, { paddingTop: insets.top + space.s }]}>
+            <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Search and ask" style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}>
+              <Icon name="search" size={19} color={color.ink} />
+            </Pressable>
+            <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Your learning profile" style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}>
+              <Avatar name={name} size={44} />
+            </Pressable>
+          </Gutter>
+        )
       )}
       <ScrollView
         ref={scrollRef}
@@ -104,19 +130,12 @@ export default function Ask() {
           <ReasoningView answer={answer} conceptName={conceptName} initialAllSources={why.allSources} />
         ) : (
         <>
-        <Gutter>
-          {!answer && !asking ? (
-            <T variant="support" style={{ marginBottom: space.m }}>
-              Answers grounded in your sources and in what you already understand.
-            </T>
-          ) : null}
-          <SegmentedTabs tabs={MODES} value={mode} onChange={changeMode} />
-        </Gutter>
+        {!answer && !asking ? <AskScene line="Ask anything, and I'll use your sources and what you already understand." /> : null}
 
         {asking ? (
           <Gutter style={{ marginTop: space.xl }}>
             {pending ? <QuestionBubble text={pending} /> : null}
-            <LoadingState message={MODES.find((m) => m.key === mode)!.loading} />
+            <LoadingState message={current.loading} />
           </Gutter>
         ) : answer ? (
           <AnswerView
@@ -129,7 +148,7 @@ export default function Ask() {
             onAskElse={() => setAnswer(null)}
           />
         ) : (
-          <Gutter style={{ marginTop: space.xl }}>
+          <Gutter style={{ marginTop: space.l }}>
             {failed ? (
               <RaisedCard style={{ marginBottom: space.s }}>
                 <SignalPill label="No answer yet" muted />
@@ -145,12 +164,27 @@ export default function Ask() {
                 )}
               </RaisedCard>
             ) : null}
-            <SectionHeader title="Based on your knowledge" style={{ marginTop: failed ? space.xl : space.s }} />
-            <ListCard>
-              {SUGGESTED.map((s, i) => (
-                <InsightRow key={s} title={s} last={i === SUGGESTED.length - 1} onPress={() => ask(s)} />
+            <T style={styles.promptsHeading} accessibilityRole="header">
+              Based on your knowledge
+            </T>
+            <View style={{ gap: 14 }}>
+              {SUGGESTED.map((s) => (
+                <Pressable
+                  key={s.q}
+                  onPress={() => ask(s.q)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${s.q} ${s.hint}`}
+                  style={({ pressed }) => [styles.prompt, pressed && styles.pressed]}
+                >
+                  <TopicArt kind={s.art} unit={2} style={styles.promptArt} />
+                  <View style={{ flex: 1 }}>
+                    <T style={styles.promptTitle}>{s.q}</T>
+                    <T style={styles.promptHint}>{s.hint}</T>
+                  </View>
+                  <Icon name="chevron" size={14} color={color.ink3} />
+                </Pressable>
               ))}
-            </ListCard>
+            </View>
           </Gutter>
         )}
         </>
@@ -159,11 +193,31 @@ export default function Ask() {
 
       {why && answer ? null : (
       <View style={styles.composer}>
+        {modeMenu ? <ModeMenu value={mode} onChange={changeMode} /> : null}
         <View style={styles.inputWrap}>
+          {/* The response mode, like a model picker: part of the composer, not a row of tabs. */}
+          <Pressable
+            onPress={() => setModeMenu((o) => !o)}
+            accessibilityRole="button"
+            accessibilityLabel={`Response mode: ${current.label}`}
+            accessibilityHint="Choose how Thinketh answers"
+            accessibilityState={{ expanded: modeMenu }}
+            hitSlop={4}
+            style={({ pressed }) => [styles.modeButton, pressed && { opacity: 0.7 }]}
+          >
+            <T style={styles.modeLabel} numberOfLines={1}>
+              {current.label}
+            </T>
+            <View style={[styles.chevron, modeMenu && styles.chevronOpen]}>
+              <Icon name="chevron" size={12} color={color.ink2} />
+            </View>
+          </Pressable>
+          <View style={styles.divider} />
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
-            placeholder={answer ? "Ask a follow-up…" : "Ask about anything you follow"}
+            placeholder={answer ? "Ask a follow-up…" : "Ask anything"}
             placeholderTextColor={color.ink3}
             style={styles.input}
             returnKeyType="send"
@@ -180,12 +234,43 @@ export default function Ask() {
             hitSlop={6}
             style={[styles.send, (!input.trim() || asking) && { opacity: 0.3 }]}
           >
-            <Icon name="send" size={16} color={color.onInk} />
+            <View style={{ transform: [{ rotate: "-90deg" }] }}>
+              <Icon name="send" size={16} color={color.onInk} />
+            </View>
           </Pressable>
         </View>
       </View>
       )}
+      {/* Tapping anywhere else closes the mode menu (the keyboard stays where it was). */}
+      {modeMenu ? <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={() => setModeMenu(false)} accessibilityLabel="Close response modes" /> : null}
     </KeyboardAvoidingView>
+  );
+}
+
+/** The three response modes, anchored above the selector; the current one is checked. */
+function ModeMenu({ value, onChange }: { value: AskMode; onChange: (k: AskMode) => void }) {
+  return (
+    <View style={styles.menu} accessibilityRole="menu">
+      {MODES.map((m, i) => {
+        const on = m.key === value;
+        return (
+          <Pressable
+            key={m.key}
+            onPress={() => onChange(m.key)}
+            accessibilityRole="menuitem"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={`${m.label}. ${m.hint}`}
+            style={({ pressed }) => [styles.menuItem, i > 0 && styles.menuDivided, pressed && { backgroundColor: color.surfaceMuted }]}
+          >
+            <View style={{ flex: 1 }}>
+              <T style={[styles.menuLabel, on && { fontFamily: font.sansSemibold }]}>{m.label}</T>
+              <T style={styles.menuHint}>{m.hint}</T>
+            </View>
+            {on ? <Icon name="check" size={16} color={color.ink} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -446,6 +531,16 @@ function AnswerBlock({ label, lines, muted }: { label: string; lines: string[]; 
 }
 
 const styles = StyleSheet.create({
+  // Ask's rest state (matches Today's round controls and the Learn card system).
+  roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceMuted, ...depth.control },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.99 }] },
+  restBar: { flexDirection: "row", justifyContent: "flex-end", gap: space.s },
+  promptsHeading: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: color.ink, marginTop: space.s, marginBottom: 14 },
+  prompt: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 14, paddingLeft: 14, paddingRight: 16, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.06)" },
+  promptArt: { width: 58, height: 58, borderRadius: 14, backgroundColor: color.surfaceMuted },
+  promptTitle: { fontFamily: font.sansSemibold, fontSize: 16, lineHeight: 21, letterSpacing: -0.25, color: color.ink },
+  promptHint: { fontFamily: font.sans, fontSize: 13.5, lineHeight: 19, color: color.ink2, marginTop: 3 },
   whyRow: { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.m, padding: space.m, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas },
   tabular: { fontVariant: ["tabular-nums"] },
   bubble: {
@@ -484,12 +579,12 @@ const styles = StyleSheet.create({
   reasoning: { marginTop: space.xl, paddingHorizontal: layout.pageX },
   inlineLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   disclosure: { flexDirection: "row", alignItems: "center", gap: 6 },
-  composer: { paddingHorizontal: layout.pageX, paddingTop: space.s, paddingBottom: space.s, backgroundColor: color.canvas },
+  composer: { paddingHorizontal: layout.pageX, paddingTop: space.s, paddingBottom: space.s, backgroundColor: color.canvas, zIndex: 2 },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     minHeight: 50,
-    paddingLeft: space.l,
+    paddingLeft: 5,
     paddingRight: 5,
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
@@ -497,6 +592,33 @@ const styles = StyleSheet.create({
     backgroundColor: color.canvas,
     ...lift(color.ink, 0.05, 12, 2, 1),
   },
-  input: { flex: 1, minHeight: 44, fontFamily: font.sans, fontSize: 15, color: color.ink },
+  // minWidth 0: the field gives way to the selector and send button instead of pushing them out.
+  input: { flex: 1, minWidth: 0, minHeight: 44, fontFamily: font.sans, fontSize: 15, color: color.ink },
+  // Quiet and compact: a neutral chip inside the field. Capped so "Quick answer" never crowds the input.
+  modeButton: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: 128, height: 36, paddingLeft: 12, paddingRight: 9, borderRadius: radius.pill, backgroundColor: color.surfaceMuted },
+  modeLabel: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 13.5, lineHeight: 18, color: color.ink },
+  chevron: { transform: [{ rotate: "90deg" }] },
+  chevronOpen: { transform: [{ rotate: "-90deg" }] },
+  divider: { width: StyleSheet.hairlineWidth, height: 22, marginHorizontal: space.s, backgroundColor: color.edge },
+  menu: {
+    position: "absolute",
+    left: layout.pageX,
+    bottom: "100%",
+    width: 304,
+    maxWidth: "92%",
+    marginBottom: -2,
+    borderRadius: 16,
+    backgroundColor: color.canvas,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.hairline,
+    overflow: "hidden",
+    zIndex: 3,
+    ...lift(color.ink, 0.1, 24, 6, 8),
+  },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: 56, paddingHorizontal: space.l, paddingVertical: 10 },
+  menuDivided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.hairline },
+  menuLabel: { fontFamily: font.sansMedium, fontSize: 15, lineHeight: 20, color: color.ink },
+  menuHint: { fontFamily: font.sans, fontSize: 12.5, lineHeight: 17, color: color.ink3, marginTop: 1 },
+  scrim: { zIndex: 1 },
   send: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
 });
