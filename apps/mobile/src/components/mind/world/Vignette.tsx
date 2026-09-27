@@ -39,17 +39,22 @@ export function ShelfVignette({
 }) {
   const floorH = Math.round(height * 0.24);
   const floorTop = height - floorH;
-  const shown = books.length ? books : null;
-  const count = shown ? shown.length : 1;
   const gap = U * 3;
   const pad = U * 3;
-  // Books as large as the scene allows, so their titles stay readable.
-  const bookW = Math.round(Math.min(96, width * 0.24, ((height - floorH) * 0.72) / 1.15));
+  const sprite = Math.min(64, Math.round(height * 0.44));
+  // Width each of n books can have so the whole group fits with margins.
+  const room = (n: number) => (width - 40 - (stefen ? sprite + 14 : 0) - 2 * pad - (n - 1) * gap) / n;
+  // Narrow scenes keep the featured book and one neighbour, so titles stay readable (never shrunk to fit).
+  const fi = books.findIndex((b) => b.conceptId === featuredId);
+  const trimmed = books.length === 3 && room(3) < 72 && fi >= 0 ? (fi === 2 ? books.slice(1, 3) : books.slice(fi, fi + 2)) : books;
+  const shown = trimmed.length ? trimmed : null;
+  const count = shown ? shown.length : 1;
+  // Books as large as the scene allows (readable titles), within the group's room.
+  const bookW = Math.round(Math.min(96, width * 0.24, ((height - floorH) * 0.72) / 1.15, room(count)));
   const bookH = Math.round(bookW * 1.15);
   const shelfW = count * bookW + (count - 1) * gap + 2 * pad;
   const shelfH = bookH + pad + U * 4;
   const shelfY = floorTop - shelfH - Math.round(height * 0.06);
-  const sprite = Math.min(64, Math.round(height * 0.44));
   // One centred group: [Stefen][shelf][plant] (or mirrored). The plant is left out when there's no room.
   const plantW = PROPS.plant.width;
   const withPlant = sprite + 14 + shelfW + 12 + plantW <= width - 24;
