@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { AppState } from "react-native";
 import { router, type Href } from "expo-router";
 import { ConversationProvider, useConversationControls, useConversationInput, useConversationMode } from "@elevenlabs/react-native";
-import { setupIOSAudioManagement, type AppleAudioConfiguration } from "@livekit/react-native";
 import { useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import type { AgentActivity, VoiceSession } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -30,13 +29,6 @@ import {
 import { claimAudio } from "./audioFocus";
 import { describeScreen, getScreen, subscribeScreen, waitForScreen } from "./screenContext";
 import { createAgentTools } from "./tools";
-
-// iOS audio session: one record-capable configuration for the whole call. LiveKit's default (which
-// the ElevenLabs import installs) switches to playback-only while the agent speaks and back to record
-// when the mic engine starts; when that switch loses a race with the SDK's own session start/stop,
-// the mic publishes digital silence for the rest of the call. Replaces that default (iOS only).
-const VOICE_CALL: AppleAudioConfiguration = { audioCategory: "playAndRecord", audioCategoryOptions: ["allowBluetooth", "defaultToSpeaker"], audioMode: "videoChat" };
-setupIOSAudioManagement(true, { recording: VOICE_CALL, playout: VOICE_CALL, deactivateOnStop: true });
 
 const CONNECT_TIMEOUT_MS = 15_000;
 /** How long Thinketh must stay quiet before its turn counts as over (ms). */
