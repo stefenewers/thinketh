@@ -138,7 +138,8 @@ export function WorldCanvas({
                 onPress={() => onSelect({ kind: "agent", userId: a.userId })}
               />
           ))}
-          {world.concept && conceptPt ? (
+          {/* In an exchange the idea shows once a takeaway is actually saved; until then the agents' own words carry it. */}
+          {world.concept && conceptPt && !(world.phase === "exchange" && world.concept.state === "with_teacher") ? (
             <ConceptToken
               concept={world.concept}
               to={conceptPt}
@@ -186,10 +187,13 @@ export function WorldCanvas({
 
 /** A short speech bubble above an agent. Static (no animation), so reduced motion needs nothing extra. */
 function SpeechBubble({ at, width, text, tone }: { at: { x: number; y: number }; width: number; text: string | null; tone: string }) {
-  const w = Math.min(176, width * 0.46);
-  const left = Math.max(6, Math.min(width - w - 6, at.x - w / 2));
+  // "…" (a turn in flight) is a small bubble; a message gets room for a few short lines.
+  const w = text ? Math.min(168, width * 0.42) : 44;
+  // Open toward the agent's outer side, away from the idea travelling between the two agents.
+  const outward = text ? (at.x > width / 2 ? at.x - 34 : at.x - w + 34) : at.x - w / 2;
+  const left = Math.max(6, Math.min(width - w - 6, outward));
   return (
-    <View style={{ position: "absolute", left, top: Math.max(4, at.y - 150), width: w, pointerEvents: "none" }} accessibilityLiveRegion="polite">
+    <View style={{ position: "absolute", left, top: Math.max(4, at.y - 158), width: w, pointerEvents: "none" }} accessibilityLiveRegion="polite">
       <View style={[styles.bubble, { borderColor: tone }]}>
         <T style={styles.bubbleText} numberOfLines={4}>
           {text ?? "…"}

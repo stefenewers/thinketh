@@ -27,6 +27,8 @@ export type Book = {
   highlight: boolean;
   /** Related sources in today's brief (information, not understanding). */
   sourceCount: number;
+  /** Your agent retained a takeaway on this concept (agent material, not understanding). */
+  agentMaterial: boolean;
   bay: number;
   row: number;
   col: number;
@@ -53,7 +55,7 @@ const sameDay = (iso: string, now: Date) => new Date(iso).toDateString() === now
 
 export function projectMindWorld(
   data: KnowledgeResponse,
-  opts: { selectedId: string | null; played: ReadonlySet<string>; sourceCounts?: ReadonlyMap<string, number>; now?: Date },
+  opts: { selectedId: string | null; played: ReadonlySet<string>; sourceCounts?: ReadonlyMap<string, number>; agentMaterial?: ReadonlySet<string>; now?: Date },
 ): MindWorld {
   const now = opts.now ?? new Date();
   // Stable shelf order: by domain, then id. Positions never depend on scores, so books don't shuffle.
@@ -90,6 +92,7 @@ export function projectMindWorld(
       changed,
       selected: i.concept.id === opts.selectedId,
       highlight: highlight?.conceptId === i.concept.id,
+      agentMaterial: !!opts.agentMaterial?.has(i.concept.id),
       sourceCount,
       bay: Math.floor(n / PER_BAY),
       row: Math.floor((n % PER_BAY) / COLS),
