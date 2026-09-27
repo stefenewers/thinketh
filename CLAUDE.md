@@ -113,9 +113,9 @@ Use:
 10. Storyline / temporal knowledge view if time permits
 
 Bottom nav:
-Today · Library · Explore · Ask
+Today · Learn · Mind · Ask
 
-Mind can be reached from profile / Today / development state update.
+(Learn lives at the `library` route. Explore is reached from Learn. Mind is also reached from Today and from a development's state update.)
 
 ## Required development-detail sections
 

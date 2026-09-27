@@ -115,9 +115,3 @@ What this shows:
 Known limit: the free Backboard credit covers memory and RAG only, so Backboard's built-in chat replies are blocked on billing (the new-thread check returned a billing notice as its reply, with `retrieved_memories: 6`). Thinketh doesn't use Backboard chat: Claude writes the answers, and Backboard supplies the memory.
 
 Screenshots to capture: Backboard dashboard → the assistant's Memories, plus the evidence output above.
-
-## To do
-
-- Public API: the Node server via `./scripts/demo-api.sh` (see `docs/DEPLOY.md`). All four sponsors are live there; a stable Railway/Render URL for judging is still open.
-- ElevenLabs: `/voice/session` returning `mode: "elevenlabs"`
-- Claude: `x-thinketh-delta-source: claude` on `/developments/:id`

@@ -46,6 +46,7 @@ Don't put the logo on every screen, and don't redraw it in text. The lettering i
 - **Brand coral `#D35935`** (`brand.coral` in `src/theme/tokens.ts`) is for artwork and filled surfaces: the icon, splash, favicon and tiles.
 - **Accessible text shade `#C0553A`** (`color.coral`) is for coral text and signals on light grounds, because `#D35935` on white is below AA for small text.
 - **Ink `#161616`** is for the marks on ivory or white. White is for marks on coral or charcoal.
+- **Tab bar:** the selected tab is burnt orange `#C65D2E` (`color.navActive`), icon and label, with no pill. The other tabs are `#5F5F5B` (`color.navInactive`). These two are only for the bottom navigation; use `color.coral` everywhere else.
 - **Clear space:** keep at least the height of the `t`'s crossbar around the mark on every side.
 - **Minimum sizes:** the compact mark reads down to 12 px; use the wordmark at 18 px high or more.
 
