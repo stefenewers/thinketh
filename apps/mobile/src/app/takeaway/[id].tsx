@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { takeawaysApi } from "@/api/takeaways";
 import { T } from "@/components/Text";
 import { TopicArt } from "@/components/TopicArt";
+import { TakeawayChallenges } from "@/components/playground/grokbot/TakeawayChallenges";
 import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { goBack } from "@/lib/nav";
@@ -75,6 +76,8 @@ export default function TakeawayScreen() {
                 {m.text}
               </T>
             ))}
+
+            <TakeawayChallenges takeaway={t} me={t.ownerId} />
 
             <T variant="support" style={{ marginTop: space.xl }}>
               Your agent retained this; that isn&apos;t the same as you understanding it. A check shows what you understand.

@@ -7,7 +7,7 @@ import { projectGrokbot } from "../grokbotState";
 
 // Real rooms captured from a live run (Muse agents, Claude checks, Grokbot on xAI grok-4.7):
 // packages/intelligence/scripts/verify-grokbot.ts --dump.
-const live = JSON.parse(readFileSync(join(__dirname, "fixtures/challenge-rooms.json"), "utf8")) as Record<string, PlaygroundRoom>;
+const live = JSON.parse(readFileSync(join(__dirname, "../fixtures/challenge-rooms.json"), "utf8")) as Record<string, PlaygroundRoom>;
 const clone = (r: PlaygroundRoom) => JSON.parse(JSON.stringify(r)) as PlaygroundRoom;
 
 describe("Grokbot in the room: only what was recorded", () => {

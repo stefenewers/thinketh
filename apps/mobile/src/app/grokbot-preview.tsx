@@ -18,7 +18,7 @@ import { color, pixel, space } from "@/theme/tokens";
 // Dev-only: Grokbot's pieces rendered with rooms captured from a live run (Muse agents, Claude checks,
 // Grokbot on xAI), for review before they're mounted in the Playground screen. Not linked anywhere.
 // /grokbot-preview?beat=arrived|challenged|revised|no_issue|library
-const live = require("@/components/playground/grokbot/__tests__/fixtures/challenge-rooms.json") as Record<string, PlaygroundRoom | AgentTakeaway>;
+const live = require("@/components/playground/grokbot/fixtures/challenge-rooms.json") as Record<string, PlaygroundRoom | AgentTakeaway>;
 
 const BEATS = {
   arrived: "overbroad_started",

@@ -10,6 +10,8 @@ import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
 import { color, font, pixel } from "@/theme/tokens";
 import { AGENT_SPRITES, PROPS } from "./assets";
+import { GrokbotLayer } from "../grokbot/GrokbotLayer";
+import { projectGrokbot } from "../grokbot/grokbotState";
 import { Character } from "./Character";
 import { CheckpointGate, ConceptToken, MindRing } from "./ConceptToken";
 import { sceneLayout } from "./layout";
@@ -48,6 +50,7 @@ export function WorldCanvas({
 }) {
   const paused = usePaused();
   const L = sceneLayout(width, height);
+  const grok = projectGrokbot(room);
 
   if (room && !firstSeen.has(room.id)) firstSeen.set(room.id, room.seq);
   const fx = freshEffects(room, room ? firstSeen.get(room.id) : undefined, played);
@@ -150,13 +153,15 @@ export function WorldCanvas({
             />
           ) : null}
           {/* Agent exchange: the latest message beside the agent that sent it; "…" only while a turn is in flight. */}
-          {world.phase === "exchange"
+          {world.phase === "exchange" && !grok.present
             ? present.map((a) => {
                 const typing = world.speaking === a.userId;
                 const text = !typing && world.speech?.userId === a.userId ? world.speech.text : null;
                 return typing || text ? <SpeechBubble key={`bubble-${a.userId}`} at={L.at(a.at)} width={width} text={text} tone={TONE[a.tone]} /> : null;
               })
             : null}
+          {/* Grokbot (optional visiting challenger): arrives, speaks and answers only from the recorded challenge. */}
+          <GrokbotLayer view={grok} layout={L} defenderAt={grok.defender ? present.find((a) => a.userId === grok.defender!.userId)?.at : undefined} width={width} paused={paused} reduced={reduced} />
           {world.muse.state !== "absent" ? <MuseCue at={musePt} state={world.muse.state} by={world.muse.by} pointing={museTargetPt !== null} paused={paused} reduced={reduced} onPress={() => onSelect({ kind: "muse" })} /> : null}
         </Animated.View>
       </GestureDetector>

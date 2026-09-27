@@ -10,6 +10,9 @@ import { DEMO_USER_ID } from "@/api";
 import { useProfile } from "@/lib/profile";
 import { currentMode, currentUserId } from "@/lib/session";
 import { playground, PLAYGROUND_AVAILABLE, PlaygroundError } from "@/api/playground";
+import { challengeApi } from "@/api/challenge";
+import { ChallengePanel } from "@/components/playground/grokbot/ChallengePanel";
+import { useChallengeDriver } from "@/components/playground/grokbot/useChallengeDriver";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { EventRail } from "@/components/playground/EventRail";
@@ -46,7 +49,7 @@ const RAIL_SCENES = new Set(["overview", "peer_teaching", "transfer", "knowledge
 /** "Following Muse" (Figma Spotlight): the view goes where the conductor points until you stop following. */
 const FollowContext = createContext(true);
 
-type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange";
+type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange" | "challenge";
 
 export default function PlaygroundScreen() {
   const params = useLocalSearchParams<{ code?: string; as?: string }>();
@@ -136,6 +139,10 @@ export default function PlaygroundScreen() {
         setExTick((t) => t + 1);
       });
   }, [roomId, exRunning, exStep, me, exTick]);
+
+  // Grokbot's challenge advances the same way: one server step at a time, claimed durably.
+  const onChallengeRoom = useCallback((r: PlaygroundRoom) => setRoom((prev) => acceptRoom(prev, r)), []);
+  useChallengeDriver(room, me, onChallengeRoom);
 
   const other = room?.participants.find((p) => p.userId !== me);
   const actAs = (userId: string) => (userId !== me && other?.demoPersona && other.userId === userId ? userId : undefined);
@@ -292,6 +299,8 @@ export default function PlaygroundScreen() {
               onStop={() => run("exchange", () => playground.stopExchange(room.id, me))}
               onCheck={() => run("exchange", () => playground.exchangeCheck(room.id, me))}
               onClose={() => run("exchange", () => playground.closeExchange(room.id, me))}
+              onChallenge={() => run("challenge", () => challengeApi.start(room.id, me))}
+              onStopChallenge={() => run("challenge", () => challengeApi.stop(room.id, me))}
             />
           ) : null}
           {room && scene === "peer_teaching" ? (
@@ -646,7 +655,25 @@ const STATUS_TITLE: Record<string, string> = {
  * The exchange itself: what's actually in flight, the agents' concise messages with their sources, the
  * full transcript on request, and the result. Stop is always there while it runs.
  */
-function ExchangeScene({ room, me, busy, onStop, onCheck, onClose }: { room: PlaygroundRoom; me: string; busy: Busy; onStop: () => void; onCheck: () => void; onClose: () => void }) {
+function ExchangeScene({
+  room,
+  me,
+  busy,
+  onStop,
+  onCheck,
+  onClose,
+  onChallenge,
+  onStopChallenge,
+}: {
+  room: PlaygroundRoom;
+  me: string;
+  busy: Busy;
+  onStop: () => void;
+  onCheck: () => void;
+  onClose: () => void;
+  onChallenge: () => void;
+  onStopChallenge: () => void;
+}) {
   const ex = room.exchange!;
   const [full, setFull] = useState(false);
   const running = ex.status === "running";
@@ -742,6 +769,8 @@ function ExchangeScene({ room, me, busy, onStop, onCheck, onClose }: { room: Pla
           </T>
         </RaisedCard>
       ) : null}
+      {/* Grokbot (optional): challenge the saved takeaway; present only when the server has a challenger. */}
+      {ex.savedTakeawayId && !running ? <ChallengePanel room={room} me={me} busy={busy === "challenge"} onStart={onChallenge} onStop={onStopChallenge} /> : null}
 
       {running ? (
         <Button kind="secondary" label="Stop the exchange" loading={busy === "exchange"} onPress={onStop} style={{ alignSelf: "flex-start", marginTop: space.l }} />
@@ -755,7 +784,7 @@ function ExchangeScene({ room, me, busy, onStop, onCheck, onClose }: { room: Pla
               Saved to {nameOf(room, ex.learnerId)}&apos;s agent library.
             </T>
           ) : null}
-          <Button kind="quiet" label="Back to the room" loading={busy === "exchange" && !canApply} onPress={onClose} />
+          {room.challenge?.status !== "running" ? <Button kind="quiet" label="Back to the room" loading={busy === "exchange" && !canApply} onPress={onClose} /> : null}
         </View>
       )}
     </View>
