@@ -5,6 +5,7 @@
 // The knowledge-state update below is a fixed demo stand-in so the UI has
 // something to render. The real update rules are owned by the intelligence
 // layer (packages/intelligence); do not tune them here.
+import { visualizationFromDiagram } from "@thinketh/contracts";
 import type {
   AskResponse,
   DiagnosticCandidate,
@@ -17,6 +18,7 @@ import type {
 import { levelOf } from "@/lib/knowledge";
 import { DEMO_USER_ID, type ThinkethApi, UnknownQuestionError } from "./client";
 import * as fx from "./fixtures";
+import { OFFLINE_VISUALIZATIONS } from "./visualizations";
 
 const clamp = (n: number) => Math.min(1, Math.max(0, fx.round(n)));
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -298,7 +300,8 @@ function createMockApi(): ThinkethApi {
 
     async visualize({ developmentId }) {
       await delay(600);
-      return fx.diagramFor(developmentId ? localId(developmentId) : fx.HERO_ID);
+      const id = developmentId ? localId(developmentId) : fx.HERO_ID;
+      return OFFLINE_VISUALIZATIONS[id] ?? visualizationFromDiagram(fx.diagramFor(id));
     },
 
     async makeItStick({ conceptId, developmentId }) {

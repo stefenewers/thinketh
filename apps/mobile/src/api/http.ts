@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import {
   AskResponseSchema,
   BriefResponseSchema,
@@ -7,6 +7,9 @@ import {
   DiagnosticAnswerResponseSchema,
   DiagnosticSelectResponseSchema,
   DiagramSpecSchema,
+  normalizeVisualization,
+  visualizationFromDiagram,
+  VisualizationSpecSchema,
   FeedbackResponseSchema,
   KnowledgeResponseSchema,
   MemoryAidSchema,
@@ -20,6 +23,13 @@ import { DEMO_USER_ID, type ThinkethApi } from "./client";
 const TIMEOUT_MS = 8000;
 /** Ask, Visualize and Make it stick may be written by Claude; the server falls back well before this. */
 const GENERATIVE_TIMEOUT_MS = 15000;
+/** Visualize plans a diagram (server allows 20 s) behind a skeleton, and is cached once drawn. */
+const VISUALIZE_TIMEOUT_MS = 24000;
+
+/** POST /visualize: a plan, or (from an older server) a before/after diagram drawn the same way. */
+const VisualizeResponseSchema = z
+  .union([VisualizationSpecSchema, DiagramSpecSchema.transform((d) => visualizationFromDiagram(d, "model"))])
+  .transform(normalizeVisualization);
 
 export class ApiError extends Error {
   constructor(
@@ -112,7 +122,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
         a.getConceptHistory(conceptId),
       ),
     ask: (req) => call(AskResponseSchema, "POST", "/ask", req, (a) => a.ask(req), GENERATIVE_TIMEOUT_MS),
-    visualize: (req) => call(DiagramSpecSchema, "POST", "/visualize", req, (a) => a.visualize(req), GENERATIVE_TIMEOUT_MS),
+    visualize: (req) => call(VisualizeResponseSchema, "POST", "/visualize", req, (a) => a.visualize(req), VISUALIZE_TIMEOUT_MS),
     makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req), GENERATIVE_TIMEOUT_MS),
     createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
     listResources: async () =>

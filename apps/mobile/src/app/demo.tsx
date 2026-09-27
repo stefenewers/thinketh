@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { router } from "expo-router";
 import { closeAll, goBack } from "@/lib/nav";
 import { api, API_URL, FALLBACK_TO_MOCK, USE_MOCK_API } from "@/api";
 import { adapterStatus, fetchHealth } from "@/api/devtools";
@@ -78,6 +79,7 @@ export default function DemoPanel() {
           <T variant="support" style={{ marginTop: space.s }}>
             Clears the saved learner profile. Today shows onboarding again. Knowledge state is untouched.
           </T>
+          <Button kind="secondary" label="Visualization gallery" style={{ marginTop: space.l }} onPress={() => router.push("/visualize/gallery")} />
         </Gutter>
 
         <View style={{ marginTop: space.xxl }}>

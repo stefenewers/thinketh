@@ -10,7 +10,7 @@ import {
   DevelopmentDetailResponseSchema,
   DiagnosticAnswerResponseSchema,
   DiagnosticSelectResponseSchema,
-  DiagramSpecSchema,
+  VisualizationSpecSchema,
   FeedbackResponseSchema,
   KnowledgeResponseSchema,
   MemoryAidSchema,
@@ -139,7 +139,11 @@ describe("contract: remaining endpoints", () => {
   });
 
   it("POST /visualize and /make-it-stick", async () => {
-    expect((await post(DiagramSpecSchema, "/visualize", { developmentId: FLAGSHIP_DEVELOPMENT_ID })).nodes.length).toBeGreaterThan(0);
+    const vis = await post(VisualizationSpecSchema, "/visualize", { developmentId: FLAGSHIP_DEVELOPMENT_ID });
+    // Offline: the curated plan for the flagship concept, a process with real relationships.
+    expect(vis.visualizationType).toBe("process");
+    expect(vis.source).toBe("seed");
+    expect(vis.edges.length).toBeGreaterThan(0);
     expect((await post(MemoryAidSchema, "/make-it-stick", { conceptId: "agent-memory" })).threeStepModel).toHaveLength(3);
   });
 

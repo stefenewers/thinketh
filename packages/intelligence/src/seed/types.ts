@@ -4,6 +4,7 @@ import type {
   ConceptEdge,
   DiagnosticQuestion,
   DiagramSpec,
+  VisualizationSpec,
   Development,
   KnowledgeState,
   KnowledgeStateTransition,
@@ -71,6 +72,7 @@ export type SeedCorpus = {
   /** Other seeded learners (Playground), keyed by user id. */
   personas: Record<string, Persona>;
   diagrams: Record<string, DiagramSpec>;
+  visualizations: Record<string, VisualizationSpec>;
   memoryAids: Record<string, MemoryAid>;
   ingestion: IngestionStats;
 };

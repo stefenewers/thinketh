@@ -16,7 +16,7 @@ import {
   DiagnosticAnswerResponseSchema,
   DiagnosticSelectRequestSchema,
   DiagnosticSelectResponseSchema,
-  DiagramSpecSchema,
+  VisualizationSpecSchema,
   FeedbackRequestSchema,
   FeedbackResponseSchema,
   KnowledgeResponseSchema,
@@ -155,7 +155,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
 
   app.post("/visualize", async (c) => {
     const input = await body(c, LearningRequestSchema);
-    return c.json(DiagramSpecSchema.parse(await service.visualize(c.get("userId"), input)));
+    return c.json(VisualizationSpecSchema.parse(await service.visualize(c.get("userId"), input)));
   });
 
   app.post("/make-it-stick", async (c) => {
