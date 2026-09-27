@@ -36,6 +36,11 @@ import {
   RoomExplainRequestSchema,
   RoomResourceRequestSchema,
   RoomShareRequestSchema,
+  StartExchangeRequestSchema,
+  AdvanceExchangeRequestSchema,
+  AdvanceChallengeRequestSchema,
+  AgentTakeawaySchema,
+  AgentTakeawayListResponseSchema,
   ProfileResponseSchema,
   ProfileUpdateRequestSchema,
   type IdentityKind,
@@ -272,6 +277,30 @@ export function createApp(deps: {
       const { savedSources, asUserId } = await body(c, RoomShareRequestSchema);
       return c.json(room(await playground.share(c.req.param("id"), c.get("userId"), { savedSources }, asUserId)));
     });
+    // Agent exchange: start (idempotent), advance one step (stale steps are ignored), stop, close, then the human check.
+    app.post("/playground/rooms/:id/exchange", async (c) => {
+      const { conceptId } = await body(c, StartExchangeRequestSchema);
+      return c.json(room(await playground.startExchange(c.req.param("id"), c.get("userId"), conceptId)));
+    });
+    app.post("/playground/rooms/:id/exchange/advance", async (c) => {
+      const { step } = await body(c, AdvanceExchangeRequestSchema);
+      return c.json(room(await playground.advanceExchange(c.req.param("id"), c.get("userId"), step)));
+    });
+    app.post("/playground/rooms/:id/exchange/stop", async (c) => c.json(room(await playground.stopExchange(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/exchange/close", async (c) => c.json(room(await playground.closeExchange(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/exchange/check", async (c) => c.json(room(await playground.exchangeCheck(c.req.param("id"), c.get("userId")))));
+    // Grokbot (optional): challenge the saved takeaway (idempotent per version), advance one step, stop.
+    app.post("/playground/rooms/:id/challenge", async (c) => c.json(room(await playground.startChallenge(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/challenge/advance", async (c) => {
+      const { step } = await body(c, AdvanceChallengeRequestSchema);
+      return c.json(room(await playground.advanceChallenge(c.req.param("id"), c.get("userId"), step)));
+    });
+    app.post("/playground/rooms/:id/challenge/stop", async (c) => c.json(room(await playground.stopChallenge(c.req.param("id"), c.get("userId")))));
+    // What this person's agent has retained (their own library only).
+    app.get("/takeaways", async (c) =>
+      c.json(AgentTakeawayListResponseSchema.parse({ takeaways: await playground.takeaways(c.get("userId"), c.req.query("conceptId") || undefined) })),
+    );
+    app.get("/takeaways/:id", async (c) => c.json(AgentTakeawaySchema.parse(await playground.takeaway(c.get("userId"), c.req.param("id")))));
     app.post("/playground/rooms/:id/leave", async (c) => c.json(room(await playground.leave(c.req.param("id"), c.get("userId")))));
   }
 

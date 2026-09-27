@@ -26,6 +26,13 @@ import { NADANI_ID, PEER_PROMPTS } from "../seed/personas.ts";
 import { BadRequestError, ForbiddenError, NotFoundError, UnreadableSourceError, type ThinkethService } from "../service.ts";
 import type { DocStore } from "../store/docStore.ts";
 import { runInBackground } from "../adapters/guard.ts";
+import type { AgentTakeaway } from "../contracts.ts";
+import type { IntelligenceModel } from "../adapters/types.ts";
+import { DeterministicModel } from "../adapters/model/deterministic.ts";
+import { AgentExchangeEngine, type ExchangeLimits, type RoomEventOut } from "./exchange/engine.ts";
+import type { ExchangeModel } from "./exchange/muse.ts";
+import { TakeawayChallengeEngine, type ChallengeLimits } from "./exchange/challenge.ts";
+import type { ChallengerModel } from "./exchange/grok.ts";
 import { newId } from "../util.ts";
 import { validateAction, type Conductor, type ConductorView } from "./conductor.ts";
 import type { RoomRealtime } from "./realtime.ts";
@@ -87,6 +94,8 @@ export class PlaygroundService {
     store: DocStore,
     now: () => Date = () => new Date(),
     subscribe?: { url: string; key: string },
+    exchange?: { model: ExchangeModel | undefined; grader: { live: IntelligenceModel | undefined; fallback: DeterministicModel }; limits: ExchangeLimits },
+    challenge?: { grok: ChallengerModel | undefined; limits: ChallengeLimits },
   ) {
     this.svc = svc;
     this.conductor = conductor;
@@ -94,6 +103,154 @@ export class PlaygroundService {
     this.store = store;
     this.now = now;
     this.subscribe = subscribe;
+    this.exchange = new AgentExchangeEngine({
+      svc,
+      store,
+      model: exchange?.model,
+      grader: exchange?.grader ?? { live: undefined, fallback: new DeterministicModel({ diagrams: {}, visualizations: {}, memoryAids: {} }) },
+      limits: exchange?.limits ?? { maxMessages: 6, maxToolCalls: 12, deadlineMs: 300_000, callTimeoutMs: 25_000 },
+      host: this,
+      now,
+    });
+    this.challenge = new TakeawayChallengeEngine({
+      svc,
+      store,
+      grok: challenge?.grok,
+      defender: () => this.exchange.agentModel,
+      grader: exchange?.grader ?? { live: undefined, fallback: new DeterministicModel({ diagrams: {}, visualizations: {}, memoryAids: {} }) },
+      limits: challenge?.limits ?? { deadlineMs: 240_000, callTimeoutMs: 45_000, maxToolCalls: 18 },
+      host: this,
+      now,
+    });
+  }
+
+  /** Grokbot: an optional visiting challenger for a saved takeaway (absent unless xAI is configured). */
+  readonly challenge: TakeawayChallengeEngine;
+
+  async startChallenge(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    await this.challenge.start(roomId, userId);
+    return this.get(roomId, userId);
+  }
+
+  async advanceChallenge(roomId: string, userId: string, step: number): Promise<PlaygroundRoom> {
+    await this.challenge.advance(roomId, userId, step);
+    return this.get(roomId, userId);
+  }
+
+  async stopChallenge(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    await this.challenge.stop(roomId, userId);
+    return this.get(roomId, userId);
+  }
+
+  /** The agent exchange (Muse agents in separate contexts). */
+  readonly exchange: AgentExchangeEngine;
+
+  /** ExchangeHost: run `fn` on the stored room under its lock; commit (save, then broadcast) if it changed. */
+  withRoom<T>(roomId: string, fn: (room: Room, emit: (e: RoomEventOut) => void) => Promise<T> | T): Promise<T> {
+    return this.locked(roomId, async () => {
+      const room = await this.load(roomId);
+      if (!room) throw new NotFoundError("Playground not found.");
+      const before = JSON.stringify(room);
+      try {
+        return await fn(room, (e) => this.emit(room, e.type, e.actor, e.summary, e.data));
+      } finally {
+        if (this.unpublished.has(room.id) || JSON.stringify(room) !== before) await this.commit(room);
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Agent exchange: start / advance / stop, then the human's own check
+
+  async startExchange(roomId: string, userId: string, conceptId?: string): Promise<PlaygroundRoom> {
+    await this.withRoom(roomId, (room) => {
+      if (room.challenge?.status === "running") throw new BadRequestError("Grokbot is still examining the last takeaway.");
+    });
+    await this.exchange.start(roomId, userId, conceptId);
+    return this.get(roomId, userId);
+  }
+
+  async advanceExchange(roomId: string, userId: string, step: number): Promise<PlaygroundRoom> {
+    await this.exchange.advance(roomId, userId, step);
+    return this.get(roomId, userId);
+  }
+
+  async stopExchange(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    await this.exchange.stop(roomId, userId);
+    return this.get(roomId, userId);
+  }
+
+  /** Back to the room overview once an exchange has ended. */
+  async closeExchange(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    return this.mutate(roomId, userId, (room) => {
+      if (room.exchange?.status === "running") throw new BadRequestError("Stop the exchange first.");
+      if (room.challenge?.status === "running") throw new BadRequestError("Stop the challenge first.");
+      if (room.scene === "agent_exchange") room.scene = "overview";
+    });
+  }
+
+  /**
+   * After an exchange: the LEARNER applies it themselves, on the existing assessment path. The agents are
+   * done (they never see the rubric), and only this human answer can change the learner's Mind. Bounded:
+   * one application question, plus one different one if the first isn't verified.
+   */
+  async exchangeCheck(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    return this.mutate(roomId, userId, async (room) => {
+      const ex = room.exchange;
+      if (!ex || ex.status !== "completed" || !ex.savedTakeawayId) throw new BadRequestError("There's no saved takeaway to apply yet.");
+      const learner = room.participants.find((p) => p.userId === ex.learnerId);
+      if (userId !== ex.learnerId && !(learner?.demoPersona && room.hostId === userId)) throw new ForbiddenError("Only the learner applies it.");
+      if (ex.humanChecks >= 2) throw new BadRequestError("That's the last application question for this exchange.");
+      if (room.transfer && room.transfer.correctness === undefined && room.transfer.conceptId === ex.conceptId) {
+        room.scene = "transfer"; // already asked and unanswered: show it again, don't mint another
+        return;
+      }
+      const takeaway = await this.store.get<{ text: string }>("agent_takeaways", ex.savedTakeawayId);
+      const avoid = room.events.filter((e) => e.type === "transfer_question" && e.data?.conceptId === ex.conceptId && typeof e.data?.questionId === "string").map((e) => e.data!.questionId as string);
+      const ch = await this.svc.transferChallenge(ex.conceptId, takeaway?.text, { avoid });
+      room.teaching = {
+        conceptId: ex.conceptId,
+        conceptName: ex.conceptName,
+        teacherId: ex.teacherId,
+        learnerId: ex.learnerId,
+        prompt: `Agent exchange on ${ex.conceptName}`,
+        explanation: takeaway?.text ?? ex.takeaway?.text ?? "",
+        explanationSource: "agent",
+      };
+      room.transfer = {
+        conceptId: ex.conceptId,
+        learnerId: ex.learnerId,
+        questionId: ch.item.id,
+        prompt: ch.item.prompt,
+        source: ch.source,
+        ...(ch.applicationContext ? { applicationContext: ch.applicationContext } : {}),
+        rationale: ch.item.rationale,
+      };
+      room.exchange = { ...ex, humanChecks: ex.humanChecks + 1 };
+      await this.store.get<Record<string, unknown>>("exchanges", ex.id).then(async (rec) => {
+        if (rec) await this.store.put("exchanges", ex.id, { ...rec, pub: { ...(rec.pub as object), humanChecks: ex.humanChecks + 1 } });
+      });
+      room.scene = "transfer";
+      room.spotlight = { conceptId: ex.conceptId, participantId: ex.learnerId };
+      this.emit(room, "transfer_question", "thinketh", `${this.name(room, ex.learnerId)}, apply it yourself: only your answer counts as evidence.`, {
+        conceptId: ex.conceptId,
+        learnerId: ex.learnerId,
+        questionId: ch.item.id,
+        by: "fallback",
+      });
+    });
+  }
+
+  /** Takeaways this person's agent retained (their own library only). */
+  async takeaways(userId: string, conceptId?: string): Promise<AgentTakeaway[]> {
+    const all = await this.store.list<AgentTakeaway>("agent_takeaways", { ownerId: userId }, 200);
+    return all.filter((t) => !conceptId || t.conceptId === conceptId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async takeaway(userId: string, id: string): Promise<AgentTakeaway> {
+    const t = await this.store.get<AgentTakeaway>("agent_takeaways", id);
+    if (!t || t.ownerId !== userId) throw new NotFoundError("Takeaway not found.");
+    return t;
   }
 
   // -------------------------------------------------------------------------
@@ -197,6 +354,8 @@ export class PlaygroundService {
 
   async get(roomId: string, userId: string): Promise<PlaygroundRoom> {
     return this.mutate(roomId, userId, async (room) => {
+      await this.exchange.reconcile(room);
+      await this.challenge.reconcile(room);
       await this.refreshResource(room);
       await this.markDelivered(room, userId);
     });
@@ -500,7 +659,12 @@ export class PlaygroundService {
     tr.verified = verified;
     tr.transition = result.transition;
     const taught = room.teaching;
-    if (taught) this.markDone(room, (i) => i.type === "peer_teach" && i.conceptId === taught.conceptId && i.teacherId === taught.teacherId && i.learnerId === taught.learnerId);
+    // A teaching is complete only when understanding was verified; otherwise it was attempted, not done.
+    const item = taught && room.plan?.items.find((i) => !i.done && i.type === "peer_teach" && i.conceptId === taught.conceptId && i.teacherId === taught.teacherId && i.learnerId === taught.learnerId);
+    if (item) {
+      if (verified) item.done = true;
+      else item.attempted = true;
+    }
     room.scene = "knowledge_moved";
     const teacher = room.teaching ? this.name(room, room.teaching.teacherId) : "Your peer";
     this.emit(
@@ -777,6 +941,8 @@ export class PlaygroundService {
     return {
       ...structuredClone(room),
       conductor: { mode: this.conductor.mode, detail: this.conductor.detail },
+      exchangeAvailability: this.exchange.availability(room),
+      ...(this.challenge.configured ? { challengeAvailability: this.challenge.availability(room) } : {}),
       realtime: {
         channel: this.channel(room),
         mode: this.realtime.mode,

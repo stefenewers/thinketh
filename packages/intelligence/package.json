@@ -20,7 +20,8 @@
     "evidence:backboard": "node --env-file-if-exists=../../.env scripts/evidence-backboard.ts",
     "verify:backboard": "node --env-file-if-exists=../../.env scripts/verify-backboard.ts",
     "secrets:remote": "node scripts/remote-secrets.ts",
-    "discover": "node --env-file-if-exists=../../.env scripts/discover.ts"
+    "discover": "node --env-file-if-exists=../../.env scripts/discover.ts",
+    "verify:grokbot": "node --env-file-if-exists=../../.env scripts/verify-grokbot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

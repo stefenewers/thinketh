@@ -1693,9 +1693,10 @@ export class ThinkethService {
   async transferChallenge(
     conceptId: string,
     teacherExplanation?: string,
+    opts: { avoid?: string[] } = {},
   ): Promise<{ item: DiagnosticItem; source: "seeded" | "generated" | "fallback"; applicationContext?: string }> {
     const seededId = TRANSFER_QUESTION_FOR[conceptId];
-    const seeded = seededId ? this.diagnostics.get(seededId) : undefined;
+    const seeded = seededId && !opts.avoid?.includes(seededId) ? this.diagnostics.get(seededId) : undefined;
     if (seeded) return { item: seeded, source: "seeded", applicationContext: "an autonomous coding agent" };
     const ctx = this.transferContext(conceptId, teacherExplanation);
     if (!ctx) throw new NotFoundError(`Concept not found: ${conceptId}`);
@@ -1820,6 +1821,11 @@ export class ThinkethService {
       points,
       sources: [...cited.values()].filter((x) => used.has(x.id)),
     };
+  }
+
+  /** A source record from the corpus (seeded or discovered). */
+  sourceById(id: string): Source | undefined {
+    return this.sources.get(id);
   }
 
   /** Public prompt of a diagnostic (the answer key stays server-side). */
