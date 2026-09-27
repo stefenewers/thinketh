@@ -140,7 +140,7 @@ function ShelfBook({ book, x, y, w, reduced, onPress }: { book: Book; x: number;
   return (
     <Animated.View style={[{ position: "absolute", left: x, top: y }, liftStyle]}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: book.selected }} accessibilityLabel={`${book.a11y} ${book.selected ? "Selected." : "Opens its details."}`} hitSlop={4}>
-        <BookCover evidence={book.evidence} uncertain={book.uncertain} changed={book.changed} selected={book.selected} title={book.title} width={w} height={BOOK_H} />
+        <BookCover evidence={book.evidence} uncertain={book.uncertain} changed={book.changed} selected={book.selected} title={book.title} width={w} height={BOOK_H} material={book.agentMaterial} />
         {glow ? <Animated.View style={[styles.ring, { pointerEvents: "none" }, ringStyle]} /> : null}
       </Pressable>
     </Animated.View>
@@ -158,12 +158,13 @@ export function LibraryLegend() {
     </View>
   );
   return (
-    <View style={styles.legend} accessible accessibilityLabel="How to read the books. Darker covers have more evidence. A dotted edge means few signals so far. A coral bookmark means stronger evidence today.">
+    <View style={styles.legend} accessible accessibilityLabel="How to read the books. Darker covers have more evidence. A dotted edge means few signals so far. A coral bookmark means stronger evidence today. A paper slip means your agent retained notes, which aren't evidence.">
       {item(<BookGlyph evidence="strong" />, "Strong")}
       {item(<BookGlyph evidence="developing" />, "Developing")}
       {item(<BookGlyph evidence="early" />, "Early")}
       {item(<BookGlyph evidence="early" uncertain />, "Few signals")}
       {item(<BookGlyph evidence="developing" changed="up" />, "Changed today")}
+      {item(<BookGlyph evidence="developing" material />, "Your agent's notes")}
     </View>
   );
 }

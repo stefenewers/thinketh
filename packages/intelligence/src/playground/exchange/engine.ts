@@ -97,8 +97,8 @@ export function validActions(p: AgentExchange, now: number): ActionKey[] {
     return [...out, "finish"];
   }
   if (msgsLeft <= 0) return ["finish"];
-  // The last message this exchange can afford is the takeaway.
-  if (msgsLeft === 1) return ["learner_takeaway", "finish"];
+  // Keep room for the takeaway and one revision of it after the check.
+  if (msgsLeft <= 2) return ["learner_takeaway", "finish"];
   const last = p.messages.at(-1)!;
   if (last.from === p.teacherId) return ["learner_respond", "learner_takeaway", "finish"];
   return ["teacher_respond", "finish"];
@@ -750,7 +750,7 @@ export class AgentExchangeEngine {
     p.finishedAt = this.now().toISOString();
     p.outcome = p.savedTakeawayId
       ? `${this.agent(rec, p.learnerId)} retained a ${p.check?.verdict === "partial" ? "partly supported" : "supported"} takeaway. It's agent material: ${rec.names[p.learnerId] ?? "the learner"} hasn't shown understanding yet.`
-      : `${why ?? "The exchange ended"} ${p.takeaway ? "The proposed takeaway wasn't supported by its sources, so nothing was saved." : "No takeaway was proposed, so nothing was saved."}`.trim();
+      : `${why ?? "The exchange ended."} ${p.takeaway ? "The proposed takeaway wasn't supported by its sources, so nothing was saved." : "No takeaway was proposed, so nothing was saved."}`.trim();
     p.actions.push({ id: newId("act"), at: this.now().toISOString(), actor: "coordinator", summary: p.outcome, by });
     events.push({ type: "exchange_completed", actor: "thinketh", summary: p.outcome, data: { exchangeId: p.id, status: p.status, takeawayId: p.savedTakeawayId ?? null } });
     logEvent("exchange.finished", { exchangeId: p.id, status: p.status, used: p.used, messages: p.messages.map((m) => m.kind) });

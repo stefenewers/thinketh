@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Development, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { PLAYGROUND_AVAILABLE } from "@/api/playground";
+import { takeawaysApi } from "@/api/takeaways";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
@@ -91,7 +92,10 @@ function Mind({ data, initialConceptId, from, developments, sources }: { data: K
   const { width } = useWindowDimensions();
   // The library: a pure projection of this response. Sources are counted per book, never shelved as books.
   const sourceCounts = new Map(concepts.map((c) => [c.id, sourcesFor(c.id).length]));
-  const world = projectMindWorld(data, { selectedId, played: playedHighlights, sourceCounts });
+  // Concepts your agent retained a takeaway on (agent material; it never changes a book's evidence).
+  const takeaways = useApi(() => (PLAYGROUND_AVAILABLE ? takeawaysApi.list().catch(() => []) : Promise.resolve([])), [], { refetchOnFocus: true });
+  const agentMaterial = new Set((takeaways.data ?? []).map((t) => t.conceptId));
+  const world = projectMindWorld(data, { selectedId, played: playedHighlights, sourceCounts, agentMaterial });
 
   return (
     <View style={{ flex: 1, backgroundColor: warm.ground }}>

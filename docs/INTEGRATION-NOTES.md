@@ -106,6 +106,25 @@ Branch `stefen-earn-the-promise`. Contract changes are additive (commit `5e20ee0
 - `POST /playground/rooms/:id/share { savedSources }` is the one sharing choice beyond the snapshot. When on, the agent may use the titles, links and summaries of the teacher's saved sources on that concept. It is off by default and emits the `sharing_changed` event.
 - `teaching.deliveredAt` is set when the learner's device has the explanation in front of it. That means encountered, not understood; only `transfer.verified` means demonstrated.
 
+## 2026-09-27: agent exchange (Playground)
+
+Branch `stefen-agent-exchange`. Everything below is additive.
+
+- **Room fields:**
+  - `exchangeAvailability { available, reason, mode, conceptId, teacherId, learnerId }`: the teaching direction comes from the collaborative delta. It falls back to a shared exploration of a shared gap, or gives a reason why nothing can start.
+  - `exchange`: status, messages, actions (who did what: Muse, the planner, Thinketh or Claude), sources read (as an extracted claim, a saved summary, or an earlier takeaway), the takeaway, its check, the saved takeaway id, and the outcome.
+  - `plan.items[].attempted`: a teaching whose check wasn't verified is attempted, not done.
+- **Routes:**
+  - `POST /playground/rooms/:id/exchange` starts it (idempotent).
+  - `POST …/exchange/advance { step }` runs one step (stale steps are ignored).
+  - `…/exchange/stop`, `…/exchange/close`.
+  - `…/exchange/check` asks the learner's own application question; at most two, and they're different.
+  - `GET /takeaways?conceptId=` and `GET /takeaways/:id`: owner only.
+- **New room events:** `exchange_started`, `retrieval_started`/`_completed`, `agent_message`, `clarification_requested`, `explanation_revised`, `takeaway_checked`, `takeaway_saved`, `exchange_completed`/`_stopped`/`_failed`.
+- **Muse:** needs `MUSE_API_KEY` and `MUSE_MODEL`; without them `exchangeAvailability.available` is false. Limits: `THINKETH_EXCHANGE_MAX_MESSAGES` (6), `_MAX_TOOL_CALLS` (12), `_DEADLINE_MS` (300000) and `_CALL_TIMEOUT_MS` (25000).
+- **Evidence:** nothing in an exchange observes knowledge state. Only the learner's graded answer to `exchange/check` does.
+- **Client:** it must accept a room whose exchange moved on at the same `seq` (`lib/roomSync.ts`); coordinator steps don't emit room events.
+
 ## Backend behaviours the mobile app now relies on
 
 If you change any of these, the app needs a matching change:
