@@ -13,7 +13,7 @@ import { AGENT_SPRITES, PROPS } from "./assets";
 import { GrokbotLayer } from "../grokbot/GrokbotLayer";
 import { projectGrokbot } from "../grokbot/grokbotState";
 import { Character } from "./Character";
-import { CheckpointGate, ConceptToken, MindRing } from "./ConceptToken";
+import { ConceptToken } from "./ConceptToken";
 import { sceneLayout } from "./layout";
 import { usePaused } from "./usePaused";
 import { freshEffects, PLACES, type WorldView } from "./worldState";
@@ -57,7 +57,6 @@ export function WorldCanvas({
   // Mark one-time effects as shown once they've rendered, so a remount or return settles.
   useEffect(() => {
     for (const k of fx.enterKeys) played.add(k);
-    if (fx.celebrate) played.add(fx.celebrate);
   });
 
   // ---- Camera: Follow frames the current exchange; Explore allows a limited pan. Camera state only.
@@ -97,10 +96,8 @@ export function WorldCanvas({
 
   const present = world.agents.filter((a) => !a.gone);
   const byDepth = [...world.agents].sort((a, b) => a.at.y - b.at.y);
-  const learner = world.agents.find((a) => a.userId === world.concept?.learnerId);
   const teacher = world.agents.find((a) => a.userId === world.concept?.teacherId);
   const conceptPt = world.concept ? L.at(world.concept.at) : null;
-  const learnerMindPt = world.learnerMind ? L.at(world.learnerMind.at) : null;
 
   // Muse: a quiet named cue that moves to what it directs. Never a character.
   // Muse: a quiet named cue on the wall line, above what it directs. Never a character.
@@ -121,8 +118,6 @@ export function WorldCanvas({
       <GestureDetector gesture={pan}>
         <Animated.View style={[{ width, height }, camera]}>
           <Backdrop W={width} H={height} wallH={L.wallH} />
-          {learnerMindPt && world.learnerMind ? <MindRing at={learnerMindPt} tone={TONE[world.learnerMind.tone]} solid={world.phase === "verified"} /> : null}
-          {world.checkpoint && world.concept ? <CheckpointGate at={L.at(world.checkpoint)} state={world.concept.state} paused={paused} reduced={reduced} /> : null}
           {world.thinketh === "comparing" && present.length > 1 ? <CompareSweep from={L.at(PLACES.hostHome).x} to={L.at(PLACES.guestHome).x} y={L.at(PLACES.hostHome).y} paused={paused} reduced={reduced} /> : null}
           {byDepth.map((a) => (
               <Character
@@ -134,10 +129,10 @@ export function WorldCanvas({
                 tone={TONE[a.tone]}
                 label={a.label}
                 tag={a.gone ? "left the room" : [a.role === "teacher" ? "teaching" : a.role === "learner" ? "learning" : null, a.persona ? "demo persona" : null].filter(Boolean).join(" · ") || undefined}
-                react={!!fx.celebrate && a.userId === world.concept?.learnerId}
+                react={false}
                 paused={paused}
                 reduced={reduced}
-                a11y={`${a.label}${a.role ? `, ${a.role === "together" ? "learning together" : a.role}` : ""}. ${a.doing}. Show details`}
+                a11y={`${a.label}${a.role ? `, ${a.role}` : ""}. ${a.doing}. Show details`}
                 onPress={() => onSelect({ kind: "agent", userId: a.userId })}
               />
           ))}
@@ -147,7 +142,6 @@ export function WorldCanvas({
               concept={world.concept}
               to={conceptPt}
               tone={teacher ? TONE[teacher.tone] : color.ink2}
-              learnerTone={learner ? TONE[learner.tone] : color.ink2}
               paused={paused}
               reduced={reduced}
               onPress={() => onSelect({ kind: "concept" })}
@@ -170,7 +164,7 @@ export function WorldCanvas({
       {world.thinketh ? (
         <View style={styles.system} accessibilityLiveRegion="polite">
           <Mark size={12} decorative />
-          <T style={styles.systemText}>{world.thinketh === "comparing" ? "Thinketh is comparing both Minds" : "Thinketh is grading the answer"}</T>
+          <T style={styles.systemText}>Thinketh is comparing both Minds</T>
         </View>
       ) : null}
 
@@ -265,7 +259,7 @@ function MuseCue({ at, state, by, pointing, paused, reduced, onPress }: { at: { 
   const text = choosing ? "Muse · choosing…" : by;
   return (
     <Animated.View style={[{ position: "absolute", left: 0, top: 0, width: 120, alignItems: "center" }, place]}>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={choosing ? "Muse is choosing the next move. Show details" : `${by}, the conductor. Show details`} style={styles.muse}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={choosing ? "Muse is choosing the next move. Show details" : `${by}, coordinating the exchange. Show details`} style={styles.muse}>
         {/* Muse's own mark when Muse acts; the deterministic planner keeps a plain "P". */}
         <Animated.View style={dim}>
           {by === "Planner" ? (

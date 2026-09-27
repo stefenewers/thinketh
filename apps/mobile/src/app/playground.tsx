@@ -6,7 +6,7 @@ import { goBack } from "@/lib/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { CollaborativeDeltaItem, PlaygroundRoom } from "@thinketh/contracts";
+import type { CollaborativeDeltaItem, LearningScene, PlaygroundRoom } from "@thinketh/contracts";
 import { narrativeLabel, topicLabel } from "@thinketh/contracts";
 import { DEMO_USER_ID } from "@/api";
 import { useProfile } from "@/lib/profile";
@@ -17,36 +17,28 @@ import { ChallengePanel } from "@/components/playground/grokbot/ChallengePanel";
 import { useChallengeDriver } from "@/components/playground/grokbot/useChallengeDriver";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
-import { EventRail } from "@/components/playground/EventRail";
-import { RoomScene, type Selection } from "@/components/playground/room/RoomScene";
 import { WorldCanvas, type WorldSelection } from "@/components/playground/world/WorldCanvas";
 import { AgentSheet, WorldNow } from "@/components/playground/world/WorldPanel";
-import { projectPlayground, sessionOutcome } from "@/components/playground/world/worldState";
+import { projectPlayground } from "@/components/playground/world/worldState";
 import { acceptRoom } from "@/lib/roomSync";
-import { ActionBanner, EvidenceSheet, useRoomCues } from "@/components/playground/room/RoomParts";
-import { projectRoomToWorld } from "@/lib/roomWorld";
+import { ActionBanner, EvidenceSheet, useRoomCues, type Selection } from "@/components/playground/room/RoomParts";
 import { useReducedMotion } from "@/lib/hooks";
-import { nextHumanAction, railSteps, stageState, type Pending } from "@/lib/roomStory";
-import { deltaClaim } from "@/lib/resourceDelta";
-import { formatMinutes, planSummary } from "@/lib/planSummary";
 import { DEMO_LEARNER_NAME } from "@/content/demo";
-import { Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, type DotTone } from "@/components/playground/pieces";
+import { Dot, DotTag, StepRow, ThreadCard, type DotTone } from "@/components/playground/pieces";
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
 import { useRoomChannel } from "@/lib/roomChannel";
 import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { fmt2 } from "@/lib/knowledge";
-import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
+import { color, font, gutter, radius, space } from "@/theme/tokens";
 
 /** The device owner's name in the room (the demo persona's human). */
 const HOST_NAME = DEMO_LEARNER_NAME;
 const POLL_MS = 1500;
-/** Verified moments whose haptic already fired on this device. */
-const celebratedHaptics = new Set<string>();
 /** Scenes that happen in the one persistent room. */
-const ROOM_SCENES = new Set(["arrival", "comparing", "overview", "peer_teaching", "transfer", "knowledge_moved", "shared_gap", "resource", "agent_exchange"]);
-/** Scenes whose "What just happened" rail tracks a teaching exchange. */
-const RAIL_SCENES = new Set(["overview", "peer_teaching", "transfer", "knowledge_moved"]);
+const ROOM_SCENES = new Set<LearningScene>(["arrival", "comparing", "overview", "agent_exchange"]);
+/** Quiet status at the top right. (Scenes of the removed guided session never reach the app: the server shows them as the overview.) */
+const HEADER_RIGHT: Partial<Record<LearningScene, string>> = { waiting: "Invite", arrival: "2 minds", comparing: "2 minds", overview: "Overview", agent_exchange: "Exchange", ended: "Done" };
 
 /** "Following Muse" (Figma Spotlight): the view goes where the conductor points until you stop following. */
 const FollowContext = createContext(true);
@@ -55,7 +47,7 @@ const FollowContext = createContext(true);
 const lastRoomKey = (userId: string) => `thinketh.playground.lastRoom.v1.${userId}`;
 type LastRoom = { roomId: string; me: string };
 
-type Busy = null | "quick" | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange" | "challenge";
+type Busy = null | "quick" | "invite" | "compare" | "join" | "share" | "exchange" | "challenge" | "leave";
 
 export default function PlaygroundScreen() {
   const params = useLocalSearchParams<{ code?: string; as?: string }>();
@@ -151,8 +143,8 @@ export default function PlaygroundScreen() {
 
   /**
    * One tap from an empty Playground to agents exchanging: open a room, bring in Nadani's seeded Mind,
-   * compare, and start the exchange. Each step is the same server call the guided path makes; if the
-   * exchange isn't available (no Muse, nothing to teach), it stops on the overview, which says why.
+   * compare, and start the exchange. Each step is the same server call the step-by-step path makes; if
+   * the exchange isn't available (no Muse, nothing to teach), it stops on the overview, which says why.
    */
   const quickExchange = () =>
     run("quick", async () => {
@@ -195,9 +187,6 @@ export default function PlaygroundScreen() {
   const onChallengeRoom = useCallback((r: PlaygroundRoom) => setRoom((prev) => acceptRoom(prev, r)), []);
   useChallengeDriver(room, me, onChallengeRoom);
 
-  const other = room?.participants.find((p) => p.userId !== me);
-  const actAs = (userId: string) => (userId !== me && other?.demoPersona && other.userId === userId ? userId : undefined);
-
   // Thinketh computes the comparison; the screen shows it while the request is actually in flight, no longer.
   const compare = async () => {
     if (!room) return;
@@ -210,25 +199,18 @@ export default function PlaygroundScreen() {
   // Every scene after arrival happens in the one room; Follow Muse / Explore applies to all of them.
   const inRoom = !!room && ROOM_SCENES.has(scene) && room.snapshots.length === 2;
   const following = inRoom;
-  // What this device is waiting on: shown as in progress, never as a finished step.
-  const pending: Pending = busy === "conduct" ? "conduct" : busy === "answer" ? "answer" : busy === "explain" ? "explain" : null;
-  const stage = room ? stageState(room, pending) : null;
-  const world = room ? projectRoomToWorld(room, me, busy === "compare" ? "compare" : pending) : null;
   const reducedMotion = useReducedMotion();
-  const { cue, live: cueLive } = useRoomCues(room, me, reducedMotion);
+  const { cue } = useRoomCues(room, me, reducedMotion);
   const [sel, setSel] = useState<Selection | "action" | null>(null);
   const [agentSel, setAgentSel] = useState<string | null>(null);
-  // The Mind diagram stays available as a secondary inspection view, never beside the room.
-  const [inspectMinds, setInspectMinds] = useState(false);
   const { width: winW, height: winH } = useWindowDimensions();
-  const sceneH = Math.round(Math.min(winW * 0.92, winH * 0.44));
   // The persistent room: pure projection of the server's room, this viewer and what's in flight.
-  const pw = projectPlayground(room, me, busy === "compare" ? "compare" : pending, hostName);
+  const pw = projectPlayground(room, me, busy === "compare" ? "compare" : null, hostName);
   const worldH = Math.round(Math.max(260, Math.min(winW * 0.76, winH * 0.35)));
   const keyboard = useKeyboardVisible();
   // With the keyboard up the room shrinks (scaled, not re-laid-out, so nobody walks) to keep the input visible.
   const shownH = keyboard ? Math.min(worldH, 150) : worldH;
-  // For the voice agent: which room and scene, never the hidden rubric or another person's answer.
+  // For the voice agent: which room and scene, never another person's private data.
   useAgentScreen({
     screen: "playground",
     route: "/playground",
@@ -237,30 +219,17 @@ export default function PlaygroundScreen() {
       ? {
           focus: { kind: "room" as const, id: room.id, label: "this Playground room" },
           visible: [`With: ${room.participants.map((p) => (p.userId === me ? "you" : p.displayName)).join(", ")}`],
-          room: { id: room.id, scene, assessing: scene === "transfer", participants: room.participants.length },
+          room: { id: room.id, scene, participants: room.participants.length },
         }
       : {}),
   });
   const onWorldSelect = (s: WorldSelection) => {
     if (s.kind === "agent") setAgentSel(s.userId);
     else if (s.kind === "muse") setSel({ kind: "muse" });
-    else setSel(scene === "shared_gap" ? { kind: "gap" } : scene === "resource" ? { kind: "source" } : { kind: "path" });
+    else setSel({ kind: "idea" });
   };
-  const headerRight = {
-    waiting: room ? "Invite" : "Invite",
-    arrival: "2 minds",
-    comparing: "2 minds",
-    overview: "Overview",
-    peer_teaching: "Leave",
-    transfer: "Leave",
-    knowledge_moved: "Overview",
-    shared_gap: "Pause",
-    resource: "Resource",
-    agent_exchange: "Exchange",
-    ended: "Done",
-  }[scene];
-
-  const customSource = (url: string) => room && run("resource", () => playground.resource(room.id, url, me));
+  // Leaving ends the room for both devices; not while agents or Grokbot are mid-turn (stop them first).
+  const canLeave = !!room && (scene === "overview" || scene === "agent_exchange") && room.exchange?.status !== "running" && room.challenge?.status !== "running";
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
@@ -294,15 +263,15 @@ export default function PlaygroundScreen() {
             </Pressable>
           )}
         </View>
-        {room && (scene === "peer_teaching" || scene === "transfer") ? (
-          <Pressable onPress={() => run(null, () => playground.leave(room.id, me)).then(() => goBack())} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+        {room && canLeave ? (
+          <Pressable onPress={() => run("leave", () => playground.leave(room.id, me)).then(() => goBack())} disabled={busy === "leave"} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
             <T variant="meta" style={{ color: color.ink2, fontSize: 14 }}>
               Leave
             </T>
           </Pressable>
         ) : (
           <T variant="meta" style={{ color: color.ink3, fontSize: 13 }}>
-            {headerRight}
+            {HEADER_RIGHT[scene] ?? ""}
           </T>
         )}
       </View>
@@ -312,21 +281,14 @@ export default function PlaygroundScreen() {
         <Offline />
       ) : (
         <FollowContext.Provider value={followMuse || !following}>
-        {inspectMinds && inRoom && room && world ? (
-          // Secondary: the two Minds as a diagram, for inspection.
-          <RoomStageBoundary key={`minds-${room.id}`}>
-            <RoomScene world={world} cue={cue} live={cueLive} width={winW} height={sceneH} following={followMuse} onSelect={setSel} onReturnToLive={() => setFollowMuse(true)} />
-          </RoomStageBoundary>
-        ) : (
-          // The room: one persistent world for the whole session, above a compact action area.
-          <View style={{ height: shownH, overflow: "hidden", alignItems: "center" }}>
-            <View style={{ width: winW, height: worldH, transform: [{ translateY: -(worldH - shownH) / 2 }, { scale: shownH / worldH }] }}>
-              <RoomStageBoundary>
-                <WorldCanvas room={room} world={pw} width={winW} height={worldH} following={followMuse || !inRoom} reduced={reducedMotion} onSelect={onWorldSelect} onFollow={setFollowMuse} />
-              </RoomStageBoundary>
-            </View>
+        {/* The room: one persistent world for the whole session, above a compact action area. */}
+        <View style={{ height: shownH, overflow: "hidden", alignItems: "center" }}>
+          <View style={{ width: winW, height: worldH, transform: [{ translateY: -(worldH - shownH) / 2 }, { scale: shownH / worldH }] }}>
+            <RoomStageBoundary>
+              <WorldCanvas room={room} world={pw} width={winW} height={worldH} following={followMuse || !inRoom} reduced={reducedMotion} onSelect={onWorldSelect} onFollow={setFollowMuse} />
+            </RoomStageBoundary>
           </View>
-        )}
+        </View>
         <WorldNow world={pw} />
         <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: space.x4 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {scene === "waiting" ? (
@@ -344,17 +306,9 @@ export default function PlaygroundScreen() {
             />
           ) : null}
           {room && scene === "arrival" ? <Arrival room={room} me={me} busy={busy === "compare"} onCompare={compare} /> : null}
-          {/* The action area: what the room means right now, then the next human action. */}
-          {stage?.waiting === "muse" ? <MuseWaiting /> : null}
+          {/* The action area: what the room means right now, then the next action. */}
           {room && scene === "overview" ? (
-            <Overview
-              room={room}
-              me={me}
-              busy={busy === "conduct"}
-              onStart={() => run("conduct", () => playground.conduct(room.id, "next", me))}
-              exchangeBusy={busy === "exchange"}
-              onExchange={() => run("exchange", () => playground.startExchange(room.id, undefined, me))}
-            />
+            <Overview room={room} me={me} busy={busy === "exchange"} onExchange={() => run("exchange", () => playground.startExchange(room.id, undefined, me))} />
           ) : null}
           {room && scene === "agent_exchange" && room.exchange ? (
             <ExchangeScene
@@ -362,35 +316,12 @@ export default function PlaygroundScreen() {
               me={me}
               busy={busy}
               onStop={() => run("exchange", () => playground.stopExchange(room.id, me))}
-              onCheck={() => run("exchange", () => playground.exchangeCheck(room.id, me))}
               onClose={() => run("exchange", () => playground.closeExchange(room.id, me))}
               onChallenge={() => run("challenge", () => challengeApi.start(room.id, me))}
               onStopChallenge={() => run("challenge", () => challengeApi.stop(room.id, me))}
             />
           ) : null}
-          {room && scene === "peer_teaching" ? (
-            <PeerTeaching room={room} me={me} />
-          ) : null}
-          {room && scene === "transfer" ? (
-            <Transfer room={room} me={me} busy={busy === "answer"} onAnswer={(text) => room.transfer && run("answer", () => playground.answer(room.id, text, { asUserId: actAs(room.transfer!.learnerId), as: me }))} />
-          ) : null}
-          {room && scene === "knowledge_moved" ? (
-            <KnowledgeMoved
-              room={room}
-              me={me}
-              busy={busy === "conduct"}
-              onNext={() => run("conduct", () => playground.conduct(room.id, "shared_gap", me))}
-              onPlanNext={() => run("conduct", () => playground.conduct(room.id, "next", me))}
-              onEnd={() => run("conduct", () => playground.conduct(room.id, "end", me))}
-            />
-          ) : null}
-          {room && scene === "shared_gap" ? (
-            <SharedGap room={room} me={me} busy={busy === "conduct"} sourceBusy={busy === "resource"} onNext={() => run("conduct", () => playground.conduct(room.id, "resource", me))} onCustomSource={customSource} />
-          ) : null}
-          {room && scene === "resource" ? (
-            <ResourceScene room={room} me={me} busy={busy === "conduct"} sourceBusy={busy === "resource"} onEnd={() => run("conduct", () => playground.conduct(room.id, "end", me))} onCustomSource={customSource} />
-          ) : null}
-          {room && scene === "ended" ? <Ended room={room} me={me} /> : null}
+          {room && scene === "ended" ? <Ended /> : null}
           {error ? (
             <T variant="support" tone="coral" style={{ marginHorizontal: gutter, marginTop: space.l }}>
               {error}
@@ -403,21 +334,11 @@ export default function PlaygroundScreen() {
                 What happened
               </T>
               <ActionBanner cue={cue} onPress={() => setSel("action")} />
-              <Pressable onPress={() => setInspectMinds((v) => !v)} accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }}>
-                <T variant="meta" style={{ color: color.ink }}>
-                  {inspectMinds ? "Back to the room" : "Inspect both Minds as a diagram"}
-                </T>
-              </Pressable>
-            </View>
-          ) : null}
-          {room && stage && RAIL_SCENES.has(scene) ? (
-            <View style={{ marginTop: space.m }}>
-              <EventRail steps={railSteps(room, pending)} next={pending ? null : nextHumanAction(room, me)} />
             </View>
           ) : null}
           {room && showDiag ? <Provenance room={room} live={live} /> : null}
         </ScrollView>
-        {room && world ? <EvidenceSheet room={room} world={world} me={me} selection={sel} cue={cue} onClose={() => setSel(null)} /> : null}
+        {room ? <EvidenceSheet room={room} world={pw} me={me} selection={sel} cue={cue} onClose={() => setSel(null)} /> : null}
         <AgentSheet
           room={room}
           world={pw}
@@ -462,20 +383,6 @@ class RoomStageBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
-/** Muse can take several seconds. Say so honestly; the planner steps in if it can't answer. Mounted per wait. */
-function MuseWaiting() {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(() => setSlow(true), 8000);
-    return () => clearTimeout(id);
-  }, []);
-  return (
-    <T variant="meta" style={styles.stageCaption} accessibilityLiveRegion="polite">
-      {slow ? "Still waiting for Muse. If it can't answer, Thinketh's planner makes the move from the same plan." : "Muse is choosing the next move from Thinketh's plan…"}
-    </T>
-  );
-}
-
 function Pill({ label, onPress, busy, kind = "primary" }: { label: string; onPress: () => void; busy?: boolean; kind?: "primary" | "secondary" }) {
   return <Button label={label} kind={kind} loading={busy} onPress={onPress} style={styles.pill} />;
 }
@@ -511,7 +418,7 @@ function Waiting({
           Bring another Mind in. Thinketh finds what can move between you.
         </T>
         <T variant="meta" style={{ marginTop: space.xs, color: color.ink3, textAlign: "center" }}>
-          Muse conducts the room.
+          Your agents exchange. Thinketh checks what they keep.
         </T>
       </View>
 
@@ -579,7 +486,7 @@ function Waiting({
       <ListCard>
         <StepRow icon="person" title="Invite someone" body="A collaborator on their phone, or Nadani on this one." />
         <StepRow icon="people" title="Thinketh compares your Minds" body="Shared strengths, teaching opportunities, shared gaps." />
-        <StepRow icon="ask" title="Your agents teach each other" body="One agent explains; the other person applies it somewhere new." />
+        <StepRow icon="ask" title="Your agents teach each other" body="One agent explains; the other questions it and keeps a sourced takeaway." />
         <StepRow icon="sparkle" title="See what moves your thinking" body="A Mind changes only after demonstration." last />
       </ListCard>
     </View>
@@ -603,28 +510,14 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
 }
 
 /** Storyboard 09 / Figma 1:197: the collaborative delta, computed and explainable. */
-function Overview({
-  room,
-  me,
-  busy,
-  onStart,
-  exchangeBusy,
-  onExchange,
-}: {
-  room: PlaygroundRoom;
-  me: string;
-  busy: boolean;
-  onStart: () => void;
-  exchangeBusy: boolean;
-  onExchange: () => void;
-}) {
+function Overview({ room, me, busy, onExchange }: { room: PlaygroundRoom; me: string; busy: boolean; onExchange: () => void }) {
   const d = room.delta!;
   const aName = nameOf(room, d.aId);
   const bName = nameOf(room, d.bId);
   const items: { tag: string; tone: DotTone; item: CollaborativeDeltaItem }[] = [
     ...d.bTeachesA.slice(0, 1).map((item) => ({ tag: `${upper(d.bId === me ? "You" : bName)} → ${upper(d.aId === me ? "You" : aName)}`, tone: (d.bId === me ? "coral" : "partner") as DotTone, item })),
     ...d.aTeachesB.slice(0, 1).map((item) => ({ tag: `${upper(d.aId === me ? "You" : aName)} → ${upper(d.bId === me ? "You" : bName)}`, tone: (d.aId === me ? "coral" : "partner") as DotTone, item })),
-    ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "MUSE → BOTH", tone: "muted" as const, item })),
+    ...d.sharedGaps.slice(0, 1).map((item) => ({ tag: "SHARED GAP", tone: "muted" as const, item })),
   ];
   const words = ["No", "One", "Two", "Three"][items.length] ?? String(items.length);
   const [showAll, setShowAll] = useState(false);
@@ -657,15 +550,8 @@ function Overview({
             Not assigned yet: {d.conflicts.map((c) => headline(c.conceptId, c.conceptName)).join(", ")}. The evidence can&apos;t tell who should teach.
           </T>
         ) : null}
-        {/* The budget is a planning constraint, not a countdown: Start begins the first move at once. */}
-        <Pill label="Start session" busy={busy} onPress={onStart} />
-        {planSummary(room.plan) ? (
-          <T variant="meta" style={{ marginTop: space.s, color: color.ink2 }}>
-            {planSummary(room.plan)}
-          </T>
-        ) : null}
-        {room.plan?.items.length ? <PlanDisclosure room={room} /> : null}
-        <ExchangeOffer room={room} me={me} busy={exchangeBusy} onStart={onExchange} />
+        {/* The one next step after the delta: the agents exchange on the difference Thinketh found. */}
+        <ExchangeOffer room={room} me={me} busy={busy} onStart={onExchange} />
       </View>
     </View>
   );
@@ -680,11 +566,8 @@ function ExchangeOffer({ room, me, busy, onStart }: { room: PlaygroundRoom; me: 
   if (!av) return null;
   const last = room.exchange && room.exchange.status !== "running" ? room.exchange : null;
   return (
-    <View style={{ marginTop: space.xl }}>
-      <Divider />
-      <T variant="section" style={{ marginTop: space.l }}>
-        Or let your agents exchange
-      </T>
+    <View style={{ marginTop: space.l }}>
+      <T variant="section">Let your agents exchange</T>
       {av.available ? (
         <>
           <T variant="support" style={{ marginTop: space.xs }}>
@@ -693,9 +576,9 @@ function ExchangeOffer({ room, me, busy, onStart }: { room: PlaygroundRoom; me: 
               : `Neither of you has strong evidence on ${topic(av.conceptId!, av.conceptName ?? "")}, so your agents explore what the sources say together and bring back a sourced takeaway.`}
           </T>
           <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
-            They use only what&apos;s already shared here: your knowledge snapshots and Thinketh&apos;s sources. Nothing private. It doesn&apos;t count as anyone understanding it; you can check that yourself after.
+            They use only what&apos;s already shared here: your knowledge snapshots and Thinketh&apos;s sources. Nothing private. It doesn&apos;t count as anyone understanding it.
           </T>
-          <Button kind="secondary" label="Let our agents exchange" loading={busy} onPress={onStart} style={{ alignSelf: "flex-start", marginTop: space.m }} />
+          <Pill label="Let our agents exchange" busy={busy} onPress={onStart} />
         </>
       ) : av.reason ? (
         <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
@@ -739,7 +622,6 @@ function ExchangeScene({
   me,
   busy,
   onStop,
-  onCheck,
   onClose,
   onChallenge,
   onStopChallenge,
@@ -748,7 +630,6 @@ function ExchangeScene({
   me: string;
   busy: Busy;
   onStop: () => void;
-  onCheck: () => void;
   onClose: () => void;
   onChallenge: () => void;
   onStopChallenge: () => void;
@@ -758,8 +639,6 @@ function ExchangeScene({
   const running = ex.status === "running";
   const shown = full ? ex.messages : ex.messages.slice(-3);
   const sourceOf = (ref: string) => ex.sources.find((s) => s.ref === ref);
-  const learner = room.participants.find((p) => p.userId === ex.learnerId);
-  const canApply = ex.status === "completed" && !!ex.savedTakeawayId && (ex.learnerId === me || (!!learner?.demoPersona && room.hostId === me)) && ex.humanChecks < 2;
   const ownsTakeaway = ex.learnerId === me;
   return (
     <View style={{ paddingHorizontal: gutter, marginTop: space.m }}>
@@ -855,7 +734,6 @@ function ExchangeScene({
         <Button kind="secondary" label="Stop the exchange" loading={busy === "exchange"} onPress={onStop} style={{ alignSelf: "flex-start", marginTop: space.l }} />
       ) : (
         <View style={{ marginTop: space.l, gap: space.s, alignItems: "flex-start" }}>
-          {canApply ? <Button label={ex.humanChecks ? "Try a different application" : "Apply it yourself"} icon="arrow" loading={busy === "exchange"} onPress={onCheck} /> : null}
           {ex.savedTakeawayId && ownsTakeaway ? (
             <Button kind="secondary" label="Open it in your Mind" onPress={() => router.push({ pathname: "/takeaway/[id]", params: { id: ex.savedTakeawayId! } })} />
           ) : ex.savedTakeawayId ? (
@@ -863,7 +741,7 @@ function ExchangeScene({
               Saved to {nameOf(room, ex.learnerId)}&apos;s agent library.
             </T>
           ) : null}
-          {room.challenge?.status !== "running" ? <Button kind="quiet" label="Back to the room" loading={busy === "exchange" && !canApply} onPress={onClose} /> : null}
+          {room.challenge?.status !== "running" ? <Button kind="quiet" label="Back to the room" loading={busy === "exchange"} onPress={onClose} /> : null}
         </View>
       )}
     </View>
@@ -904,82 +782,6 @@ function ExchangeDetails({ room, me }: { room: PlaygroundRoom; me: string }) {
         {ex.used.messages} messages · {ex.used.toolCalls} tool calls · {ex.used.modelCalls} model calls
       </T>
     </View>
-  );
-}
-
-/** The real session plan: only the moves Thinketh chose, with its planning estimates and reasons. */
-function PlanDisclosure({ room }: { room: PlaygroundRoom }) {
-  const [open, setOpen] = useState(false);
-  const plan = room.plan!;
-  const who = (i: (typeof plan.items)[number]) =>
-    i.type === "peer_teach" ? `${nameOf(room, i.teacherId)} → ${nameOf(room, i.learnerId)}` : i.type === "shared_gap" ? "Muse → both" : "Shared source";
-  return (
-    <View>
-      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "flex-start" }}>
-        <T variant="meta" style={{ color: color.ink }}>
-          {open ? "Hide learning plan" : "View learning plan"}
-        </T>
-        <View style={{ transform: [{ rotate: open ? "90deg" : "0deg" }] }}>
-          <Icon name="chevron" size={12} color={color.ink3} />
-        </View>
-      </Pressable>
-      {open ? (
-        <View>
-          <T style={styles.planHead}>{plan.budgetMinutes}-minute learning plan</T>
-          <T variant="meta" style={{ color: color.ink3, marginTop: 2, marginBottom: space.s }}>
-            Thinketh ranked the highest-value moves that fit your available time. Do one, some or all of them.
-          </T>
-          <ListCard>
-            {plan.items.map((i, k) => (
-              <View key={i.id} style={[styles.planRow, k < plan.items.length - 1 && styles.planDivided]}>
-                <T style={styles.planMin}>{formatMinutes(i.estimatedMinutes)}</T>
-                <View style={{ flex: 1 }}>
-                  <T variant="meta" style={{ color: color.ink2 }}>
-                    {who(i)}
-                  </T>
-                  <T style={styles.planTitle}>{i.conceptName && i.conceptId ? headline(i.conceptId, i.conceptName) : "One source, two deltas"}</T>
-                  <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
-                    {i.rationale}
-                  </T>
-                </View>
-                {i.done ? <Icon name="check" size={14} color={color.ink} /> : null}
-              </View>
-            ))}
-          </ListCard>
-          <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-            Thinketh plans the moves. Muse conducts them. Only evidence changes a Mind.
-          </T>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-/** "Use another source": paste any article, docs page, PDF or YouTube link into the room. */
-function SourceEntry({ busy, onSubmit }: { busy: boolean; onSubmit: (url: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [url, setUrl] = useState("");
-  if (!open) {
-    return <Button label="Use another source" kind="quiet" onPress={() => setOpen(true)} style={{ alignSelf: "flex-start" }} />;
-  }
-  return (
-    <RaisedCard style={{ marginTop: space.s }}>
-      <T variant="label">Another source</T>
-      <TextInput
-        value={url}
-        onChangeText={setUrl}
-        placeholder="Paste an article, PDF or YouTube link"
-        placeholderTextColor={color.ink3}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        returnKeyType="go"
-        onSubmitEditing={() => url.trim() && onSubmit(url.trim())}
-        style={styles.urlInput}
-        accessibilityLabel="Source link"
-      />
-      <Pill label={busy ? "Reading it…" : "Read it for both of us"} busy={busy} onPress={() => url.trim() && onSubmit(url.trim())} />
-    </RaisedCard>
   );
 }
 
@@ -1028,428 +830,15 @@ function DeltaRow({ tag, tone, item, names, last }: { tag: string; tone: DotTone
   );
 }
 
-/**
- * Storyboard 10 / Figma 1:216: the agents teach each other. The teacher's agent explains to the learner's
- * agent (adapted to the learner's gap); nobody types. The learner's own answer to the check comes next,
- * and only that can change a Mind.
- */
-function PeerTeaching({ room, me }: { room: PlaygroundRoom; me: string }) {
-  const t = room.teaching!;
-  const agentName = (id: string) => (id === me ? "Your agent" : `${nameOf(room, id)}'s agent`);
-  return (
-    <View>
-      <View style={{ paddingHorizontal: gutter, marginTop: space.m, gap: space.m }}>
-        <MuseCard>{room.museLine ?? `${agentName(t.teacherId)} is teaching ${agentName(t.learnerId).replace(/^Your/, "your")}.`}</MuseCard>
-        <ThreadCard who={`${agentName(t.teacherId)} → ${agentName(t.learnerId).replace(/^Your/, "your")}`} tone={t.teacherId === me ? "coral" : "partner"}>
-          <T variant="meta" style={{ color: color.ink3 }}>
-            The question they&apos;re working through
-          </T>
-          <T variant="body" style={{ marginTop: 2, fontSize: 15.5, lineHeight: 23 }}>
-            {t.prompt}
-          </T>
-        </ThreadCard>
-        {t.prepared ? <PreparedLessonCard room={room} mine={t.teacherId === me} teacher={nameOf(room, t.teacherId)} /> : null}
-        <T variant="meta" style={{ color: color.ink3 }}>
-          Agents teaching each other isn&apos;t evidence that anyone learned it. Next, {t.learnerId === me ? "you" : nameOf(room, t.learnerId)} will apply it somewhere new, and only that answer counts.
-        </T>
-      </View>
-    </View>
-  );
-}
-
-/** What the teacher's agent found and prepared: labeled as agent material, with its sources and its reasoning. */
-function PreparedLessonCard({ room, mine, teacher }: { room: PlaygroundRoom; mine: boolean; teacher: string }) {
-  const p = room.teaching!.prepared!;
-  const learner = nameOf(room, p.preparedFor);
-  const whose = mine ? "Your agent" : `${teacher}'s agent`;
-  if (p.status === "preparing") {
-    return (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-        <ActivityIndicator color={color.ink3} />
-        <T variant="meta" style={{ color: color.ink3 }}>
-          {whose} is looking for sourced material to prepare an explanation for {learner}…
-        </T>
-      </View>
-    );
-  }
-  if (p.status === "unavailable") {
-    return (
-      <T variant="meta" style={{ color: color.ink3 }}>
-        {p.message ?? `${whose} couldn't prepare this, so it's over to ${mine ? "you" : teacher}.`}
-      </T>
-    );
-  }
-  const sources = new Map((p.sources ?? []).map((s) => [s.id, s]));
-  return (
-    <ThreadCard who={`${whose} prepared this · not ${mine ? "your" : `${teacher}'s`} own words`} tone="partner">
-      <T variant="body" style={{ fontSize: 15, lineHeight: 22 }}>
-        {p.text}
-      </T>
-      {(p.points ?? []).length ? (
-        <View style={{ marginTop: space.m, gap: space.s }}>
-          {p.points!.map((pt, i) => (
-            <View key={i}>
-              <T variant="support" style={{ color: color.ink, fontSize: 14, lineHeight: 20 }}>
-                {pt.text}
-              </T>
-              <T variant="meta" style={{ color: color.ink3 }}>
-                {pt.sourceIds
-                  .map((id) => sources.get(id))
-                  .filter(Boolean)
-                  .map((s) => [s!.publisher, s!.title].filter(Boolean).join(" · ") + (s!.via === "shared_resource" ? ` (saved by ${teacher})` : ""))
-                  .join("; ")}
-              </T>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {p.whyRelevant ? (
-        <T variant="meta" style={{ marginTop: space.m, color: color.ink2 }}>
-          Why this exchange: {p.whyRelevant}
-        </T>
-      ) : null}
-      {p.adaptedTo ? (
-        <T variant="meta" style={{ marginTop: space.xs, color: color.ink2 }}>
-          Adapted to: {p.adaptedTo}
-        </T>
-      ) : null}
-      <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
-        {whose} used {(p.context ?? []).join("; ").replace(/^./, (c) => c.toLowerCase())}. Preparing this changed nobody&apos;s Mind.
-      </T>
-    </ThreadCard>
-  );
-}
-
-/** Whose words the learner is reading: the teacher's own, or their agent's (as-is or edited). */
-function explainedBy(t: NonNullable<PlaygroundRoom["teaching"]>, who: string): string {
-  if (t.explanationSource === "agent") return `${who === "You" ? "Your" : `${who}'s`} agent taught it`;
-  if (t.explanationSource === "agent_edited") return `${who} edited ${who === "You" ? "your" : "their"} agent's explanation`;
-  return `${who} explained`;
-}
-
-/** Between 1:216 and 1:269: the learner applies it somewhere new. Graded by Thinketh, not Muse. */
-function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: string; busy: boolean; onAnswer: (text: string) => void }) {
-  const tr = room.transfer!;
-  const t = room.teaching;
-  const [text, setText] = useState("");
-  const learner = nameOf(room, tr.learnerId);
-  const canAnswer = tr.learnerId === me || room.participants.find((p) => p.userId === tr.learnerId)?.demoPersona;
-  return (
-    <View>
-      <View style={{ paddingHorizontal: gutter }}>
-        <DotTag tone="coral" label={tr.learnerId === me ? "Your turn" : `${upper(learner)}'s turn`} style={{ marginTop: space.l }} />
-        <T variant="title" style={{ marginTop: space.m }}>
-          {tr.prompt}
-        </T>
-        {t?.explanation ? (
-          <ThreadCard who={explainedBy(t, t.teacherId === me ? "You" : nameOf(room, t.teacherId))} tone={t.teacherId === me ? "coral" : "partner"} style={{ marginTop: space.l }}>
-            <T variant="support" style={{ fontSize: 15, lineHeight: 22, color: color.ink }}>
-              “{t.explanation}”
-            </T>
-          </ThreadCard>
-        ) : null}
-      </View>
-      <View style={{ paddingHorizontal: gutter }}>
-        {canAnswer ? (
-          <>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={tr.learnerId === me ? "Apply it in your own words…" : `Type ${learner}'s answer`}
-              placeholderTextColor={color.ink3}
-              multiline
-              maxLength={2000}
-              style={styles.answer}
-              accessibilityLabel={tr.learnerId === me ? "Your answer" : `${learner}'s answer`}
-            />
-            {tr.learnerId !== me ? (
-              <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-                You&apos;re typing for {learner}, a seeded demo persona on this phone. Thinketh grades it as {learner}&apos;s answer.
-              </T>
-            ) : null}
-            <View style={!text.trim() || busy ? { opacity: 0.4, pointerEvents: "none" } : undefined}>
-              <Pill label={busy ? "Thinketh is checking…" : "Submit"} busy={busy} onPress={() => onAnswer(text.trim())} />
-            </View>
-          </>
-        ) : (
-          <T variant="support" style={{ marginTop: space.l }}>
-            Waiting for {learner} to answer from their device…
-          </T>
-        )}
-        <T variant="meta" style={{ marginTop: space.l, color: color.ink3 }}>
-          Thinketh grades this against a rubric. Muse can&apos;t change anyone&apos;s Mind.
-        </T>
-      </View>
-    </View>
-  );
-}
-
-/** Storyboard 11 / Figma 1:269: knowledge moved, and exactly why Thinketh believes it. */
-function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: PlaygroundRoom; me: string; busy: boolean; onNext: () => void; onPlanNext: () => void; onEnd: () => void }) {
-  const nextItem = room.plan?.items.find((i) => !i.done);
-  const gapPending = !room.sharedGap && (room.delta?.sharedGaps.length ?? 0) > 0;
-  const tr = room.transfer!;
-  const t = room.teaching;
-  const learner = nameOf(room, tr.learnerId);
-  const teacher = t ? nameOf(room, t.teacherId) : "Your peer";
-  const verified = !!tr.verified;
-  const [why, setWhy] = useState(false);
-  // Once per verified event on this device: a refetch or remount never repeats the success moment.
-  const verifiedSeq = room.events.findLast((e) => e.type === "transfer_verified")?.seq;
-  useEffect(() => {
-    const key = `${room.id}:${verifiedSeq}`;
-    if (!verified || verifiedSeq === undefined || celebratedHaptics.has(key)) return;
-    celebratedHaptics.add(key);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-  }, [verified, verifiedSeq, room.id]);
-  const tn = tr.transition;
-  // Concepts the moved one connects to in the learner's own Mind (from the room snapshot).
-  const learnerSnap = room.snapshots.find((x) => x.userId === tr.learnerId);
-  const related = learnerSnap
-    ? [...new Set(learnerSnap.edges.flatMap((e) => (e.fromConceptId === tr.conceptId ? [e.toConceptId] : e.toConceptId === tr.conceptId ? [e.fromConceptId] : [])))]
-        .map((id) => learnerSnap.concepts.find((c) => c.conceptId === id)?.short)
-        .filter((n): n is string => !!n)
-        .slice(0, 4)
-    : [];
-  return (
-    <View>
-      <View style={{ paddingHorizontal: gutter }}>
-        <T variant="title" style={{ marginTop: space.m }}>
-          {verified ? "Knowledge moved." : "Not yet."}
-        </T>
-        <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
-          {verified
-            ? t?.explanationSource && t.explanationSource !== "own"
-              ? `${learner} applied it in a new context, after the explanation ${teacher}'s agent prepared.`
-              : `${learner} applied what ${teacher} taught in a new context.`
-            : `${learner}'s answer didn't show it yet. Thinketh recorded what it did show.`}
-        </T>
-      </View>
-      <View style={{ paddingHorizontal: gutter, marginTop: space.l }}>
-        {tn ? (
-          <View style={{ flexDirection: "row", gap: space.s, marginBottom: space.m }}>
-            <View style={styles.resultMeasure}>
-              <T variant="label">MASTERY</T>
-              <T style={styles.resultValue}>{fmt2(tn.before.mastery)} → {fmt2(tn.after.mastery)}</T>
-            </View>
-            <View style={styles.resultMeasure}>
-              <T variant="label">UNCERTAINTY</T>
-              <T style={styles.resultValue}>{fmt2(tn.before.uncertainty)} → {fmt2(tn.after.uncertainty)}</T>
-            </View>
-          </View>
-        ) : null}
-        <ListCard>
-          {verified ? (
-            <OutcomeRow icon="sparkle" title={`Strengthened ${tr.learnerId === me ? "your" : `${learner}'s`} thinking on ${topic(tr.conceptId, t?.conceptName ?? "")}`} body={related.length ? `Connected concepts lit in the room: ${related.join(" · ")}` : "New connection verified"} last={!tn} />
-          ) : (
-            <View style={[styles.changeRow, tn ? styles.changeDivided : null]}>
-              <DotTag tone="muted" label={upper(headline(tr.conceptId, t?.conceptName ?? ""))} />
-              <T variant="section" style={{ marginTop: space.s }}>
-                Recorded, not verified
-              </T>
-              <T variant="support" style={{ marginTop: space.xs }}>
-                {tr.feedback ?? ""}
-              </T>
-            </View>
-          )}
-          {tn ? (
-            <Pressable onPress={() => setWhy((w) => !w)} accessibilityRole="button" accessibilityState={{ expanded: why }} style={({ pressed }) => [styles.changeRow, { minHeight: 44 }, pressed && { backgroundColor: color.surfaceMuted }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.s }}>
-                <T variant="meta" style={{ color: color.ink, fontVariant: ["tabular-nums"], flex: 1 }}>
-                  {why ? "Why Thinketh changed its model" : "Why did Thinketh change its model?"}
-                </T>
-                <View style={{ transform: [{ rotate: why ? "90deg" : "0deg" }] }}>
-                  <Icon name="chevron" size={14} color={color.ink3} />
-                </View>
-              </View>
-              {why ? (
-                <View style={styles.why}>
-                  <T variant="meta" style={{ color: color.ink3 }}>
-                    Technical concept: {t?.conceptName}
-                  </T>
-                  <T variant="support" style={{ marginTop: space.xs }}>
-                    {tn.reason}
-                  </T>
-                  {verified && tr.feedback ? (
-                    <T variant="meta" style={{ marginTop: space.s }}>
-                      Grader: {tr.feedback}
-                    </T>
-                  ) : null}
-                </View>
-              ) : null}
-            </Pressable>
-          ) : null}
-        </ListCard>
-        {/* The next planned teaching move, up front: "what about another concept?" gets a real, different challenge. */}
-        {nextItem?.type === "peer_teach" ? (
-          <View style={styles.nextMove}>
-            <T variant="label">Next in the plan</T>
-            <T style={styles.nextTitle}>
-              {nameOf(room, nextItem.teacherId)} teaches {nameOf(room, nextItem.learnerId)} {topic(nextItem.conceptId ?? "", nextItem.conceptName ?? "")}
-            </T>
-            <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
-              {nextItem.rationale}
-            </T>
-            <Button label={busy ? "Muse is setting it up…" : "Start this move"} icon="arrow" loading={busy} onPress={onPlanNext} style={{ marginTop: space.m }} />
-          </View>
-        ) : null}
-        {/* Only the learner's Mind is graded here; teaching doesn't change the teacher's Mind. */}
-        {tr.learnerId === me ? (
-          <Button
-            kind="secondary"
-            label={tr.verified ? "See the change in your Mind" : "See this concept in your Mind"}
-            onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId, from: "playground" } })}
-            style={{ alignSelf: "flex-start", marginTop: space.m }}
-          />
-        ) : null}
-        {gapPending ? (
-          <Button label="Next: the shared gap" kind="quiet" icon="arrow" loading={busy} onPress={onNext} style={{ alignSelf: "flex-start", marginTop: nextItem?.type === "peer_teach" ? 0 : space.s }} />
-        ) : nextItem?.type !== "peer_teach" ? (
-          <Button label="Continue" kind="quiet" icon="arrow" loading={busy} onPress={onPlanNext} style={{ alignSelf: "flex-start", marginTop: space.s }} />
-        ) : null}
-        {/* The plan is guidance, not a commitment: ending after any move is fine. */}
-        <Button label="End session" kind="quiet" loading={busy} onPress={onEnd} style={{ alignSelf: "flex-start" }} />
-        <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-          Source: peer learning session · just now
-        </T>
-      </View>
-    </View>
-  );
-}
-
-/** Figma 1:322: neither Mind has it; Muse teaches both. */
-function SharedGap({ room, me, busy, sourceBusy, onNext, onCustomSource }: { room: PlaygroundRoom; me: string; busy: boolean; sourceBusy: boolean; onNext: () => void; onCustomSource: (url: string) => void }) {
-  const g = room.sharedGap!;
-  const [open, setOpen] = useState(false);
-  const source = room.events.findLast((e) => e.type === "shared_gap_taught")?.data?.resourceTitle;
-  return (
-    <View>
-      <View style={{ paddingHorizontal: gutter }}>
-        <DotTag tone="muted" label="Shared gap" style={{ marginTop: space.m }} />
-        <T variant="section" style={{ marginTop: space.xs }}>
-          {headline(g.conceptId, g.conceptName)}
-        </T>
-      </View>
-      <View style={{ paddingHorizontal: gutter, marginTop: space.l, gap: space.m }}>
-        <MuseCard>
-          <T style={{ fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 21, color: color.ink, marginTop: space.s }}>Neither Mind has strong evidence here.</T>
-          <T variant="support" style={{ marginTop: space.xs }}>
-            Muse will teach the shared gap.
-          </T>
-        </MuseCard>
-        {typeof source === "string" ? (
-          <RaisedCard style={{ paddingVertical: space.m }}>
-            <T variant="label">Resource</T>
-            <T variant="body" style={{ fontFamily: font.sansSemibold, marginTop: space.s, fontSize: 15 }}>
-              {source}
-            </T>
-          </RaisedCard>
-        ) : null}
-        {open ? (
-          <View>
-            <RaisedCard style={{ gap: space.l }}>
-              {(g.lesson ?? []).map((s) => (
-                <View key={s.heading}>
-                  <T variant="label">{s.heading}</T>
-                  <T variant="body" style={{ marginTop: space.xs }}>
-                    {s.body}
-                  </T>
-                </View>
-              ))}
-            </RaisedCard>
-            {/* What the next step is, before it happens: the same reading, a different delta for each Mind. */}
-            <T variant="support" style={{ marginTop: space.l }}>
-              Next: one shared source, read against each Mind separately. Same words, a different delta for each of you.
-            </T>
-            <Pill label={busy ? "Reading it for both of you…" : "Bring in a shared source"} busy={busy} onPress={onNext} />
-            <SourceEntry busy={sourceBusy} onSubmit={onCustomSource} />
-          </View>
-        ) : (
-          <Pill label="Teach it to both of us" onPress={() => setOpen(true)} />
-        )}
-      </View>
-    </View>
-  );
-}
-
-/** Figma 1:376: same source, a different delta for each Mind. */
-function ResourceScene({ room, me, busy, sourceBusy, onEnd, onCustomSource }: { room: PlaygroundRoom; me: string; busy: boolean; sourceBusy: boolean; onEnd: () => void; onCustomSource: (url: string) => void }) {
-  const res = room.resource!;
-  const hostFirst = [...res.sides].sort((a) => (a.userId === room.hostId ? -1 : 1));
-  const mine = res.sides.find((s) => s.userId === me);
-  // Only claim "different" when the two computed deltas actually differ.
-  const claim = deltaClaim(res.sides);
-  const ready = claim !== "reading";
-  // An unreadable source makes no claim about either delta.
-  const anyFailed = res.sides.some((x) => x.status === "failed");
-  return (
-    <View style={{ paddingHorizontal: gutter }}>
-      {/* The room shows the source splitting into each Mind's delta; here, one line and the actions. */}
-      <T variant="meta" style={{ marginTop: space.m, color: color.ink2 }} numberOfLines={2}>
-        One source · {res.title}
-        {res.readMinutes ? ` · ~${Math.round(res.readMinutes)} min full` : ""}
-      </T>
-      {res.chosenBecause ? (
-        <T variant="meta" style={{ marginTop: 2, color: color.ink3 }}>
-          {res.chosenBecause}
-        </T>
-      ) : null}
-      {hostFirst.some((x) => x.status === "failed") ? (
-        <T variant="support" style={{ marginTop: space.s }}>
-          Thinketh couldn&apos;t read this source for {hostFirst.filter((x) => x.status === "failed").map((x) => (x.userId === me ? "you" : nameOf(room, x.userId))).join(" and ")}. Nothing was changed; try another link.
-        </T>
-      ) : null}
-      <T variant="title" style={{ marginTop: space.m }}>
-        {claim === "reading" ? "Same source." : anyFailed ? "Same source, not read yet." : claim === "different" ? "Same source. Different delta." : "Same source. A similar delta."}
-      </T>
-      {res.note ? (
-        <MuseCard style={{ marginTop: space.l }}>{res.note}</MuseCard>
-      ) : (
-        <T variant="support" style={{ marginTop: space.m }}>
-          Thinketh is reading it against each Mind…
-        </T>
-      )}
-      {ready && mine?.status === "failed" ? null : ready ? (
-        <Pill label="Start together" onPress={() => mine && router.push({ pathname: "/resource/[id]", params: { id: mine.resourceId } })} />
-      ) : (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-          <ActivityIndicator color={color.ink3} />
-          <T variant="support">Reading the source for both of you…</T>
-        </View>
-      )}
-      <SourceEntry busy={sourceBusy} onSubmit={onCustomSource} />
-      <Button label="End session" kind="quiet" loading={busy} onPress={onEnd} style={{ alignSelf: "flex-start", marginTop: space.s }} />
-    </View>
-  );
-}
-
-function Ended({ room, me }: { room: PlaygroundRoom; me: string }) {
-  // Every recorded move, not just the last one.
-  const { moves, verifiedCount } = sessionOutcome(room);
-  const who = (id: string) => (id === me ? "You" : nameOf(room, id));
+function Ended() {
   return (
     <View style={{ paddingHorizontal: gutter }}>
       <T variant="display" style={{ marginTop: space.l }}>
         Session complete.
       </T>
       <T variant="support" style={{ marginTop: space.s, fontSize: 15, lineHeight: 22 }}>
-        {verifiedCount
-          ? "Every answer was recorded as evidence. The verified ones showed understanding; teaching and agent-prepared material showed none on their own."
-          : "No answer showed understanding yet. Each was still recorded as evidence, so Thinketh knows where you stand."}
+        Any takeaway your agents saved stays in their library. Nothing here changed anyone&apos;s Mind.
       </T>
-      {moves.length ? (
-        <View style={{ marginTop: space.m, gap: space.xs }}>
-          {moves.map((m) => (
-            <View key={`${m.conceptId}:${m.learnerId}`} style={{ flexDirection: "row", gap: space.s, alignItems: "baseline" }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: m.verified ? color.coral : color.ink3 }} />
-              <T variant="meta" style={{ color: color.ink, flex: 1 }}>
-                {who(m.teacherId)} → {who(m.learnerId)} · {headline(m.conceptId, m.conceptName)} · {m.verified ? "verified" : "not verified yet"}
-              </T>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      <Pill label="See your Mind" onPress={() => router.push({ pathname: "/mind", params: room.transfer && room.transfer.learnerId === me ? { concept: room.transfer.conceptId } : {} })} />
     </View>
   );
 }
@@ -1469,11 +858,11 @@ function PresenceLine({ room, me, present }: { room: PlaygroundRoom; me: string;
   );
 }
 
-/** Honest provenance: who conducted, how the room syncs. */
+/** Honest provenance: how the room syncs, and its code. */
 function Provenance({ room, live }: { room: PlaygroundRoom; live: boolean }) {
   return (
     <T variant="meta" style={{ marginHorizontal: gutter, marginTop: space.xl, color: color.ink3, fontSize: 11 }}>
-      Conductor: {room.conductor.mode === "muse" ? room.conductor.detail : "deterministic fallback"} · Sync: {live ? "Supabase Realtime + polling" : "polling"} · Room {room.code}
+      Sync: {live ? "Supabase Realtime + polling" : "polling"} · Room {room.code}
     </T>
   );
 }
@@ -1495,35 +884,13 @@ const styles = StyleSheet.create({
   exPending: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.m, minHeight: 32 },
   exRefs: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: space.s },
   exRef: { maxWidth: "100%", paddingHorizontal: 8, minHeight: 26, justifyContent: "center", borderRadius: 8, backgroundColor: color.surfaceMuted },
-  planRow: { flexDirection: "row", alignItems: "flex-start", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m },
-  planDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
-  planHead: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.ink, marginTop: space.xs },
-  planMin: { width: 48, fontFamily: font.sansSemibold, fontSize: 13, lineHeight: 18, color: color.ink, fontVariant: ["tabular-nums"] },
-  planTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 20, color: color.ink, marginTop: 1 },
-  urlInput: { marginTop: space.s, minHeight: 44, paddingHorizontal: space.m, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.surfaceMuted, fontFamily: font.sans, fontSize: 15, color: color.ink },
-  focusChip: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, marginTop: 4, paddingHorizontal: space.s, paddingVertical: 4, borderRadius: 999, backgroundColor: color.surfaceMuted },
-  focusText: { fontFamily: font.sansSemibold, fontSize: 13, lineHeight: 17, color: color.ink, flexShrink: 1 },
-  conceptTitle: { marginTop: space.s, fontSize: 28, lineHeight: 34 },
-  stageCaption: { marginTop: space.xs, paddingHorizontal: gutter, textAlign: "center", color: color.ink2 },
-  nextMove: { marginTop: space.l, padding: space.l, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, ...shadow.soft },
-  nextTitle: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23, letterSpacing: -0.3, color: color.ink, marginTop: space.xs },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: gutter, paddingBottom: space.s, backgroundColor: color.canvas },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44 },
   headerTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
   cta: { alignSelf: "stretch", minHeight: 52 },
   codeInput: { alignSelf: "stretch", textAlign: "center", fontFamily: font.sansSemibold, fontSize: 26, lineHeight: 34, letterSpacing: 6, color: color.ink, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline, paddingVertical: space.s, marginTop: space.s },
   pill: { alignSelf: "flex-start", marginTop: space.l, borderRadius: radius.pill, paddingHorizontal: space.xl, minHeight: 46 },
-  check: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: color.edge, alignItems: "center", justifyContent: "center" },
   why: { marginTop: space.s, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: radius.control, gap: 2 },
-  speak: { flexDirection: "row", alignItems: "center", minHeight: 60, paddingLeft: space.l, paddingRight: space.s, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas, ...shadow.soft },
-  speakInput: { flex: 1, fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: color.ink, paddingVertical: space.m, maxHeight: 140 },
-  speakBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.ink, alignItems: "center", justifyContent: "center", marginLeft: space.s },
-  answer: { marginTop: space.l, minHeight: 104, padding: space.l, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline, backgroundColor: color.canvas, fontFamily: font.sans, fontSize: 15, lineHeight: 22, color: color.ink, textAlignVertical: "top", ...shadow.soft },
-  changeRow: { paddingHorizontal: space.l, paddingVertical: space.m },
-  changeDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
-  resultMeasure: { flex: 1, padding: space.m, borderRadius: radius.control, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
-  resultValue: { marginTop: space.s, fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 23, color: color.ink, fontVariant: ["tabular-nums"] },
-  colDivided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.hairline },
 });
 
 /** Whether the software keyboard is up (so the room can make space for the input). */

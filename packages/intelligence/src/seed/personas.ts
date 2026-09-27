@@ -99,15 +99,6 @@ export const PLAYGROUND_DIAGNOSTICS: DiagnosticItem[] = [
   },
 ];
 
-/** The peer-teaching prompt the teacher answers out loud, per concept. */
-export const PEER_PROMPTS: Record<string, string> = {
-  "evaluator-architectures": "Why shouldn't an AI always be the final judge of its own output?",
-  "agent-tool-use": "How does an AI decide when to use a tool, and what can go wrong?",
-  "retrieval": "When should an AI look something up instead of answering from what it knows?",
-  "mcp": "Why does it help for AI tools to share one common way of connecting?",
-  "context-windows": "What does it buy you when an AI can keep more in mind at once, and what doesn't it?",
-};
-
 /** Transfer questions available after a peer explanation, per concept. */
 export const TRANSFER_QUESTION_FOR: Record<string, string> = {
   "evaluator-architectures": "dq-evaluators-transfer-coding-agent",

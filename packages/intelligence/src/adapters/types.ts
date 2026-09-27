@@ -127,7 +127,6 @@ export type AskContext = {
 export type AskResult = { thinkethInfers: string[] };
 
 import type { TransferContext, TransferDraft } from "../engine/transfer.ts";
-import type { ExchangeContext, ExchangeDraft } from "../engine/exchange.ts";
 import type { SupportInput, SupportResult } from "../engine/grounding.ts";
 
 export type ShortAnswerGrade = { coveredIdeaIndices: number[]; misconception?: string; feedback: string };
@@ -152,11 +151,6 @@ export interface IntelligenceModel {
   analyzeResource(input: ResourceContext): Promise<ResourceAnalysis>;
   /** Teach what's new in a resource, skipping what the user already understands. */
   teachDelta(input: TeachContext): Promise<TeachResult>;
-  /**
-   * Playground: the teacher's agent drafts an explanation for the learner's gap from the given
-   * materials only. Validated (every point must cite a material) before anyone sees it.
-   */
-  prepareExchange(input: ExchangeContext): Promise<ExchangeDraft>;
   /** For each statement: do the given passages support it? Judged only against those passages. */
   checkSupport(input: SupportInput): Promise<SupportResult[]>;
 }

@@ -2,6 +2,16 @@
 
 Written for Nadani and her Claude Code sessions. It explains the changes made on `stefen-integration-mobile` that touch backend-owned or shared code. Read this before editing `packages/contracts` or `packages/intelligence/src/contracts.ts`.
 
+## 2026-09-27: Playground guided session removed (breaking for those routes)
+
+Removed at the product owner's request: nothing in the Playground may ask a person to answer in their own words.
+
+- **Routes removed:** `POST /playground/rooms/:id/conduct`, `…/explain`, `…/answer`, `…/resource`, `…/exchange/check` (now 404). Everything else under `/playground` and `/takeaways` is unchanged.
+- **Server:** `playground/conductor.ts`, `engine/sessionPlan.ts`, `engine/exchange.ts` (agent-prepared lessons), `service.prepareExchange`/`conceptLesson` and `IntelligenceModel.prepareExchange` are gone. Compare no longer builds a `plan`; rooms no longer send `conductor`. `closeExchange` returns to `overview`. A stored room in a removed scene is shown as `overview`.
+- **Contracts:** request schemas `RoomExplain/Answer/Resource/ConductRequestSchema` removed. Room fields (`teaching`, `transfer`, `plan`, `completedTeachings`, `sharedGap`, `resource`, `museLine`), their scenes and event types are kept and marked `@deprecated` so stored rooms still parse; `conductor` is now optional. `AgentScreenContext.room.assessing` is optional.
+- **Kept:** `service.transferChallenge`/`isTransferAssessable` and the seeded transfer diagnostic (still covered by `test/generality.test.ts`), though no route calls them now.
+- The Playground and exchange sections below describe the removed routes as history.
+
 ## 2026-09-27: voice session activities (additive)
 
 Stefen's persistent voice companion (see `docs/VOICE-AGENT.md`) made one small change to backend code:

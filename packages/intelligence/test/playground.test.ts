@@ -1,14 +1,12 @@
 /**
- * Playground: collaborative delta rules, conductor validation, and the peer
- * learning golden path over HTTP: create -> Nadani joins -> compare ->
- * Nadani teaches -> Stefen answers a transfer question -> the evidence engine
- * records a real transition (or refuses to) -> shared gap -> resource.
+ * Playground: collaborative delta rules and the room path over HTTP: create -> Nadani joins ->
+ * compare -> overview (the agent exchange starts from there; see exchange.test.ts). The guided
+ * session (conductor, peer teaching, transfer questions) was removed on 2026-09-27.
  */
 import { PlaygroundRoomSchema, type MindSnapshot, type PlaygroundRoom } from "@thinketh/contracts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { collaborativeDelta } from "../src/engine/collaborative.ts";
 import { createThinketh } from "../src/index.ts";
-import { fallbackNext, MUSE_TOOLS, MuseConductor, validateAction, type ConductorView } from "../src/playground/conductor.ts";
 import { NOW, offlineConfig } from "./helpers.ts";
 
 const snap = (userId: string, rows: Array<[string, number, number, number, boolean?, boolean?]>): MindSnapshot => ({
@@ -59,48 +57,6 @@ describe("collaborative delta", () => {
   });
 });
 
-describe("conductor boundary", () => {
-  const view: ConductorView = {
-    scene: "overview",
-    participants: [{ id: "demo-user", name: "Stefen" }, { id: "nadani", name: "Nadani" }],
-    teachable: [{ conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", teacherId: "nadani", learnerId: "demo-user", assessmentAvailable: true }],
-    sharedGaps: [{ conceptId: "memory-consolidation", conceptName: "Memory Consolidation" }],
-    plan: [
-      { id: "peer:evaluator-architectures:nadani", type: "peer_teach", conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", teacherId: "nadani", learnerId: "demo-user", done: false },
-      { id: "gap:memory-consolidation", type: "shared_gap", conceptId: "memory-consolidation", conceptName: "Memory Consolidation", done: false },
-    ],
-    next: "peer:evaluator-architectures:nadani",
-    progress: { teacherAssigned: false, explanationSubmitted: false, transferAsked: false, transferAnswered: false, sharedGapTaught: false, resourceIntroduced: false },
-  };
-
-  it("has no tool that can change knowledge state", () => {
-    const names = MUSE_TOOLS.map((t) => t.name).join(" ");
-    expect(names).not.toMatch(/mastery|understood|uncertainty|verify|knowledge|mutate|set_/i);
-  });
-
-  it("rejects actions that don't come from the computed delta", () => {
-    expect(validateAction({ tool: "assign_peer_teacher", args: { conceptId: "evaluator-architectures", teacherId: "demo-user", learnerId: "nadani" }, by: "muse" }, view)).toMatch(/computed delta/);
-    expect(validateAction({ tool: "teach_shared_gap", args: { conceptId: "agent-tool-use" }, by: "muse" }, view)).toMatch(/not a shared gap/);
-    expect(validateAction({ tool: "ask_transfer_question", args: {}, by: "muse" }, view)).toMatch(/explanation must come first/);
-    expect(validateAction({ tool: "spotlight_scene", args: { conceptId: "evaluator-architectures", mastery: 1 }, by: "muse" }, view)).toMatch(/unknown argument/);
-    expect(validateAction(fallbackNext(view), view)).toBeNull();
-  });
-
-  it("falls back deterministically when Muse misbehaves", async () => {
-    const bad = (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: "set_mastery", arguments: "{\"value\":1}" } }] } }] }), { status: 200 })) as typeof fetch;
-    const muse = new MuseConductor({ apiKey: "k", model: "m", baseUrl: "https://example.invalid", timeoutMs: 1000 }, bad);
-    const action = await muse.next(view);
-    expect(action.by).toBe("fallback");
-    expect(action.tool).toBe("assign_peer_teacher");
-
-    const good = (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: "assign_peer_teacher", arguments: JSON.stringify({ conceptId: "evaluator-architectures", teacherId: "nadani", learnerId: "demo-user", say: "Nadani, take it." }) } }] } }] }), { status: 200 })) as typeof fetch;
-    const live = await new MuseConductor({ apiKey: "k", model: "m", baseUrl: "https://example.invalid", timeoutMs: 1000 }, good).next(view);
-    expect(live).toMatchObject({ tool: "assign_peer_teacher", by: "muse" });
-  });
-});
-
 describe("Playground golden path (HTTP)", () => {
   let app: ReturnType<typeof createThinketh>["app"];
   beforeEach(() => {
@@ -117,7 +73,7 @@ describe("Playground golden path (HTTP)", () => {
     return r.room;
   };
 
-  async function toTransfer() {
+  it("create -> demo guest -> compare lands on the overview, with the exchange offered from the delta", async () => {
     let room = await ok("POST", "/playground/rooms", { displayName: "Stefen" });
     expect(room.scene).toBe("waiting");
     room = await ok("POST", `/playground/rooms/${room.id}/demo-guest`);
@@ -130,63 +86,21 @@ describe("Playground golden path (HTTP)", () => {
     expect(room.delta!.sharedGaps.map((g) => g.conceptId)).toContain("memory-consolidation");
     // Snapshots are permissioned: knowledge state only.
     expect(JSON.stringify(room.snapshots)).not.toMatch(/misconceptionFlags|memory-equals-context-window/);
-    room = await ok("POST", `/playground/rooms/${room.id}/conduct`, {});
-    expect(room.scene).toBe("peer_teaching");
-    expect(room.teaching).toMatchObject({ teacherId: "nadani", learnerId: "demo-user", prompt: "Why shouldn't an AI always be the final judge of its own output?" });
-    expect(room.museLine).toBe("Nadani's agent will teach Stefen's agent how AI should check its own work.");
-    expect(room.conductor.mode).toBe("fallback");
-    // Nobody types: Nadani's agent teaches Stefen's agent, then Thinketh asks Stefen the transfer question.
-    await vi.waitFor(async () => {
-      room = await ok("GET", `/playground/rooms/${room.id}`);
-      expect(room.scene).toBe("transfer");
-    });
-    expect(room.teaching).toMatchObject({ explanationSource: "agent" });
-    expect(room.teaching!.explanation).toBeTruthy();
-    expect(room.events.find((e) => e.type === "explanation_submitted")).toMatchObject({ actor: "agent:nadani", summary: expect.stringMatching(/Nadani's agent taught Stefen's agent/) });
-    // The explanation is in: a person can't overwrite it.
-    expect((await call("POST", `/playground/rooms/${room.id}/explain`, { text: "x", asUserId: "nadani" })).status).toBe(400);
-    expect(room.scene).toBe("transfer");
-    expect(room.transfer!.prompt).toMatch(/approve customer refunds/);
-    return room;
-  }
-
-  it("a correct transfer answer moves knowledge through the real evidence path", async () => {
-    let room = await toTransfer();
-    const before = room.snapshots.find((s) => s.userId === "demo-user")!.concepts.find((c) => c.conceptId === "evaluator-architectures")!;
-    room = await ok("POST", `/playground/rooms/${room.id}/answer`, {
-      answer: "Use a separate, independent evaluator model rather than letting the agent grade its own output, because self-grading is biased. Evaluate at each commit gate with tests and CI, and feed the verdict back so the agent retries and fixes.",
-    });
-    expect(room.scene).toBe("knowledge_moved");
-    expect(room.transfer).toMatchObject({ verified: true });
-    const t = room.transfer!.transition!;
-    expect(t.observation.kind).toBe("diagnostic_correct");
-    expect(t.observation.sourceRef).toBe("diagnostic:dq-evaluators-transfer-coding-agent");
-    expect(t.after.mastery).toBeGreaterThan(t.before.mastery);
-    expect(t.reason).toMatch(/transfer question/);
-    const after = room.snapshots.find((s) => s.userId === "demo-user")!.concepts.find((c) => c.conceptId === "evaluator-architectures")!;
-    expect(after.mastery).toBeGreaterThan(before.mastery);
-    expect(after.verified).toBe(true);
-    expect(room.events.map((e) => e.type)).toContain("transfer_verified");
-
-    // The Mind endpoint agrees: the change is real, not a Playground-only illusion.
-    const res = await app.request("/knowledge", { headers: { "x-thinketh-user": "demo-user" } });
-    const k = (await res.json()) as { items: Array<{ concept: { id: string }; state: { mastery: number } }> };
-    expect(k.items.find((i) => i.concept.id === "evaluator-architectures")!.state.mastery).toBeCloseTo(t.after.mastery, 5);
-
-    // "Next: the shared gap" in the app sends this intent (the plan's next item would be the second peer teaching).
-    room = await ok("POST", `/playground/rooms/${room.id}/conduct`, { intent: "shared_gap" });
-    expect(room.scene).toBe("shared_gap");
-    expect(room.sharedGap).toMatchObject({ conceptId: "memory-consolidation" });
-    expect(room.sharedGap!.lesson!.length).toBeGreaterThan(1);
+    // Nothing of the removed guided session is built or sent.
+    expect(room).not.toHaveProperty("plan");
+    expect(room).not.toHaveProperty("teaching");
+    expect(room).not.toHaveProperty("conductor");
+    // Without Muse configured the exchange says why instead of starting.
+    expect(room.exchangeAvailability).toMatchObject({ available: false, reason: expect.stringMatching(/needs Muse/) });
   });
 
-  it("a weak transfer answer is recorded honestly and nothing is verified", async () => {
-    let room = await toTransfer();
-    room = await ok("POST", `/playground/rooms/${room.id}/answer`, { answer: "I think it just makes it faster." });
-    expect(room.scene).toBe("knowledge_moved");
-    expect(room.transfer!.verified).toBe(false);
-    expect(room.transfer!.transition!.observation.kind).not.toBe("diagnostic_correct");
-    expect(room.events.map((e) => e.type)).toContain("transfer_not_verified");
+  it("the guided session routes are gone", async () => {
+    const room = await ok("POST", "/playground/rooms", { displayName: "Stefen" });
+    await ok("POST", `/playground/rooms/${room.id}/demo-guest`);
+    await ok("POST", `/playground/rooms/${room.id}/compare`);
+    for (const path of ["conduct", "explain", "answer", "resource", "exchange/check"]) {
+      expect((await call("POST", `/playground/rooms/${room.id}/${path}`, { text: "x", answer: "x", url: "https://example.com" })).status, path).toBe(404);
+    }
   });
 
   it("rooms are private to their participants", async () => {

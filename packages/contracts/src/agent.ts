@@ -49,8 +49,11 @@ export const AgentScreenContextSchema = z.object({
   focus: AgentFocusSchema.optional(),
   /** A few short lines of what is visible. Never whole libraries or private histories. */
   visible: z.array(z.string().max(240)).max(6).optional(),
-  /** Playground only. `assessing`: a human answer is about to count as evidence; no coaching. */
-  room: z.object({ id: z.string(), scene: z.string().max(40), assessing: z.boolean(), participants: z.number().int() }).optional(),
+  /**
+   * Playground only. `assessing` (@deprecated, optional since the guided session's transfer question was
+   * removed on 2026-09-27): a human answer was about to count as evidence; no coaching.
+   */
+  room: z.object({ id: z.string(), scene: z.string().max(40), assessing: z.boolean().optional(), participants: z.number().int() }).optional(),
 });
 export type AgentScreenContext = z.infer<typeof AgentScreenContextSchema>;
 

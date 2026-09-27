@@ -118,8 +118,8 @@ export function loadConfig() {
       agentId: env("ELEVENLABS_AGENT_ID"),
     },
     /**
-     * Muse conducts Playground rooms (server-side only). Without a key, or if a
-     * call fails or proposes an invalid action, the deterministic conductor runs.
+     * Muse runs the Playground's agent exchange (server-side only). Without a key and a
+     * model there is no agent exchange; the room still compares both Minds.
      */
     muse: {
       apiKey: env("MUSE_API_KEY"),

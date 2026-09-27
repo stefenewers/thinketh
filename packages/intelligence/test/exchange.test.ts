@@ -272,7 +272,7 @@ describe("agent exchange", () => {
     expect(ex2.actions.some((a) => a.actor === "coordinator" && a.by === "planner" && /planner did/.test(a.summary))).toBe(true);
   });
 
-  it("without Muse there is no agent exchange, only the guided session", async () => {
+  it("without Muse there is no agent exchange, and the room says why", async () => {
     const t = boot(undefined);
     const r0 = await comparedRoom(t);
     expect(r0.exchangeAvailability).toMatchObject({ available: false, reason: expect.stringMatching(/needs Muse/) });
@@ -289,24 +289,5 @@ describe("agent exchange", () => {
     (t2.playground.exchange as unknown as { model: ExchangeModel }).model = new FakeMuse(cooperative());
     const r = (await req(t2 as T, "GET", `/playground/rooms/${r0.id}`)).room;
     expect(r.exchange).toMatchObject({ status: "interrupted", outcome: expect.stringMatching(/Interrupted/) });
-  });
-
-  it("the human check after an exchange is the only thing that changes the learner's Mind, and a miss isn't 'done'", async () => {
-    const t = boot(new FakeMuse(cooperative()));
-    const r0 = await comparedRoom(t);
-    await req(t, "POST", `/playground/rooms/${r0.id}/exchange`, {});
-    await runToEnd(t, r0.id);
-    const asked = (await req(t, "POST", `/playground/rooms/${r0.id}/exchange/check`, {})).room;
-    expect(asked.scene).toBe("transfer");
-    expect(asked.transfer!.learnerId).toBe("demo-user");
-    const answered = (await req(t, "POST", `/playground/rooms/${r0.id}/answer`, { answer: "No idea." })).room;
-    expect(answered.transfer!.verified).toBe(false);
-    const item = answered.plan!.items.find((i) => i.type === "peer_teach" && i.conceptId === "evaluator-architectures")!;
-    expect(item).toMatchObject({ done: false, attempted: true });
-    // One more, different question; then no more.
-    const second = (await req(t, "POST", `/playground/rooms/${r0.id}/exchange/check`, {})).room;
-    expect(second.transfer!.questionId).not.toBe(asked.transfer!.questionId);
-    await req(t, "POST", `/playground/rooms/${r0.id}/answer`, { answer: "Still not sure." });
-    expect((await req(t, "POST", `/playground/rooms/${r0.id}/exchange/check`, {})).status).toBe(400);
   });
 });

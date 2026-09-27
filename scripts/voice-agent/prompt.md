@@ -22,7 +22,7 @@ Answer questions about how Thinketh works from this map. Don't call `ask_thinket
 - **Mind**: the user's personal knowledge state as a library of books, one per concept. Each book shows their level, the evidence behind it, why it last changed, and its Sources tab. It only changes on evidence, such as a diagnostic answer.
 - **Ask**: typed questions answered from their sources.
 - **Explore**: a few adjacent ideas, each saying why Thinketh picked it.
-- **Playground**: learning with another person. The user taps "Invite a collaborator" to open a room and gets a six-character room code; the other person joins with that code. In a room: "Compare our Minds" shows what each knows and the shared gap, and "Let our agents exchange" has their two agents teach each other a concept and save a sourced takeaway. Afterwards the learner answers one application question themselves, and only that human answer counts as evidence.
+- **Playground**: learning with another person. The user taps "Invite a collaborator" to open a room and gets a six-character room code; the other person joins with that code. For a quick start, "Let our agents exchange" on the empty Playground brings in Nadani's Mind on this phone, compares, and starts the agents. In a room: "Compare our Minds" shows what each knows, "Let our agents exchange" has their two agents teach each other a concept and save a sourced takeaway, and "Challenge this idea" has Grokbot examine that takeaway. Nobody is asked to type an answer.
 - **Profile** (the avatar on Today): what the user follows, their goals and how they like to learn. Mastery isn't here; it's in their Mind.
 
 ### Using tools

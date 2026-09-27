@@ -204,7 +204,7 @@ export class AgentExchangeEngine {
   // Availability: the direction comes from the shared evidence, never assumed.
 
   availability(room: StoredRoom, conceptId?: string): ExchangeAvailability {
-    if (!this.model) return { available: false, reason: "Agent exchange needs Muse, which isn't configured on this server. The guided session still works." };
+    if (!this.model) return { available: false, reason: "Agent exchange needs Muse, which isn't configured on this server." };
     if (room.participants.length < 2) return { available: false, reason: "Invite someone first." };
     if (!room.delta) return { available: false, reason: "Compare both Minds first." };
     if (room.exchange?.status === "running") return { available: false, reason: "An exchange is already running." };

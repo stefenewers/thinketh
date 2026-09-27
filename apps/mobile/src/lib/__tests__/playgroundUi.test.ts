@@ -2,26 +2,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { deltaClaim } from "../resourceDelta";
-
-describe("same source, different delta: only when it's true", () => {
-  const ready = (newIdeas: number, usefulMinutes: number, focus?: string) => ({ status: "ready" as const, newIdeas, usefulMinutes, focus });
-  it("says nothing while either Mind is still being read", () => {
-    expect(deltaClaim([ready(5, 6, "evaluators"), { status: "processing", newIdeas: 0 }])).toBe("reading");
-  });
-  it("claims different only when minutes, ideas or focus actually differ", () => {
-    expect(deltaClaim([ready(5, 6, "evaluator architectures"), ready(5, 6, "agent tool use")])).toBe("different");
-    expect(deltaClaim([ready(5, 6), ready(2, 6)])).toBe("different");
-    expect(deltaClaim([ready(5, 6.2, "x"), ready(5, 5.9, "X")])).toBe("similar");
-  });
-  it("never claims a difference against a failed read", () => {
-    expect(deltaClaim([ready(5, 6, "x"), { status: "failed", newIdeas: 0 }])).toBe("similar");
-  });
-});
 
 describe("the consumer Playground hides its plumbing", () => {
   const src = readFileSync(join(__dirname, "..", "..", "app", "playground.tsx"), "utf8");
-  it("renders provenance (conductor, sync, room code) only behind the diagnostics toggle", () => {
+  it("renders provenance (sync, room code) only behind the diagnostics toggle", () => {
     expect(src).toMatch(/room && showDiag \? <Provenance/);
     expect(src.match(/<Provenance /g)).toHaveLength(1);
   });
@@ -29,9 +13,21 @@ describe("the consumer Playground hides its plumbing", () => {
     const jsxText = src.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\/.*$/gm, "");
     expect(jsxText).not.toMatch(/One-device mode/);
   });
-  it("leads with Thinketh; Muse is the conductor", () => {
+  it("leads with Thinketh; the agents exchange", () => {
     expect(src).toMatch(/Learn together\.\n/);
     expect(src).not.toMatch(/Learn together with Muse/);
-    expect(src).toMatch(/Muse conducts the room\./);
+    expect(src).toMatch(/Your agents exchange\. Thinketh checks what they keep\./);
+  });
+});
+
+describe("nothing in the Playground asks a person to answer in their own words (guided session removed 2026-09-27)", () => {
+  const src = readFileSync(join(__dirname, "..", "..", "app", "playground.tsx"), "utf8");
+  it("has no guided-session actions or answer inputs", () => {
+    for (const gone of ["Start session", "Apply it yourself", "in your own words", "exchangeCheck", "playground.conduct", "playground.answer", "playground.explain", "playground.resource", "Use another source"]) {
+      expect(src, gone).not.toContain(gone);
+    }
+  });
+  it("the exchange is the action right after the delta", () => {
+    expect(src).toMatch(/<ExchangeOffer room=\{room\} me=\{me\} busy=\{busy\} onStart=\{onExchange\} \/>/);
   });
 });

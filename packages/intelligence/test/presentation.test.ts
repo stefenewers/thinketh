@@ -7,9 +7,8 @@ import { CONCEPT_LABELS, narrativeLabel, topicLabel } from "@thinketh/contracts"
 import { evaluateShortAnswerKeywords } from "../src/engine/evaluation.ts";
 import { kindForCorrectness } from "../src/engine/observations.ts";
 import { createThinketh } from "../src/index.ts";
-import { fallbackNext, type ConductorView } from "../src/playground/conductor.ts";
 import { SHORT_LABELS } from "../src/playground/room.ts";
-import { PEER_PROMPTS, PLAYGROUND_DIAGNOSTICS } from "../src/seed/personas.ts";
+import { PLAYGROUND_DIAGNOSTICS } from "../src/seed/personas.ts";
 import { NOW, offlineConfig } from "./helpers.ts";
 
 const make = () => createThinketh({ config: offlineConfig(), now: () => NOW });
@@ -66,8 +65,7 @@ describe("concept labels", () => {
 });
 
 describe("golden peer teaching and transfer wording", () => {
-  it("the peer prompt and transfer question are plain; the diagnostic id is stable", () => {
-    expect(PEER_PROMPTS["evaluator-architectures"]).toBe("Why shouldn't an AI always be the final judge of its own output?");
+  it("the transfer question is plain; the diagnostic id is stable", () => {
     expect(golden.prompt).toBe("An AI agent can approve customer refunds. Where would you add an independent check before money is sent, and why?");
     expect(golden.conceptId).toBe("evaluator-architectures");
   });
@@ -107,34 +105,5 @@ describe("golden peer teaching and transfer wording", () => {
     expect(plain.observation.kind).toBe(legacy.observation.kind);
     expect(plain.before).toEqual(legacy.before);
     expect({ ...plain.after, lastUpdatedAt: 0 }).toEqual({ ...legacy.after, lastUpdatedAt: 0 });
-  });
-});
-
-describe("Muse speaks in plain language", () => {
-  const view: ConductorView = {
-    scene: "overview",
-    participants: [
-      { id: "a", name: "Stefen" },
-      { id: "b", name: "Nadani" },
-    ],
-    teachable: [{ conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", topic: "how AI should check its own work", teacherId: "b", learnerId: "a", assessmentAvailable: true }],
-    sharedGaps: [{ conceptId: "memory-consolidation", conceptName: "Memory Consolidation", topic: "what is worth remembering long-term" }],
-    plan: [
-      { id: "peer:e:b", type: "peer_teach", conceptId: "evaluator-architectures", conceptName: "Evaluator Architectures", topic: "how AI should check its own work", teacherId: "b", learnerId: "a", done: false },
-      { id: "gap:m", type: "shared_gap", conceptId: "memory-consolidation", conceptName: "Memory Consolidation", topic: "what is worth remembering long-term", done: false },
-    ],
-    next: "peer:e:b",
-    progress: { teacherAssigned: false, explanationSubmitted: false, transferAsked: false, transferAnswered: false, sharedGapTaught: false, resourceIntroduced: false },
-  };
-
-  it("names the teaching by its topic, not its technical name", () => {
-    const a = fallbackNext(view);
-    expect(a.tool).toBe("assign_peer_teacher");
-    expect(a.args.say).toBe("Nadani's agent will teach Stefen's agent how AI should check its own work.");
-  });
-
-  it("the shared gap line uses plain wording too", () => {
-    const a = fallbackNext({ ...view, intent: "shared_gap" });
-    expect(a.args.say).toBe("Neither of you has strong evidence on what is worth remembering long-term yet. I'll teach it to both of you.");
   });
 });

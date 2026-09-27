@@ -36,9 +36,7 @@ import type {
   IdentityKind,
   LearnerProfile,
   ProfileResponse,
-  PreparedLesson,
 } from "./contracts.ts";
-import { CONCEPT_LABELS } from "./contracts.ts";
 import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
 import { BackboardMemory } from "./adapters/memory.ts";
 import { ClaudeModel } from "./adapters/model/claude.ts";
@@ -54,7 +52,6 @@ import { computeDelta, focusConceptId } from "./engine/delta.ts";
 import { evaluateMultipleChoice, evaluateShortAnswerKeywords, InvalidAnswerError, scoreRubric, type Evaluation } from "./engine/evaluation.ts";
 import { knowledgeLevel, transition, type Graph, type TransitionResult, type UpdateOptions } from "./engine/knowledgeState.ts";
 import { kindForCorrectness, makeObservation } from "./engine/observations.ts";
-import { deterministicExchange, pitchFor, validateExchange, type ExchangeContext, type ExchangeGap, type ExchangeMaterial } from "./engine/exchange.ts";
 import { hasGroundedChallenge, sanitizeDraft, TransferNotAssessableError, validateTransferDraft, type TransferContext, type TransferDraft } from "./engine/transfer.ts";
 import { explainSelection, pickItem, scoreConcepts, toPublicQuestion } from "./engine/selection.ts";
 import { logEvent } from "./log.ts";
@@ -1768,91 +1765,6 @@ export class ThinkethService {
     return { item, source: out.source === "live" ? "generated" : "fallback", applicationContext: d.applicationContext };
   }
 
-  /**
-   * Playground: the teacher's agent prepares an explanation for the learner's gap. It may use the
-   * shared corpus on this concept and, only when the teacher chose to share them, the titles, links
-   * and summaries of sources the teacher saved on it. Never private questions or memories. Every
-   * point must cite a material; with nothing grounded, the room falls back to the person's own words.
-   * Preparing a lesson observes nothing: no knowledge state changes here.
-   */
-  async prepareExchange(input: {
-    conceptId: string;
-    teacherId: string;
-    learnerId: string;
-    teacherName: string;
-    learnerName: string;
-    gap: ExchangeGap;
-    shareSavedSources: boolean;
-    whyRelevant: string;
-    /** "demo" only when every participant is a seeded persona; otherwise real, discovered sources only. */
-    corpus: "demo" | "live";
-  }): Promise<PreparedLesson> {
-    const concept = this.concepts.get(input.conceptId);
-    if (!concept) throw new NotFoundError(`Concept not found: ${input.conceptId}`);
-    const materials: ExchangeMaterial[] = [];
-    const cited = new Map<string, NonNullable<PreparedLesson["sources"]>[number]>();
-    const claims = this.claimsFor(input.corpus)
-      .filter((c) => c.conceptIds.includes(concept.id) && c.sourceIds.some((id) => this.sources.has(id)))
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 6);
-    for (const c of claims) {
-      const src = this.sources.get(c.sourceIds.find((id) => this.sources.has(id))!)!;
-      materials.push({ ref: `m${materials.length + 1}`, text: c.text, sourceId: src.id, via: "corpus", ...(c.stance === "challenges" ? { challenges: true } : {}) });
-      cited.set(src.id, { id: src.id, title: src.title, ...(src.url ? { url: src.url } : {}), ...(src.publisher ? { publisher: src.publisher } : {}), ...(src.publishedAt ? { publishedAt: src.publishedAt } : {}), via: "corpus" });
-    }
-    if (input.shareSavedSources) {
-      const saved = (await this.listResources(input.teacherId)).filter((r) => (r.status === "ready" || r.status === "learned") && r.summary && r.matchedConceptIds.includes(concept.id)).slice(0, 2);
-      for (const r of saved) {
-        const id = `resource:${r.id}`;
-        materials.push({ ref: `m${materials.length + 1}`, text: r.summary!, sourceId: id, via: "shared_resource" });
-        cited.set(id, { id, title: r.title, url: r.canonicalUrl ?? r.url, ...(r.publisher ? { publisher: r.publisher } : {}), ...(r.publishedAt ? { publishedAt: r.publishedAt } : {}), via: "shared_resource" });
-      }
-    }
-    const context = [
-      "Thinketh's shared source corpus on this concept",
-      ...(input.shareSavedSources ? [`Sources ${input.teacherName} saved on this topic, shared by ${input.teacherName}`] : []),
-      `${input.learnerName}'s shared knowledge snapshot (level, and whether it was ever verified)`,
-    ];
-    const g = input.gap;
-    const adaptedTo = `${input.learnerName}'s snapshot shows ${g.level} evidence on ${concept.name}${g.verified ? "" : ", never verified by a check"}${g.hasMisconception ? ", with a misconception flagged" : ""}. ${pitchFor(g)}`;
-    const base = { agentOf: input.teacherId, preparedFor: input.learnerId, adaptedTo, whyRelevant: input.whyRelevant, context, preparedAt: this.now().toISOString() };
-    if (materials.length === 0) {
-      logEvent("playground.lesson_unavailable", { conceptId: concept.id, teacherId: input.teacherId, reason: "no sourced material" });
-      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent found no sourced material on ${concept.name} to prepare from, so it teaches from Thinketh's concept description instead.` };
-    }
-    const ctx: ExchangeContext = { concept, teacherName: input.teacherName, learnerName: input.learnerName, learnerGap: g, materials };
-    const model = this.model();
-    const r = await guarded(
-      "claude",
-      "prepareExchange",
-      model
-        ? async () => {
-            const v = validateExchange(await model.prepareExchange(ctx), ctx);
-            if ("problem" in v) throw new Error(`exchange rejected: ${v.problem}`);
-            return v.draft;
-          }
-        : undefined,
-      () => deterministicExchange(ctx),
-      this.claudeTimeout(),
-    );
-    const checked = validateExchange(r.value, ctx);
-    if ("problem" in checked) {
-      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent couldn't ground an explanation in its sources, so it teaches from Thinketh's concept description instead.` };
-    }
-    const byRef = new Map(materials.map((m) => [m.ref, m.sourceId]));
-    const points = checked.draft.points.map((p) => ({ text: p.text, sourceIds: [...new Set(p.refs.map((ref) => byRef.get(ref)!))] }));
-    const used = new Set(points.flatMap((p) => p.sourceIds));
-    logEvent("playground.lesson_prepared", { conceptId: concept.id, teacherId: input.teacherId, learnerId: input.learnerId, by: r.source, points: points.length, sources: [...used] });
-    return {
-      status: "prepared",
-      ...base,
-      by: r.source === "live" ? "claude" : "deterministic",
-      text: checked.draft.explanation,
-      points,
-      sources: [...cited.values()].filter((x) => used.has(x.id)),
-    };
-  }
-
   /** A source record from the corpus (seeded or discovered). */
   sourceById(id: string): Source | undefined {
     return this.sources.get(id);
@@ -1870,21 +1782,6 @@ export class ThinkethService {
     const out = new Set<string>();
     for (const t of [...recent, ...this.seedHistory(userId)]) if (t.observation.kind === "diagnostic_correct") out.add(t.conceptId);
     return out;
-  }
-
-  /** A short, sourced lesson on one concept for two people at once (shared gaps). */
-  conceptLesson(conceptId: string, corpus: "demo" | "live" = "demo"): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
-    const concept = this.concepts.get(conceptId);
-    if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
-    const claims = this.claimsFor(corpus).filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
-    const source = claims.flatMap((c) => c.sourceIds).map((id) => this.sources.get(id)).find(Boolean);
-    const plain = CONCEPT_LABELS[conceptId]?.explanation;
-    const sections = [
-      ...(plain ? [{ heading: "In plain terms", body: `${plain}.` }] : []),
-      { heading: "The idea", body: concept.description },
-      ...claims.slice(0, 2).map((c, i) => ({ heading: i === 0 ? "What the evidence says" : "And", body: c.text })),
-    ];
-    return { sections, ...(source ? { resourceTitle: source.title } : {}) };
   }
 
   /**

@@ -1,5 +1,4 @@
 import { type ReactNode } from "react";
-import { MuseMark } from "@/components/brand/MuseMark";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Icon, type IconName } from "@/components/Icon";
@@ -70,20 +69,7 @@ export function StepRow({ icon, title, body, last }: { icon: IconName; title: st
   );
 }
 
-/** Muse speaking: a small labeled card led by an ink dot (coral is you, blue is the other Mind). */
-export function MuseCard({ children, label = "Muse", style }: { children: ReactNode; label?: string; style?: StyleProp<ViewStyle> }) {
-  return (
-    <RaisedCard style={[{ paddingVertical: space.m }, style]}>
-      <View style={styles.museHead}>
-        {label === "Muse" ? <MuseMark size={10} /> : <Dot tone="ink" size={5} />}
-        <T style={styles.tagText}>{label}</T>
-      </View>
-      {typeof children === "string" ? <T style={styles.museText}>{children}</T> : children}
-    </RaisedCard>
-  );
-}
-
-/** One voice in the teaching thread (storyboard 10): a dot for who is speaking, then their card. */
+/** One voice in a thread (an agent's message, Grokbot's challenge): a dot for who is speaking, then their card. */
 export function ThreadCard({ who, tone, children, style }: { who: string; tone: DotTone; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <RaisedCard style={[{ paddingVertical: space.m }, style]}>
@@ -93,25 +79,6 @@ export function ThreadCard({ who, tone, children, style }: { who: string; tone: 
       </View>
       <View style={{ marginTop: space.s }}>{children}</View>
     </RaisedCard>
-  );
-}
-
-/** An outcome row on the payoff screen (storyboard 11): soft icon well, what changed, one line. */
-export function OutcomeRow({ icon, title, body, last }: { icon: IconName; title: string; body?: string; last?: boolean }) {
-  return (
-    <View style={styles.stepRow}>
-      <View style={styles.stepIcon}>
-        <Icon name={icon} size={17} color={color.ink} />
-      </View>
-      <View style={[styles.stepBody, !last && styles.divided]}>
-        <T style={styles.stepTitle}>{title}</T>
-        {body ? (
-          <T style={styles.stepText} numberOfLines={2}>
-            {body}
-          </T>
-        ) : null}
-      </View>
-    </View>
   );
 }
 
@@ -131,6 +98,5 @@ const styles = StyleSheet.create({
   stepTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.2, color: color.ink },
   stepText: { fontFamily: font.sans, fontSize: 12.5, lineHeight: 17, color: color.ink2, marginTop: 2 },
   museHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  museText: { fontFamily: font.sansMedium, fontSize: 15, lineHeight: 22, color: color.ink, marginTop: space.s },
   cardTitle: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
 });

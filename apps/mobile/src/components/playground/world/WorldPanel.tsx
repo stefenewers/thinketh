@@ -7,10 +7,9 @@ import { T } from "@/components/Text";
 import { color, font, gutter, space } from "@/theme/tokens";
 import type { WorldView } from "./worldState";
 
-/** Who is teaching, what idea, what Thinketh is waiting for, and whether it was verified. */
+/** Who is teaching, what idea, and what the room is waiting for. */
 export function WorldNow({ world }: { world: WorldView }) {
-  const v = world.now.verified;
-  const tone = v === true ? color.coral : v === false ? color.ink3 : world.thinketh ? color.ink : color.ink3;
+  const tone = world.thinketh ? color.ink : color.ink3;
   return (
     <View style={styles.now} accessibilityLiveRegion="polite" accessible accessibilityLabel={[world.now.teaching, world.now.idea, world.now.waitingFor].filter(Boolean).join(". ")}>
       {world.now.teaching || world.now.idea ? (
@@ -21,7 +20,7 @@ export function WorldNow({ world }: { world: WorldView }) {
       ) : null}
       <View style={styles.waitRow}>
         <View style={[styles.waitDot, { backgroundColor: tone }]} />
-        <T style={[styles.wait, v === true && { color: color.ink }]} numberOfLines={2}>
+        <T style={styles.wait} numberOfLines={2}>
           {world.now.waitingFor}
         </T>
       </View>
@@ -44,8 +43,8 @@ export function AgentSheet({ room, world, me, userId, onClose, onSeeMind }: { ro
       </T>
     </View>
   );
-  const role = !a?.role ? "In the room" : a.role === "teacher" ? "Teaching this move" : a.role === "learner" ? "Learning this move" : "Learning together";
-  const device = !a ? "" : a.isMe ? "This device" : a.persona ? `Seeded demo persona. ${host?.displayName ?? "The host"} types for them on this phone; it isn't a second live device.` : "Their own device";
+  const role = !a?.role ? "In the room" : a.role === "teacher" ? "Its agent is teaching" : "Its agent is learning";
+  const device = !a ? "" : a.isMe ? "This device" : a.persona ? `Seeded demo persona, run from ${host?.displayName ?? "the host"}'s phone; it isn't a second live device.` : "Their own device";
   return (
     <Sheet visible={!!a} onClose={onClose} title={a ? (a.isMe ? "You" : a.name) : ""}>
       {a ? (

@@ -31,10 +31,6 @@ import {
   CreateRoomRequestSchema,
   JoinRoomRequestSchema,
   PlaygroundRoomSchema,
-  RoomAnswerRequestSchema,
-  RoomConductRequestSchema,
-  RoomExplainRequestSchema,
-  RoomResourceRequestSchema,
   RoomShareRequestSchema,
   StartExchangeRequestSchema,
   AdvanceExchangeRequestSchema,
@@ -256,28 +252,12 @@ export function createApp(deps: {
     app.get("/playground/rooms/:id", async (c) => c.json(room(await playground.get(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/demo-guest", async (c) => c.json(room(await playground.addDemoGuest(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/compare", async (c) => c.json(room(await playground.compare(c.req.param("id"), c.get("userId")))));
-    app.post("/playground/rooms/:id/conduct", async (c) => {
-      const { intent } = await body(c, RoomConductRequestSchema);
-      return c.json(room(await playground.conduct(c.req.param("id"), c.get("userId"), intent)));
-    });
-    app.post("/playground/rooms/:id/explain", async (c) => {
-      const { text, asUserId, source } = await body(c, RoomExplainRequestSchema);
-      return c.json(room(await playground.explain(c.req.param("id"), c.get("userId"), text, asUserId, source)));
-    });
-    app.post("/playground/rooms/:id/answer", async (c) => {
-      const { answer, asUserId } = await body(c, RoomAnswerRequestSchema);
-      if (answer.length > MAX_ANSWER_CHARS) throw new BadRequestError("Answer is too long");
-      return c.json(room(await playground.answer(c.req.param("id"), c.get("userId"), answer, asUserId)));
-    });
-    app.post("/playground/rooms/:id/resource", async (c) => {
-      const { url } = await body(c, RoomResourceRequestSchema);
-      return c.json(room(await playground.resource(c.req.param("id"), c.get("userId"), url)));
-    });
+    // The guided session routes (conduct, explain, answer, resource, exchange/check) were removed on 2026-09-27.
     app.post("/playground/rooms/:id/share", async (c) => {
       const { savedSources, asUserId } = await body(c, RoomShareRequestSchema);
       return c.json(room(await playground.share(c.req.param("id"), c.get("userId"), { savedSources }, asUserId)));
     });
-    // Agent exchange: start (idempotent), advance one step (stale steps are ignored), stop, close, then the human check.
+    // Agent exchange: start (idempotent), advance one step (stale steps are ignored), stop, close.
     app.post("/playground/rooms/:id/exchange", async (c) => {
       const { conceptId } = await body(c, StartExchangeRequestSchema);
       return c.json(room(await playground.startExchange(c.req.param("id"), c.get("userId"), conceptId)));
@@ -288,7 +268,6 @@ export function createApp(deps: {
     });
     app.post("/playground/rooms/:id/exchange/stop", async (c) => c.json(room(await playground.stopExchange(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/exchange/close", async (c) => c.json(room(await playground.closeExchange(c.req.param("id"), c.get("userId")))));
-    app.post("/playground/rooms/:id/exchange/check", async (c) => c.json(room(await playground.exchangeCheck(c.req.param("id"), c.get("userId")))));
     // Grokbot (optional): challenge the saved takeaway (idempotent per version), advance one step, stop.
     app.post("/playground/rooms/:id/challenge", async (c) => c.json(room(await playground.startChallenge(c.req.param("id"), c.get("userId")))));
     app.post("/playground/rooms/:id/challenge/advance", async (c) => {

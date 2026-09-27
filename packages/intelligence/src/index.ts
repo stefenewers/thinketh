@@ -7,7 +7,6 @@ import { createApp } from "./api/app.ts";
 import { loadConfig, type ThinkethConfig } from "./config.ts";
 import { buildSeed } from "./seed/corpus.ts";
 import { ThinkethService } from "./service.ts";
-import { createConductor } from "./playground/conductor.ts";
 import { PollingOnly, SupabaseBroadcast } from "./playground/realtime.ts";
 import { PlaygroundService } from "./playground/room.ts";
 import { DiscoveryRunner } from "./discovery/run.ts";
@@ -22,7 +21,7 @@ export function createThinketh(overrides: { config?: ThinkethConfig; now?: () =>
   const { url, serviceRoleKey, anonKey } = config.supabase;
   const realtime = url && serviceRoleKey ? new SupabaseBroadcast(url, serviceRoleKey) : new PollingOnly();
   const exchangeModel = config.muse.apiKey && config.muse.model ? new MuseChat({ apiKey: config.muse.apiKey, baseUrl: config.muse.baseUrl, model: config.muse.model }) : undefined;
-  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, adapters.store, overrides.now, url && anonKey ? { url, key: anonKey } : undefined, {
+  const playground = new PlaygroundService(service, realtime, adapters.store, overrides.now, url && anonKey ? { url, key: anonKey } : undefined, {
     model: exchangeModel,
     grader: { live: adapters.model, fallback: adapters.fallbackModel },
     limits: config.exchange,

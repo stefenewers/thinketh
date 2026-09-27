@@ -3,13 +3,11 @@ import { API_URL, USE_MOCK_API } from "./index";
 import { authHeaders, currentMode, SignInRequired } from "@/lib/session";
 
 // The Playground talks only to the Thinketh server (it owns every room; the
-// conductor and all secrets stay there). No mock: without a server the screen
+// agents' models and all secrets stay there). No mock: without a server the screen
 // says so instead of pretending two Minds are connected.
 
 const APP_KEY = process.env.EXPO_PUBLIC_THINKETH_APP_KEY;
 const TIMEOUT_MS = 12000;
-/** A graded answer can wait on Claude; the server falls back well before this. */
-const ANSWER_TIMEOUT_MS = 20000;
 
 export const PLAYGROUND_AVAILABLE = !USE_MOCK_API && !!API_URL;
 
@@ -53,28 +51,14 @@ export const playground = {
   get: (roomId: string, as?: string) => call("GET", `/playground/rooms/${id(roomId)}`, undefined, { as }),
   demoGuest: (roomId: string) => call("POST", `/playground/rooms/${id(roomId)}/demo-guest`),
   compare: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/compare`, {}, { as }),
-  conduct: (roomId: string, intent?: "next" | "shared_gap" | "resource" | "end", as?: string) =>
-    call("POST", `/playground/rooms/${id(roomId)}/conduct`, intent ? { intent } : {}, { as }),
-  /** `source`: the teacher's own words, their agent's prepared draft as-is, or that draft edited. */
-  explain: (roomId: string, text: string, opts: { asUserId?: string; as?: string; source?: "own" | "agent" | "agent_edited" } = {}) =>
-    call(
-      "POST",
-      `/playground/rooms/${id(roomId)}/explain`,
-      { text, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}), ...(opts.source ? { source: opts.source } : {}) },
-      { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS },
-    ),
   /** Let (or stop letting) your agent use sources you saved on the topic being taught. */
   share: (roomId: string, savedSources: boolean, opts: { asUserId?: string; as?: string } = {}) =>
     call("POST", `/playground/rooms/${id(roomId)}/share`, { savedSources, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as }),
-  answer: (roomId: string, answer: string, opts: { asUserId?: string; as?: string } = {}) =>
-    call("POST", `/playground/rooms/${id(roomId)}/answer`, { answer, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS }),
-  resource: (roomId: string, url: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/resource`, { url }, { as, timeoutMs: ANSWER_TIMEOUT_MS }),
   leave: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/leave`, {}, { as }),
-  /** Agent exchange: start (idempotent), advance one server step, stop, close, and the learner's own check. */
+  /** Agent exchange: start (idempotent), advance one server step, stop, close. */
   startExchange: (roomId: string, conceptId?: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange`, conceptId ? { conceptId } : {}, { as }),
   // One step can be a model turn (retrieve, then speak): give it room; the server bounds it.
   advanceExchange: (roomId: string, step: number, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/advance`, { step }, { as, timeoutMs: 120_000 }),
   stopExchange: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/stop`, {}, { as }),
   closeExchange: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/close`, {}, { as }),
-  exchangeCheck: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/check`, {}, { as, timeoutMs: ANSWER_TIMEOUT_MS }),
 };

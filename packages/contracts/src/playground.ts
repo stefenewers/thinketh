@@ -89,6 +89,7 @@ export const LearningSceneSchema = z.enum([
   "arrival",
   "comparing",
   "overview",
+  // @deprecated guided session removed (2026-09-27): kept so stored rooms still parse; the server shows them as "overview".
   "peer_teaching",
   "transfer",
   "knowledge_moved",
@@ -114,6 +115,7 @@ export const RoomParticipantSchema = z.object({
 });
 export type RoomParticipant = z.infer<typeof RoomParticipantSchema>;
 
+/** @deprecated guided session removed (2026-09-27): the room conductor no longer exists. */
 export const MuseToolSchema = z.enum([
   "get_room_state",
   "spotlight_scene",
@@ -127,6 +129,7 @@ export const MuseToolSchema = z.enum([
 ]);
 export type MuseTool = z.infer<typeof MuseToolSchema>;
 
+/** @deprecated guided session removed (2026-09-27). */
 export const MuseActionSchema = z.object({
   tool: MuseToolSchema,
   args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
@@ -143,6 +146,7 @@ export const RoomEventTypeSchema = z.enum([
   "participant_left",
   "compare_started",
   "delta_ready",
+  // @deprecated guided session removed (2026-09-27), through "lesson_unavailable": kept so stored rooms still parse.
   "spotlight",
   "teacher_assigned",
   "explanation_submitted",
@@ -198,6 +202,7 @@ export type RoomEvent = z.infer<typeof RoomEventSchema>;
  * An explanation the teacher's agent drafted for the learner's gap. It is agent-prepared material,
  * never presented as something the teacher said, and preparing it changes nobody's knowledge state.
  */
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const PreparedLessonSchema = z.object({
   /** preparing: the agent is drafting. prepared: a sourced draft is ready. unavailable: nothing grounded could be prepared. */
   status: z.enum(["preparing", "prepared", "unavailable"]),
@@ -233,6 +238,7 @@ export const PreparedLessonSchema = z.object({
 });
 export type PreparedLesson = z.infer<typeof PreparedLessonSchema>;
 
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const RoomTeachingSchema = z.object({
   conceptId: z.string(),
   conceptName: z.string(),
@@ -251,6 +257,7 @@ export const RoomTeachingSchema = z.object({
 
 
 
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const RoomTransferSchema = z.object({
   conceptId: z.string(),
   learnerId: z.string(),
@@ -274,6 +281,7 @@ export const RoomTransferSchema = z.object({
 });
 
 /** A peer teaching that has finished (answered), kept so a session can hold several. */
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const RoomCompletedTeachingSchema = z.object({
   conceptId: z.string(),
   conceptName: z.string(),
@@ -286,6 +294,7 @@ export const RoomCompletedTeachingSchema = z.object({
  * Session plan: Thinketh's deterministic choice of the most valuable valid learning moves that fit
  * the time budget. Muse conducts it; it cannot replace it. Durations are planning estimates.
  */
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const SessionPlanItemSchema = z.object({
   id: z.string(),
   type: z.enum(["peer_teach", "shared_gap", "resource"]),
@@ -305,6 +314,7 @@ export const SessionPlanItemSchema = z.object({
 });
 export type SessionPlanItem = z.infer<typeof SessionPlanItemSchema>;
 
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const SessionPlanSchema = z.object({
   budgetMinutes: z.number(),
   estimatedMinutes: z.number(),
@@ -312,6 +322,7 @@ export const SessionPlanSchema = z.object({
 });
 export type SessionPlan = z.infer<typeof SessionPlanSchema>;
 
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const RoomResourceSideSchema = z.object({
   userId: z.string(),
   resourceId: z.string(),
@@ -326,6 +337,7 @@ export const RoomResourceSideSchema = z.object({
 });
 export type RoomResourceSide = z.infer<typeof RoomResourceSideSchema>;
 
+/** @deprecated guided session removed (2026-09-27): kept so stored rooms still parse. */
 export const RoomResourceSchema = z.object({
   url: z.string(),
   title: z.string(),
@@ -424,7 +436,7 @@ export const AgentExchangeSchema = z.object({
   savedTakeawayId: z.string().optional(),
   /** One honest sentence on how it ended. */
   outcome: z.string().optional(),
-  /** Human application checks offered after the exchange (bounded). */
+  /** @deprecated the post-exchange "apply it yourself" check was removed (2026-09-27); always 0 for new exchanges, kept so stored ones parse. */
   humanChecks: z.number(),
 });
 export type AgentExchange = z.infer<typeof AgentExchangeSchema>;
@@ -597,12 +609,17 @@ export const PlaygroundRoomSchema = z.object({
   spotlight: z.object({ conceptId: z.string().optional(), participantId: z.string().optional() }).nullable(),
   snapshots: z.array(MindSnapshotSchema),
   delta: CollaborativeDeltaSchema.optional(),
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   teaching: RoomTeachingSchema.optional(),
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   transfer: RoomTransferSchema.optional(),
-  /** Peer teachings already answered this session (the current one is `teaching`). */
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   completedTeachings: z.array(RoomCompletedTeachingSchema).optional(),
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   plan: SessionPlanSchema.optional(),
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   sharedGap: z.object({ conceptId: z.string(), conceptName: z.string(), lesson: TeachDeltaResponseSchema.shape.sections.optional() }).optional(),
+  /** @deprecated guided session removed (2026-09-27): never written now; kept so stored rooms still parse. */
   resource: RoomResourceSchema.optional(),
   /** The current (or last) agent exchange in this room. */
   exchange: AgentExchangeSchema.optional(),
@@ -612,9 +629,10 @@ export const PlaygroundRoomSchema = z.object({
   challenge: TakeawayChallengeSchema.optional(),
   /** Whether "Challenge this idea" can start now (absent when no challenger is configured). */
   challengeAvailability: ChallengeAvailabilitySchema.optional(),
-  /** Last thing the conductor said. */
+  /** @deprecated guided session removed (2026-09-27): the conductor's last line; never written now. */
   museLine: z.string().optional(),
-  conductor: z.object({ mode: z.enum(["muse", "fallback"]), detail: z.string() }),
+  /** @deprecated guided session removed (2026-09-27): the server no longer sends it (optional so older payloads still parse). */
+  conductor: z.object({ mode: z.enum(["muse", "fallback"]), detail: z.string() }).optional(),
   realtime: z.object({
     channel: z.string(),
     mode: z.enum(["broadcast", "polling"]),
@@ -630,16 +648,7 @@ export type PlaygroundRoom = z.infer<typeof PlaygroundRoomSchema>;
 // Requests
 export const CreateRoomRequestSchema = z.object({ displayName: z.string().trim().min(1).max(40) });
 export const JoinRoomRequestSchema = z.object({ code: z.string().trim().min(4).max(12), displayName: z.string().trim().min(1).max(40) });
-export const RoomExplainRequestSchema = z.object({
-  text: z.string().trim().min(1).max(2000),
-  asUserId: z.string().max(64).optional(),
-  /** Defaults to "own". "agent"/"agent_edited" only when the agent actually prepared a lesson. */
-  source: z.enum(["own", "agent", "agent_edited"]).optional(),
-});
 export const RoomShareRequestSchema = z.object({ savedSources: z.boolean(), asUserId: z.string().max(64).optional() });
-export const RoomAnswerRequestSchema = z.object({ answer: z.string().trim().min(1).max(2000), asUserId: z.string().max(64).optional() });
-export const RoomResourceRequestSchema = z.object({ url: z.string().trim().min(1).max(2048) });
-export const RoomConductRequestSchema = z.object({ intent: z.enum(["next", "shared_gap", "resource", "end"]).optional() });
 
 
 

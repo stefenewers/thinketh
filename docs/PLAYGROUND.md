@@ -4,6 +4,8 @@ Two Minds in one learning space. Thinketh works out what can usefully move betwe
 
 > Mongo models the changing world. Tiger models your changing understanding. Backboard remembers qualitative things about you that numbers cannot. Claude reasons over the delta. Muse orchestrates the shared learning environment. ElevenLabs makes the interaction conversational. Thinketh decides what you need next.
 
+> **Removed on 2026-09-27 at the product owner's request:** the guided session (Muse conductor, "Start session" and the session plan, peer teaching with agent-prepared lessons, transfer questions, the shared-gap and shared-source scenes) and the post-exchange "apply it yourself" check. Nothing in the Playground asks a person to answer in their own words any more. The Playground is now: create a room, join by code, or "Bring in Nadani" → "Compare our Minds" → "Let our agents exchange" → saved sourced takeaway → Grokbot "Challenge this idea" → stop/close → leave. The sections below that describe the removed flow are kept as history. Stored rooms still parse (the contract fields are marked deprecated), and a room left in a removed scene is shown as the overview.
+
 **Live status (2026-09-26):** Mongo, Tiger, Backboard, Claude, ElevenLabs, Supabase and **Muse** are live. Muse (`muse-spark-1.3` on Meta's Model API) conducts the room behind a strict tool surface; if it times out, errs or proposes anything invalid, the deterministic conductor decides instead. Every room shows which one conducted.
 
 ## The pieces
@@ -15,7 +17,7 @@ Two Minds in one learning space. Thinketh works out what can usefully move betwe
 | MindSnapshot | `playground/room.ts` → `snapshot()` | The permissioned view of a Mind that a room sees. |
 | Collaborative delta | `engine/collaborative.ts` | Who can teach whom, shared strengths, shared gaps and conflicts. Deterministic and explainable. |
 | Rooms | `playground/room.ts`, `/playground/*` routes | Lifecycle, scenes and the event log. The server is the source of truth. |
-| Conductor | `playground/conductor.ts` | Muse (live when configured) or the deterministic fallback, behind one validated tool surface. |
+| Agent exchange | `playground/exchange/engine.ts` | Muse agents in separate contexts teach, question and keep a sourced takeaway; Thinketh checks it. (`playground/conductor.ts` was removed on 2026-09-27.) |
 | Realtime | `playground/realtime.ts`, `apps/mobile/src/lib/roomChannel.ts` | Supabase Realtime Broadcast and Presence, with polling underneath. |
 
 ## MindSnapshot (privacy boundary)
@@ -193,7 +195,7 @@ The safe default is Claude's tool-use documentation. `scripts/resource-asymmetry
 
 ## API
 
-`POST /playground/rooms` · `POST /playground/join` · `GET /playground/rooms/:id` · `POST …/demo-guest` · `…/compare` · `…/conduct` · `…/explain` · `…/answer` · `…/resource` · `…/leave`. All require the app key. Rooms are visible only to their participants, and only the host can act for a seeded demo persona in their own room.
+`POST /playground/rooms` · `POST /playground/join` · `GET /playground/rooms/:id` · `POST …/demo-guest` · `…/compare` · `…/share` · `…/exchange` · `…/exchange/advance` · `…/exchange/stop` · `…/exchange/close` · `…/challenge` · `…/challenge/advance` · `…/challenge/stop` · `…/leave` · `GET /takeaways` · `GET /takeaways/:id`. (`…/conduct`, `…/explain`, `…/answer`, `…/resource` and `…/exchange/check` were removed on 2026-09-27 at the product owner's request.) All require the app key. Rooms are visible only to their participants, and only the host can act for a seeded demo persona in their own room.
 
 ## Presentation labels (simple outside, deep inside)
 
