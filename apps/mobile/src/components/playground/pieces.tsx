@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { MuseMark } from "@/components/brand/MuseMark";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Icon, type IconName } from "@/components/Icon";
@@ -59,7 +60,7 @@ export function StepRow({ icon, title, body, last }: { icon: IconName; title: st
   return (
     <View style={styles.stepRow}>
       <View style={styles.stepIcon}>
-        <Icon name={icon} size={17} color={color.coral} />
+        <Icon name={icon} size={17} color={color.ink} />
       </View>
       <View style={[styles.stepBody, !last && styles.divided]}>
         <T style={styles.stepTitle}>{title}</T>
@@ -74,7 +75,7 @@ export function MuseCard({ children, label = "Muse", style }: { children: ReactN
   return (
     <RaisedCard style={[{ paddingVertical: space.m }, style]}>
       <View style={styles.museHead}>
-        <Dot tone="ink" size={5} />
+        {label === "Muse" ? <MuseMark size={10} /> : <Dot tone="ink" size={5} />}
         <T style={styles.tagText}>{label}</T>
       </View>
       {typeof children === "string" ? <T style={styles.museText}>{children}</T> : children}
@@ -100,7 +101,7 @@ export function OutcomeRow({ icon, title, body, last }: { icon: IconName; title:
   return (
     <View style={styles.stepRow}>
       <View style={styles.stepIcon}>
-        <Icon name={icon} size={17} color={color.coral} />
+        <Icon name={icon} size={17} color={color.ink} />
       </View>
       <View style={[styles.stepBody, !last && styles.divided]}>
         <T style={styles.stepTitle}>{title}</T>
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
   tagText: { fontFamily: font.sansSemibold, fontSize: 10.5, lineHeight: 13, letterSpacing: 1.1, textTransform: "uppercase", color: color.ink2 },
   glyph: { position: "absolute" },
   stepRow: { flexDirection: "row", alignItems: "center", paddingLeft: space.m },
-  stepIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: color.coralTint, alignItems: "center", justifyContent: "center" },
+  stepIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: color.surfaceMuted, alignItems: "center", justifyContent: "center" },
   stepBody: { flex: 1, paddingVertical: space.m, paddingRight: space.m, marginLeft: space.m },
   divided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   stepTitle: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, letterSpacing: -0.2, color: color.ink },

@@ -41,7 +41,8 @@ export function Character({
   paused: boolean;
   reduced: boolean;
   a11y: string;
-  onPress: () => void;
+  /** Without an action the character is labelled but not a button. */
+  onPress?: () => void;
 }) {
   const size = sprite.frame;
   const [start] = useState(() => from ?? to);
@@ -102,7 +103,7 @@ export function Character({
 
   return (
     <Animated.View style={[styles.wrap, { width: size }, place]}>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={a11y} hitSlop={6} style={{ alignItems: "center" }}>
+      <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? "button" : "image"} accessibilityLabel={a11y} hitSlop={6} style={{ alignItems: "center" }}>
         <View style={[styles.shadow, { width: size * 0.62, left: size * 0.19, top: size - 6 }]} />
         <Animated.View style={[{ width: size, height: size, overflow: "hidden" }, mirror]}>
           <Animated.View style={[{ width: size * sprite.frames, height: size }, strip]}>

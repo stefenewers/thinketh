@@ -121,6 +121,7 @@ export default function Ask() {
           </Gutter>
         ) : answer ? (
           <AnswerView
+            conceptName={conceptName}
             answer={answer}
             onWhy={(allSources) => {
               setWhy({ allSources });
@@ -200,7 +201,7 @@ function QuestionBubble({ text }: { text: string }) {
 }
 
 /** Storyboard 04: the answer first; the reasoning is one tap away (its own view, storyboard 05). */
-function AnswerView({ answer, onWhy, onAskElse }: { answer: Answer; onWhy: (allSources: boolean) => void; onAskElse: () => void }) {
+function AnswerView({ answer, conceptName, onWhy, onAskElse }: { answer: Answer; conceptName: (id: string) => string | undefined; onWhy: (allSources: boolean) => void; onAskElse: () => void }) {
   const quick = answer.mode === "quick" || !answer.mode;
   const s = answer.sections;
   const modeLabel = MODES.find((m) => m.key === (answer.mode ?? "quick"))!.label;
@@ -257,6 +258,21 @@ function AnswerView({ answer, onWhy, onAskElse }: { answer: Answer; onWhy: (allS
                   </T>
                 </View>
               ))}
+            </View>
+          ) : null}
+
+          {/* The concepts Thinketh used for this answer, each one tap from its book in your Mind. */}
+          {answer.relatedConceptIds.length ? (
+            <View style={{ marginTop: space.l }}>
+              <T style={styles.keyTitle}>In your Mind</T>
+              <T variant="meta" style={{ color: color.ink3, marginTop: 2 }}>
+                Thinketh used these concepts for this answer. Asking doesn&apos;t change them; a check does.
+              </T>
+              <View style={styles.chips}>
+                {answer.relatedConceptIds.map((id) => (
+                  <ConceptChip key={id} label={conceptName(id) ?? id} book onPress={() => router.push({ pathname: "/mind", params: { concept: id, from: "ask" } })} />
+                ))}
+              </View>
             </View>
           ) : null}
         </RaisedCard>
@@ -354,7 +370,7 @@ function ReasoningView({ answer, conceptName, initialAllSources }: { answer: Ans
           <T variant="support">Connected to your existing thinking:</T>
           <View style={styles.chips}>
             {conceptIds.map((id) => (
-              <ConceptChip key={id} label={conceptName(id) ?? id} onPress={() => router.push({ pathname: "/mind", params: { concept: id } })} />
+              <ConceptChip key={id} label={conceptName(id) ?? id} book onPress={() => router.push({ pathname: "/mind", params: { concept: id, from: "ask" } })} />
             ))}
           </View>
         </View>

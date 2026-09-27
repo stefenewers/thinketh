@@ -287,6 +287,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
                       key={c.conceptId}
                       label={conceptName(c.conceptId)}
                       active={c.conceptId === primaryConceptId}
+                      book
                       onPress={() => router.push({ pathname: "/mind", params: { concept: c.conceptId } })}
                     />
                   ))}
@@ -340,7 +341,7 @@ function CheckResult({ check, conceptName, onAgain, onExplain }: { check: NonNul
       : kind === "diagnostic_partial"
         ? `Thinketh recorded partial evidence for ${conceptName}.`
         : `Nothing was marked as learned. Thinketh recorded what your answer showed about ${conceptName}.`;
-  const openMind = () => router.push({ pathname: "/mind", params: { concept: check.conceptId } });
+  const openMind = () => router.push({ pathname: "/mind", params: { concept: check.conceptId, from: "check" } });
   return (
     <View style={[styles.card, { marginTop: space.xl }]} accessibilityLiveRegion="polite">
       <T style={styles.kicker}>Your check</T>

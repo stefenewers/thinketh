@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Development, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
@@ -9,18 +9,17 @@ import { MasteryBar } from "@/components/MindGraph";
 import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
 import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, SectionHeader, SegmentedTabs } from "@/components/system";
 import { imageFor } from "@/content/imagery";
-import { layoutMind } from "@thinketh/mindprint";
-import { MindCanvas } from "@/mindprint/MindCanvas";
-import { Mindprint } from "@/mindprint/Mindprint";
-import { layoutEdges, nodesFromKnowledge } from "@/mindprint/model";
+import { FocusLabel, LibraryLegend, MindLibrary, playedHighlights } from "@/components/mind/world/MindLibrary";
+import { BookGlyph } from "@/components/mind/world/Book";
+import { EVIDENCE_OF, projectMindWorld } from "@/components/mind/world/mindWorld";
 import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState } from "@/components/ui";
-import { useApi } from "@/lib/hooks";
+import { useApi, useReducedMotion } from "@/lib/hooks";
 import { evidenceLabel, improvedTodayIds, isToday, levelLabel, relativeTime, todaysTransitions } from "@/lib/knowledge";
 import { color, depth, font, space, warm } from "@/theme/tokens";
 
 export default function MindScreen() {
-  const { concept } = useLocalSearchParams<{ concept?: string }>();
+  const { concept, from } = useLocalSearchParams<{ concept?: string; from?: string }>();
   const { data, error, loading, reload } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
   // Developments and sources for "What's changed for you" and the Sources tab. Optional: Mind never waits on it.
   const brief = useApi(() => api.getTodayBrief(), []);
@@ -34,7 +33,7 @@ export default function MindScreen() {
     );
   }
   // Mind is a tab now: a new deep link (?concept=) remounts it with that concept selected.
-  return <Mind key={concept ?? "mind"} data={data} initialConceptId={concept} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
+  return <Mind key={concept ?? "mind"} data={data} initialConceptId={concept} from={from} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
 }
 
 const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];
@@ -51,7 +50,7 @@ function recentTransitions(data: KnowledgeResponse): KnowledgeStateTransition[] 
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-function Mind({ data, initialConceptId, developments, sources }: { data: KnowledgeResponse; initialConceptId?: string; developments: Development[]; sources: Source[] }) {
+function Mind({ data, initialConceptId, from, developments, sources }: { data: KnowledgeResponse; initialConceptId?: string; from?: string; developments: Development[]; sources: Source[] }) {
   const { items } = data;
   const concepts = items.map((i) => i.concept);
   const conceptById = new Map(concepts.map((c) => [c.id, c]));
@@ -89,6 +88,11 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
   const sourceById = new Map(sources.map((x) => [x.id, x]));
   const touching = (id: string) => developments.filter((d) => d.conceptIds.includes(id));
   const sourcesFor = (id: string) => [...new Set(touching(id).flatMap((d) => d.sourceIds))].map((x) => sourceById.get(x)).filter((x): x is Source => !!x);
+  const reduced = useReducedMotion();
+  const { width } = useWindowDimensions();
+  // The library: a pure projection of this response. Sources are counted per book, never shelved as books.
+  const sourceCounts = new Map(concepts.map((c) => [c.id, sourcesFor(c.id).length]));
+  const world = projectMindWorld(data, { selectedId, played: playedHighlights, sourceCounts });
 
   return (
     <View style={{ flex: 1, backgroundColor: warm.ground }}>
@@ -110,7 +114,7 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
           value={tab}
           onChange={setTab}
           tabs={[
-            { key: "map", label: "Map" },
+            { key: "map", label: "Library" },
             { key: "concepts", label: "Concepts" },
             { key: "changes", label: "Changes" },
           ]}
@@ -119,12 +123,21 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
 
       {tab === "map" ? (
         <>
+          <View style={{ marginTop: space.m }}>
+            <MindLibrary world={world} width={width} reduced={reduced} onSelect={select} />
+          </View>
+          <Gutter>
+            <View style={{ marginTop: space.m, gap: space.s }}>
+              {!selected ? <FocusLabel book={null} /> : null}
+              {!selected ? <LibraryLegend /> : null}
+              {selected && from ? <ArrivalNote from={from} /> : null}
+            </View>
+          </Gutter>
           {!selected ? (
             <Gutter>
               <MindOrientation recent={recent[0]} items={items} conceptById={conceptById} inBrief={new Set(developments.flatMap((d) => d.conceptIds))} onOpen={select} />
             </Gutter>
           ) : null}
-          <MindMap items={items} edges={data.edges} changedIds={updatedIds} selectedId={selectedId} onSelect={select} />
 
           <Gutter>
             {selected && selectedState ? (
@@ -144,9 +157,6 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
               />
             ) : (
               <>
-                <T variant="meta" style={styles.hint}>
-                  Pinch to explore · tap a concept
-                </T>
                 <MetricStrip
                   style={{ marginTop: space.xl }}
                   metrics={[
@@ -248,50 +258,6 @@ function Mind({ data, initialConceptId, developments, sources }: { data: Knowled
   );
 }
 
-/** The Mindprint: semantic layout, pan and pinch, tap a concept. */
-function MindMap({
-  items,
-  edges,
-  changedIds,
-  selectedId,
-  onSelect,
-}: {
-  items: KnowledgeResponse["items"];
-  edges: KnowledgeResponse["edges"];
-  changedIds: Set<string>;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const { width } = useWindowDimensions();
-  const height = Math.min(420, Math.round(width * 0.98));
-  const [lod, setLod] = useState<"overview" | "normal">("normal");
-  const nodes = useMemo(() => nodesFromKnowledge(items, changedIds), [items, changedIds]);
-  const layout = useMemo(
-    () =>
-      layoutMind(nodes, layoutEdges(edges), { x: 14, y: 0, w: width - 28, h: height }, {
-        focusId: selectedId,
-        lod: selectedId ? "focus" : lod,
-        changedIds: [...changedIds],
-      }),
-    [nodes, edges, width, height, selectedId, lod, changedIds],
-  );
-  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
-  return (
-    <View style={{ marginTop: space.m }} accessible accessibilityLabel={`Map of ${nodes.length} concepts. Filled: strong evidence. Hollow: developing.`}>
-      <MindCanvas
-        width={width}
-        height={height}
-        hits={layout.nodes}
-        onTapNode={(id) => onSelect(id === selectedId ? null : id)}
-        onTapEmpty={() => onSelect(null)}
-        onZoomSettled={(sc) => setLod(sc < 0.95 ? "overview" : "normal")}
-      >
-        <Mindprint width={width} height={height} regions={[{ layout, nodes: byId, focusId: selectedId, dim: !!selectedId, stubs: true }]} />
-      </MindCanvas>
-    </View>
-  );
-}
-
 /**
  * The Mind at rest, before you tap anything: what changed recently, the one concept Thinketh is
  * least sure about (a stated rule, not a judgement), and how to read the map.
@@ -355,7 +321,7 @@ function MindOrientation({
           accessibilityLabel={`Worth strengthening: ${shaky.concept.name}. ${shakyWhy}`}
           style={[styles.orientRow, styles.orientDivided]}
         >
-          <View style={[styles.legendDot, { backgroundColor: color.canvas, borderColor: color.ink }]} />
+          <BookGlyph evidence={EVIDENCE_OF[shaky.level]} uncertain={shaky.state.uncertainty > 0.35} size={16} />
           <View style={{ flex: 1 }}>
             <T variant="meta" style={{ color: color.ink3 }}>
               Worth strengthening
@@ -370,25 +336,10 @@ function MindOrientation({
           <Icon name="chevron" size={13} color={color.ink3} />
         </Pressable>
       ) : null}
-      <View style={[styles.legend, styles.orientDivided]} accessible accessibilityLabel="How to read the map: filled means you've shown it, hollow means still developing, coral means changed recently.">
-        <Legend fill={color.ink} label="You've shown it" />
-        <Legend fill={color.canvas} ring={color.ink} label="Still developing" />
-        <Legend fill={color.coral} label="Changed" />
-      </View>
     </View>
   );
 }
 
-function Legend({ fill, ring, label }: { fill: string; ring?: string; label: string }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-      <View style={[styles.legendDot, { backgroundColor: fill, borderColor: ring ?? fill }]} />
-      <T variant="meta" style={{ color: color.ink2 }}>
-        {label}
-      </T>
-    </View>
-  );
-}
 
 function ChangeList({
   transitions,
@@ -430,12 +381,14 @@ function Footnote() {
   return (
     <T variant="support" style={styles.footnote}>
       This is an estimate built from evidence: what you read, what you tell Thinketh, and how you answer checks. Checks count far
-      more than reading. Filled concepts have strong evidence, hollow ones are still developing, and coral marks what changed.
+      more than reading. Darker covers have more evidence, a dotted edge means few signals so far, and a coral bookmark marks
+      what changed. Where you stand in the library only shows what you&apos;re looking at.
     </T>
   );
 }
 
 const styles = StyleSheet.create({
+  arrival: { paddingVertical: space.s, paddingHorizontal: space.m, borderRadius: 12, backgroundColor: color.surfaceMuted },
   hint: { textAlign: "center", color: color.ink3, marginTop: -space.xs },
   orient: { marginTop: space.l, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   orientRow: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, minHeight: 56 },
@@ -461,3 +414,27 @@ const styles = StyleSheet.create({
   conceptName: { flex: 1, fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, letterSpacing: -0.2, color: color.ink },
   footnote: { marginTop: space.xxl, fontSize: 12.5, lineHeight: 18, color: color.ink3 },
 });
+
+/**
+ * Where you came from, said plainly: why this book is open, and what can change it. Only claims what
+ * the source screen actually did (a source adds information; only demonstrated understanding changes a book).
+ */
+function ArrivalNote({ from }: { from: string }) {
+  const text: Record<string, string> = {
+    ask: "Opened from Ask: Thinketh used this concept in its answer. Asking adds context; a check is what changes the book.",
+    source: "Opened from a source: reading adds information. This book changes only when you show understanding in a check.",
+    check: "Opened from your check: the change and its reason are recorded below.",
+    playground: "Opened from the Playground: your transfer answer was graded, and the recorded result is below.",
+    today: "Opened from Today: the latest recorded change is below.",
+    voice: "Opened from Catch me up: listening adds context; a check is what changes this book.",
+  };
+  const t = text[from];
+  if (!t) return null;
+  return (
+    <View style={styles.arrival}>
+      <T variant="meta" style={{ color: color.ink2 }}>
+        {t}
+      </T>
+    </View>
+  );
+}

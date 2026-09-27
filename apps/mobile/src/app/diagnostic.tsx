@@ -196,7 +196,7 @@ function Diagnostic({
               <Button
                 label="See what changed in my Mind"
                 icon="arrow"
-                onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })}
+                onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId, from: "check" } })}
               />
             ) : (
               // Not yet (or partly): the useful next step is another way in, not a victory lap.
@@ -208,7 +208,7 @@ function Diagnostic({
                     router.replace({ pathname: "/ask", params: { q: `Explain ${concept?.name ?? "this"} based on what I already know. I just got a check on it wrong.`, mode: "teach" } })
                   }
                 />
-                <Button kind="secondary" label="See my Mind" onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId } })} />
+                <Button kind="secondary" label="See my Mind" onPress={() => router.replace({ pathname: "/mind", params: { concept: question.conceptId, from: "check" } })} />
               </>
             )}
             <Button

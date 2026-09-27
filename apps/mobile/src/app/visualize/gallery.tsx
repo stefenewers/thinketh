@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Redirect } from "expo-router";
 import { normalizeVisualization } from "@thinketh/contracts";
 import { T } from "@/components/Text";
 import { Gutter, ModalHeader, Screen } from "@/components/ui";
 import { VisualizationView } from "@/components/visualization/VisualizationView";
 import { OFFLINE_VISUALIZATIONS } from "@/api/visualizations";
 import { VISUALIZATION_SAMPLES } from "@/content/visualizationSamples";
+import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { goBack } from "@/lib/nav";
 import { color, font, radius, space } from "@/theme/tokens";
 
@@ -16,6 +18,11 @@ const ALL = [
 ];
 
 export default function VisualizationGallery() {
+  if (!DEMO_CONTROLS) return <Redirect href="/" />;
+  return <Gallery />;
+}
+
+function Gallery() {
   const [i, setI] = useState(0);
   const current = ALL[i]!;
   return (

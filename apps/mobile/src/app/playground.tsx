@@ -27,6 +27,7 @@ import { Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, type DotTone } 
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
 import { useRoomChannel } from "@/lib/roomChannel";
+import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { fmt2 } from "@/lib/knowledge";
 import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
 
@@ -165,7 +166,7 @@ export default function PlaygroundScreen() {
           {following ? (
             <Pressable
               onPress={() => setFollowMuse((f) => !f)}
-              onLongPress={() => setShowDiag((v) => !v)}
+              onLongPress={DEMO_CONTROLS ? () => setShowDiag((v) => !v) : undefined}
               delayLongPress={600}
               accessibilityRole="button"
               accessibilityState={{ selected: followMuse }}
@@ -181,7 +182,7 @@ export default function PlaygroundScreen() {
             </Pressable>
           ) : (
             // Long-press shows the room's technical provenance (dev/demo diagnostics); never shown by default.
-            <Pressable onLongPress={() => setShowDiag((v) => !v)} delayLongPress={600} accessible={false}>
+            <Pressable onLongPress={DEMO_CONTROLS ? () => setShowDiag((v) => !v) : undefined} delayLongPress={600} accessible={false}>
               <T style={styles.headerTitle} accessibilityRole="header">
                 Playground
               </T>
@@ -856,11 +857,12 @@ function KnowledgeMoved({ room, me, busy, onNext, onPlanNext, onEnd }: { room: P
             <Button label={busy ? "Muse is setting it up…" : "Start this move"} icon="arrow" loading={busy} onPress={onPlanNext} style={{ marginTop: space.m }} />
           </View>
         ) : null}
+        {/* Only the learner's Mind is graded here; teaching doesn't change the teacher's Mind. */}
         {tr.learnerId === me ? (
           <Button
             kind="secondary"
-            label="See your Mind"
-            onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId } })}
+            label={tr.verified ? "See the change in your Mind" : "See this concept in your Mind"}
+            onPress={() => router.push({ pathname: "/mind", params: { concept: tr.conceptId, from: "playground" } })}
             style={{ alignSelf: "flex-start", marginTop: space.m }}
           />
         ) : null}
