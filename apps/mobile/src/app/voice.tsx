@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { goBack } from "@/lib/nav";
 import { api } from "@/api";
 import { Mark } from "@/components/Logo";
 import { IconButton } from "@/components/system";
@@ -148,7 +149,7 @@ function VoiceHeader() {
       <T style={styles.headerTitle} accessibilityRole="header">
         Catch me up
       </T>
-      <IconButton icon="close" accessibilityLabel="Close Catch me up" onPress={() => router.back()} />
+      <IconButton icon="close" accessibilityLabel="Close Catch me up" onPress={() => goBack()} />
     </View>
   );
 }
@@ -186,7 +187,7 @@ function Transcript({ scene, lines, heroId, notice }: { scene: ReactNode; lines:
         ) : (
           <>
             <CheckUnderstanding heroId={heroId} />
-            <Button kind="quiet" label="Back to today" style={{ alignSelf: "center" }} onPress={() => router.back()} />
+            <Button kind="quiet" label="Back to today" style={{ alignSelf: "center" }} onPress={() => goBack()} />
           </>
         )}
       </View>

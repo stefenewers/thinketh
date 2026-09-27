@@ -3,13 +3,14 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { router, useLocalSearchParams } from "expo-router";
 import type { AskResponse } from "@thinketh/contracts";
 import { api } from "@/api";
+import { rejectedInputReason } from "@/api/http";
 import { Icon } from "@/components/Icon";
 import { AppTopBar, ConceptChip, IconButton, InsightRow, ListCard, RaisedCard, ReasoningStep, SectionHeader, SegmentedTabs, SignalPill, SourceCard } from "@/components/system";
 import { T } from "@/components/Text";
 import { Gutter, LoadingState } from "@/components/ui";
 import { imageFor } from "@/content/imagery";
 import { useApi } from "@/lib/hooks";
-import { color, font, layout, radius, space } from "@/theme/tokens";
+import { color, font, layout, lift, radius, space } from "@/theme/tokens";
 
 const SUGGESTED = [
   "What changed in agent memory this week?",
@@ -34,6 +35,8 @@ export default function Ask() {
   const [pending, setPending] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  // The server's reason when it declined the question itself (e.g. too long); retrying won't help.
+  const [rejected, setRejected] = useState<string | null>(null);
   // Storyboard 05: "Why this answer?" is its own view (not a route); null = the answer view.
   const [why, setWhy] = useState<null | { allSources: boolean }>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -47,12 +50,14 @@ export default function Ask() {
     setAsking(true);
     setPending(text);
     setFailed(null);
+    setRejected(null);
     setAnswer(null);
     setWhy(null);
     try {
       setAnswer({ ...(await api.ask({ question: text, ...(developmentId ? { developmentId } : {}), mode: asMode })), question: text, developmentId, mode: asMode });
-    } catch {
+    } catch (e) {
       setFailed(text);
+      setRejected(rejectedInputReason(e) ?? null);
     } finally {
       setAsking(false);
       setPending(null);
@@ -67,7 +72,7 @@ export default function Ask() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- responding to a navigation param, once
       setMode(m);
       ask(q, dev, m);
-      router.setParams({ q: undefined, dev: undefined, mode: undefined });
+      router.replace("/ask");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -130,13 +135,15 @@ export default function Ask() {
               <RaisedCard style={{ marginBottom: space.s }}>
                 <SignalPill label="No answer yet" muted />
                 <T variant="body" style={{ marginTop: space.m }}>
-                  Couldn&apos;t get an answer just now.
+                  {rejected ? `Thinketh couldn't take that question: ${rejected}.` : "Couldn't get an answer just now."}
                 </T>
-                <Pressable onPress={() => ask(failed)} accessibilityRole="button" style={styles.inlineLink}>
-                  <T variant="meta" style={{ color: color.ink }}>
-                    Try again
-                  </T>
-                </Pressable>
+                {rejected ? null : (
+                  <Pressable onPress={() => ask(failed)} accessibilityRole="button" style={styles.inlineLink}>
+                    <T variant="meta" style={{ color: color.ink }}>
+                      Try again
+                    </T>
+                  </Pressable>
+                )}
               </RaisedCard>
             ) : null}
             <SectionHeader title="Based on your knowledge" style={{ marginTop: failed ? space.xl : space.s }} />
@@ -161,6 +168,7 @@ export default function Ask() {
             placeholderTextColor={color.ink3}
             style={styles.input}
             returnKeyType="send"
+            maxLength={500}
             onSubmitEditing={() => ask(input)}
             editable={!asking}
             accessibilityLabel="Question"
@@ -489,11 +497,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: color.hairline,
     backgroundColor: color.canvas,
-    shadowColor: color.ink,
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    ...lift(color.ink, 0.05, 12, 2, 1),
   },
   input: { flex: 1, minHeight: 44, fontFamily: font.sans, fontSize: 15, color: color.ink },
   send: { width: 40, height: 40, borderRadius: 20, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },

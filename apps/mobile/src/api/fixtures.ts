@@ -121,22 +121,13 @@ export function initialHistory(): Record<string, KnowledgeStateTransition[]> {
       transition("tr-am-2", "agent-memory", "got_it", 0.2, [0.34, 0.55, 1], [0.38, 0.5, 2], "Marked “Got it” on an external-memory architecture development. Self-reported, not yet verified.", daysAgo(16)),
       transition("tr-am-3", "agent-memory", "asked_followup", 0.25, [0.38, 0.5, 2], [0.42, 0.44, 3], "Asked how retrieval differs from memory. Shows active engagement; the understanding itself was not tested.", daysAgo(7)),
     ],
+    // Mirrors the API seed: real prior history exists only for these two concepts. The rest start
+    // from an estimate with no recorded change (onboarding promises "never asked").
+    "evaluator-architectures": [
+      transition("tr-ev-1", "evaluator-architectures", "diagnostic_partial", 0.8, [0.3, 0.62, 0], [0.24, 0.53, 1], "Updated because you partially answered a question on why graders should be independent.", daysAgo(12)),
+      transition("tr-ev-2", "evaluator-architectures", "viewed", 0.05, [0.24, 0.53, 1], [0.24, 0.52, 2], "Updated because you viewed a development. A light signal: it can't show understanding by itself.", daysAgo(6)),
+    ],
   };
-  for (const [conceptId, mastery, uncertainty, evidenceCount] of seedStates) {
-    if (history[conceptId]) continue;
-    history[conceptId] = [
-      transition(
-        `tr-seed-${conceptId}`,
-        conceptId,
-        "viewed",
-        0.1,
-        [round(mastery - 0.05), round(uncertainty + 0.08), Math.max(0, evidenceCount - 1)],
-        [mastery, uncertainty, evidenceCount],
-        "Estimated from your onboarding topics and reading history.",
-        daysAgo(3),
-      ),
-    ];
-  }
   return history;
 }
 
@@ -358,6 +349,37 @@ export type DiagnosticSeed = {
   propagated: KnowledgeStateTransition["propagatedChanges"];
 };
 
+/**
+ * A recognition check for a concept with no written question, built only from concept
+ * definitions (as the API's fallback does): the concept's own description among three others.
+ */
+export function recognitionCheck(conceptId: string): DiagnosticSeed {
+  const concept = concepts.find((c) => c.id === conceptId);
+  if (!concept) throw new Error(`Unknown concept ${conceptId}`);
+  const others = concepts.filter((c) => c.id !== conceptId && c.domain === concept.domain).concat(concepts.filter((c) => c.domain !== concept.domain)).slice(0, 3);
+  const correctIndex = [...conceptId].reduce((h, ch) => h + ch.charCodeAt(0), 0) % 4;
+  const choices = others.map((c) => c.description);
+  choices.splice(correctIndex, 0, concept.description);
+  return {
+    developmentId: "",
+    correctIndex,
+    kindLabel: "recognition",
+    question: {
+      id: `dq-offline-${conceptId}`,
+      conceptId,
+      prompt: `Which statement best describes ${concept.name}?`,
+      type: "multiple_choice",
+      choices,
+      expectedConcepts: [conceptId],
+      rationale: `A recognition check on ${concept.name}, built from its definition.`,
+    },
+    correctFeedback: `Right: that is what ${concept.name} means.`,
+    incorrectFeedback: `That describes a related concept. ${concept.name}: ${concept.description}`,
+    correctReason: `Updated because you correctly answered a recognition question on ${concept.name}.`,
+    propagated: [],
+  };
+}
+
 export const diagnostics: DiagnosticSeed[] = [
   {
     developmentId: HERO_ID,
@@ -547,21 +569,81 @@ const diagrams: Record<string, DiagramSpec> = {
     ],
     caption: "A second agent now sits between action and use, catching mistakes before they compound.",
   },
+  "dev-mcp": {
+    title: "From one reply to a live connection",
+    teachingGoal: "See that a tool can now report while it works, and live on a remote server.",
+    nodes: [
+      { id: "b1", label: "Agent calls a local tool", group: "before" },
+      { id: "b2", label: "Waits in silence", group: "before" },
+      { id: "b3", label: "One result at the end", group: "before" },
+      { id: "a1", label: "Agent calls a remote server", group: "after" },
+      { id: "a2", label: "Standard sign-in", group: "after" },
+      { id: "a3", label: "Partial results stream back", group: "after" },
+      { id: "s1", label: "MCP interface", group: "shared" },
+    ],
+    edges: [
+      { from: "b1", to: "b2" },
+      { from: "b2", to: "b3" },
+      { from: "a1", to: "a2" },
+      { from: "a2", to: "a3", label: "progress" },
+      { from: "s1", to: "b1" },
+      { from: "s1", to: "a1" },
+    ],
+    caption: "The same MCP interface, but tools can now report progress while they work and run on remote servers with a standard sign-in.",
+  },
+  "dev-small-reasoning": {
+    title: "Size versus thinking time",
+    teachingGoal: "See that thinking time can stand in for model size on structured tasks.",
+    nodes: [
+      { id: "b1", label: "Hard structured task", group: "before" },
+      { id: "b2", label: "Needs a larger model", group: "before" },
+      { id: "a1", label: "Hard structured task", group: "after" },
+      { id: "a2", label: "Small model thinks longer", group: "after" },
+      { id: "s1", label: "Math and code benchmarks", group: "shared" },
+    ],
+    edges: [
+      { from: "b1", to: "b2" },
+      { from: "a1", to: "a2", label: "more thinking" },
+      { from: "s1", to: "b1" },
+      { from: "s1", to: "a1" },
+    ],
+    caption: "For structured problems, how long a model thinks can matter more than how big it is.",
+  },
+  "dev-computer-use": {
+    title: "From product feature to shared toolkit",
+    teachingGoal: "See computer use becoming a common, open capability.",
+    nodes: [
+      { id: "b1", label: "Closed products", group: "before" },
+      { id: "b2", label: "Each builds its own screen control", group: "before" },
+      { id: "a1", label: "Open-source toolkit", group: "after" },
+      { id: "a2", label: "Any agent reads, clicks, types", group: "after" },
+      { id: "s1", label: "Agent + tools", group: "shared" },
+    ],
+    edges: [
+      { from: "b1", to: "b2" },
+      { from: "a1", to: "a2", label: "shared baseline" },
+      { from: "s1", to: "b1" },
+      { from: "s1", to: "a1" },
+    ],
+    caption: "Computer use is moving from a product feature to a commodity capability.",
+  },
 };
 
 export function diagramFor(developmentId: string): DiagramSpec {
   if (diagrams[developmentId]) return diagrams[developmentId];
   const dev = developments.find((d) => d.id === developmentId);
-  const delta = deltaSeeds[developmentId];
+  // Never draw a placeholder for a development this seed doesn't know.
+  if (!dev) throw new Error(`No diagram for ${developmentId}`);
+  // No hand-drawn diagram: draw the development's own delta (what you knew -> what changed).
+  const delta = deltaFor(developmentId);
+  const before = delta.alreadyKnew.map((label, i) => ({ id: `b${i + 1}`, label, group: "before" as const }));
+  const after = delta.whatChanged.map((label, i) => ({ id: `a${i + 1}`, label, group: "after" as const }));
   return {
-    title: dev?.title ?? "What changed",
-    teachingGoal: "Compare the old model with the new one.",
-    nodes: [
-      { id: "b1", label: "Previous model", group: "before" },
-      { id: "a1", label: "Updated model", group: "after" },
-    ],
-    edges: [{ from: "b1", to: "a1", label: "this development" }],
-    caption: delta?.mentalModelChange ?? "",
+    title: dev.title,
+    teachingGoal: "Compare what you knew with what changed.",
+    nodes: [...before, ...after],
+    edges: [...before.slice(1).map((n, i) => ({ from: before[i]!.id, to: n.id })), ...after.slice(1).map((n, i) => ({ from: after[i]!.id, to: n.id }))],
+    caption: delta.mentalModelChange,
   };
 }
 
@@ -606,7 +688,9 @@ const memoryAids: Record<string, Omit<MemoryAid, "conceptId">> = {
 };
 
 export function memoryAidFor(conceptId: string): MemoryAid {
-  const aid = memoryAids[conceptId] ?? memoryAids["agent-memory"];
+  // Never another concept's analogy: a concept without a seeded aid has none offline.
+  const aid = memoryAids[conceptId];
+  if (!aid) throw new Error(`No memory aid for ${conceptId}`);
   return { conceptId, ...aid, optionalDiagram: undefined };
 }
 

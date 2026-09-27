@@ -12,6 +12,7 @@ import { T } from "@/components/Text";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { evidenceLabel, fmt2, levelLabel, misconceptionLabel, observationLabel, relativeTime, shortDate } from "@/lib/knowledge";
+import { firstSentence } from "@/lib/briefText";
 import { color, font, radius, space } from "@/theme/tokens";
 
 // Storyboard 03 "Mind — Concept": the selected concept as an object inspector.
@@ -359,7 +360,7 @@ function Stat({ label, value, divided }: { label: string; value: string; divided
 
 /** The engine's own reason, told as what changed (no invented claims). */
 export function changeSentence(t: KnowledgeStateTransition): string {
-  const first = t.reason.split(/(?<=\.)\s/)[0] ?? t.reason;
+  const first = firstSentence(t.reason);
   return first.replace(/^Updated because you /, "You ").replace(/^Updated because /, "");
 }
 

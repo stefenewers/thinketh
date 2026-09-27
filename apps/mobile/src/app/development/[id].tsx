@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { goBack } from "@/lib/nav";
 import type { Development, DevelopmentDetailResponse, FeedbackKind, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { BriefRow, BriefSection, DotLine } from "@/components/brief/Brief";
@@ -8,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { AppTopBar, ConceptChip, ListCard, SectionHeader, SignalPill } from "@/components/system";
+import { storylineFor } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
 import { shortDate, significanceLabel } from "@/lib/knowledge";
 import { firstSentence, nuanceOf } from "@/lib/briefText";
@@ -21,7 +23,7 @@ export default function DevelopmentScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: warm.ground }}>
-      <AppTopBar title="Development" onBack={() => router.back()} />
+      <AppTopBar title="Development" onBack={() => goBack()} />
       {loading && !data ? (
         <LoadingState message="Comparing this with what you already know…" />
       ) : error || !data ? (
@@ -36,7 +38,7 @@ export default function DevelopmentScreen() {
 function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
   const { development: d, delta, sources, concepts } = data;
   const [briefOpen, setBriefOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ kind: FeedbackKind; reason: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: FeedbackKind; reason: string; ok: boolean } | null>(null);
   const [sending, setSending] = useState<FeedbackKind | null>(null);
   // The check you just completed, as the API returned it (re-read whenever you come back here).
   const [check, setCheck] = useState(() => lastCheckFor(d.id));
@@ -56,9 +58,10 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
     setSending(kind);
     try {
       const res = await api.sendFeedback(d.id, kind);
-      setFeedback({ kind, reason: res.transitions[0]?.reason ?? "Recorded." });
+      // No transition: this signal was already counted for this development.
+      setFeedback({ kind, ok: true, reason: res.transitions[0]?.reason ?? "Already recorded. Thinketh counts this once per development." });
     } catch {
-      setFeedback({ kind, reason: "Couldn't record that right now. Try again in a moment." });
+      setFeedback({ kind, ok: false, reason: "Couldn't record that right now. Try again in a moment." });
     } finally {
       setSending(null);
     }
@@ -86,13 +89,13 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           },
         }),
     },
-    ...(d.storylineIds.length > 0
+    ...(storylineFor(d.storylineIds[0])
       ? [
           {
             key: "storyline",
             title: "See how this idea changed",
             subtitle: "The storyline behind this development, and where you are in it.",
-            onPress: () => router.push({ pathname: "/storyline/[id]", params: { id: "agent-memory" } }),
+            onPress: () => router.push({ pathname: "/storyline/[id]", params: { id: d.storylineIds[0] } }),
           },
         ]
       : []),
@@ -193,12 +196,12 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
             {nothingNew ? "Tell Thinketh" : "Or just tell Thinketh"}
           </T>
           <View style={{ flexDirection: "row", gap: space.s, marginTop: space.s }}>
-            <Button kind="quiet" label="Got it" style={styles.feedbackButton} disabled={!!feedback} loading={sending === "got_it"} onPress={() => send("got_it")} />
+            <Button kind="quiet" label="Got it" style={styles.feedbackButton} disabled={!!feedback?.ok} loading={sending === "got_it"} onPress={() => send("got_it")} />
             <Button
               kind="quiet"
               label="I already knew this"
               style={styles.feedbackButton}
-              disabled={!!feedback}
+              disabled={!!feedback?.ok}
               loading={sending === "already_knew"}
               onPress={() => send("already_knew")}
             />
@@ -208,7 +211,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
           </T>
           {feedback ? (
             <View style={styles.feedbackNote} accessibilityLiveRegion="polite">
-              <Icon name="check" size={16} color={color.ink} />
+              {feedback.ok ? <Icon name="check" size={16} color={color.ink} /> : null}
               <T variant="support" style={{ flex: 1 }}>
                 {feedback.reason}
               </T>

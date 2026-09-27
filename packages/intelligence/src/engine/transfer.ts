@@ -8,6 +8,7 @@
  * grounding for a fair rubric, there is no challenge, and the concept is not assessable (fail closed).
  */
 import { topicLabel, type Claim, type Concept } from "../contracts.ts";
+import { firstSentence } from "../util.ts";
 
 export type TransferContext = {
   concept: Concept;
@@ -68,11 +69,6 @@ function groundingTerms(text: string, exclude: Set<string>, max = 5): string[] {
     .filter((w) => w.length >= 4 && !STOP.has(w) && !exclude.has(w) && !seen.has(w) && (seen.add(w), true))
     .sort((a, b) => b.length - a.length || a.localeCompare(b))
     .slice(0, max);
-}
-
-function firstSentence(s: string): string {
-  const m = s.match(/^.*?[.!?](\s|$)/);
-  return (m ? m[0] : s).trim();
 }
 
 function hashIndex(id: string, n: number): number {

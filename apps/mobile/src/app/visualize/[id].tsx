@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { api } from "@/api";
 import { DiagramView } from "@/components/DiagramView";
 import { T } from "@/components/Text";
@@ -13,7 +14,7 @@ export default function VisualizeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Visualize this" onClose={() => router.back()} />
+      <ModalHeader title="Visualize this" onClose={() => goBack({ pathname: "/development/[id]", params: { id } })} />
       {loading && !spec ? (
         <LoadingState message="Drawing your old and new mental model…" />
       ) : error || !spec ? (

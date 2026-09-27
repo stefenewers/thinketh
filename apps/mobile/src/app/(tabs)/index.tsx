@@ -4,6 +4,7 @@ import { Wordmark } from "@/components/Logo";
 import { Redirect, router } from "expo-router";
 import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
+import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { ActionTile, Avatar, ListCard, SectionHeader } from "@/components/system";
 import { InsightItem, LeadStory, TodayMetrics } from "@/components/today/TodayParts";
@@ -21,7 +22,7 @@ import { useProfile } from "@/lib/profile";
 import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
-import { color, depth, font, glow, radius, space } from "@/theme/tokens";
+import { color, depth, DEPTH_INK, font, glow, lift, radius, space } from "@/theme/tokens";
 
 
 const SKIP_DEFINITIONS: Record<string, string> = {
@@ -168,7 +169,9 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             onPress={() => router.push(latest ? { pathname: "/mind", params: { concept: latest.conceptId, from: "today" } } : "/mind")}
           />
           <ActionTile icon="ask" tint={color.surfaceMuted} ink={color.ink} title="Ask Thinketh" subtitle="Ask a question" onPress={() => router.push("/ask")} />
-          <ActionTile
+          {/* The Playground needs the Thinketh server: offline it isn't offered at all. */}
+          {PLAYGROUND_AVAILABLE ? (
+            <ActionTile
             icon="people"
             art={
               <View style={{ flexDirection: "row" }}>
@@ -183,7 +186,8 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
             title="Playground"
             subtitle="Learn together"
             onPress={() => router.push("/playground")}
-          />
+            />
+          ) : null}
         </View>
 
         {rest.length ? (
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
   // A curated panel: gently lifted off the warm ground.
   panel: { borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: space.xl + space.xs },
-  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, height: 56, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: color.ink, ...depth.control, shadowOpacity: 0.16, shadowRadius: 18 },
+  cta: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, height: 56, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: color.ink, ...lift(DEPTH_INK, 0.16, 18, 5, 5) },
   ctaLabel: { fontFamily: font.sansSemibold, fontSize: 16.5, lineHeight: 21, letterSpacing: -0.2, color: color.onInk, flex: 1 },
   ctaMeta: { fontFamily: font.sansMedium, fontSize: 13, lineHeight: 18, color: color.onInk, opacity: 0.55, fontVariant: ["tabular-nums"] },
   listen: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.control },

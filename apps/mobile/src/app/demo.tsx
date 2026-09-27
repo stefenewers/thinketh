@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect } from "expo-router";
 import { DEMO_CONTROLS } from "@/lib/devFlags";
+import { closeAll, goBack } from "@/lib/nav";
 import { api, API_URL, FALLBACK_TO_MOCK, USE_MOCK_API } from "@/api";
 import { adapterStatus, fetchHealth } from "@/api/devtools";
 import { T } from "@/components/Text";
 import { Button, Divider, Gutter, ModalHeader, Screen, SectionLabel } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
+import { clearChecks } from "@/lib/lastCheck";
 import { fmt2 } from "@/lib/knowledge";
 import { clearProfile } from "@/lib/profile";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -29,6 +31,7 @@ function DemoControls() {
     setResetResult(null);
     try {
       await api.resetDemo();
+      clearChecks();
       const h = await api.getConceptHistory("agent-memory");
       const s = h.current;
       const ok = Math.abs(s.mastery - 0.42) < 0.015 && Math.abs(s.uncertainty - 0.44) < 0.015;
@@ -46,7 +49,7 @@ function DemoControls() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Demo controls (dev only)" onClose={() => router.back()} topInset />
+      <ModalHeader title="Demo controls (dev only)" onClose={() => goBack()} topInset />
       <Screen topInset={false}>
         <Gutter>
           <SectionLabel>Data source</SectionLabel>
@@ -77,7 +80,7 @@ function DemoControls() {
             style={{ marginTop: space.m }}
             onPress={async () => {
               await clearProfile();
-              router.dismissAll();
+              closeAll();
             }}
           />
           <T variant="support" style={{ marginTop: space.s }}>

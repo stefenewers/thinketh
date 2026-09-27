@@ -14,3 +14,8 @@ export function recordCheck(developmentId: string, conceptId: string, result: Di
 export function lastCheckFor(developmentId: string) {
   return checks.get(developmentId);
 }
+
+/** Forget every recorded check: a demo reset starts the story over. */
+export function clearChecks(): void {
+  checks.clear();
+}

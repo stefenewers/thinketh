@@ -79,6 +79,9 @@ describe("adaptive diagnostic selection", () => {
     expect(pickItem("agent-memory", seed.diagnostics, state, new Set())!.id).toBe("dq-agent-memory-persistence");
     expect(pickItem("agent-memory", seed.diagnostics, state, new Set(["dq-agent-memory-persistence"]))!.id).toBe("dq-agent-memory-short");
     expect(pickItem("no-such-concept", seed.diagnostics, state, new Set())).toBeUndefined();
+    // Every banked question answered: none is repeated (the service writes a new one).
+    const all = new Set(seed.diagnostics.filter((q) => q.conceptId === "agent-memory").map((q) => q.id));
+    expect(pickItem("agent-memory", seed.diagnostics, state, all)).toBeUndefined();
   });
 
   it("never sends the answer key to the client", () => {

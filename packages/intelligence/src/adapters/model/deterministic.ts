@@ -6,7 +6,7 @@ import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source }
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
 import { groundedFallback, TransferNotAssessableError, type TransferContext, type TransferDraft } from "../../engine/transfer.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
-import { newId } from "../../util.ts";
+import { firstSentence, newId } from "../../util.ts";
 import {
   deterministicAnalysis,
   deterministicTeach,
@@ -26,7 +26,6 @@ import type {
   ShortAnswerGrade,
 } from "../types.ts";
 
-const firstSentence = (text: string) => (text.match(/[^.!?]+[.!?]/)?.[0] ?? text).trim();
 const sentences = (text: string) => (text.match(/[^.!?]+[.!?]/g) ?? [text]).map((s) => s.trim()).filter((s) => s.length > 20);
 
 const tokenize = (text: string) => new Set(text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);

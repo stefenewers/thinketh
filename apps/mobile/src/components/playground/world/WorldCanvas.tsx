@@ -183,7 +183,7 @@ function Backdrop({ W, H, wallH }: { W: number; H: number; wallH: number }) {
   const door = sceneLayout(W, H).at(PLACES.door);
   const winS = Math.min(PROPS.window.height, wallH - 26);
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
       <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: wallH, backgroundColor: pixel.wall }} />
       <View style={{ position: "absolute", left: 0, right: 0, top: wallH - 5, height: 5, backgroundColor: pixel.trim }} />
       <View style={{ position: "absolute", left: 0, right: 0, top: wallH, bottom: 0, backgroundColor: pixel.floor }} />
@@ -207,7 +207,7 @@ function CompareSweep({ from, to, y, paused, reduced }: { from: number; to: numb
     return () => cancelAnimation(p);
   }, [paused, reduced, p]);
   const bar = useAnimatedStyle(() => ({ transform: [{ translateX: from + (to - from) * p.get() - 1 }] }));
-  return <Animated.View pointerEvents="none" style={[{ position: "absolute", left: 0, top: y - 86, width: 2, height: 96, borderRadius: 1, backgroundColor: color.ink, opacity: 0.18 }, bar]} />;
+  return <Animated.View style={[{ position: "absolute", pointerEvents: "none", left: 0, top: y - 86, width: 2, height: 96, borderRadius: 1, backgroundColor: color.ink, opacity: 0.18 }, bar]} />;
 }
 
 function MuseCue({ at, state, by, pointing, paused, reduced, onPress }: { at: { x: number; y: number }; state: WorldView["muse"]["state"]; by: "Muse" | "Planner"; pointing: boolean; paused: boolean; reduced: boolean; onPress: () => void }) {

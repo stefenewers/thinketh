@@ -1,5 +1,7 @@
 import { View } from "react-native";
 import { router } from "expo-router";
+import { closeTo, goBack } from "@/lib/nav";
+import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { SetupHeader, SetupRow } from "@/components/setup/Setup";
 import { ListCard, SectionHeader } from "@/components/system";
 import { Button, Gutter, ModalHeader, Screen } from "@/components/ui";
@@ -15,7 +17,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <ModalHeader title="Learning profile" onClose={() => router.back()} topInset />
+      <ModalHeader title="Learning profile" onClose={() => goBack()} topInset />
       <Screen topInset={false} background={color.ground}>
         <Gutter>
           <SetupHeader title="How you learn" note="This frames what Thinketh shows you. What you actually know is measured separately, from evidence, in your Mind." />
@@ -36,21 +38,18 @@ export default function ProfileScreen() {
               icon="mind"
               title="See what you know"
               subtitle="Your knowledge state, and why each part of it changed."
-              onPress={() => {
-                router.back();
-                router.push("/mind");
-              }}
+              onPress={() => closeTo("/mind")}
+              last={!PLAYGROUND_AVAILABLE}
             />
-            <SetupRow
-              icon="people"
-              title="Learn together"
-              subtitle="Bring another Mind in. Thinketh finds what can move between you."
-              onPress={() => {
-                router.back();
-                router.push("/playground");
-              }}
-              last
-            />
+            {PLAYGROUND_AVAILABLE ? (
+              <SetupRow
+                icon="people"
+                title="Learn together"
+                subtitle="Bring another Mind in. Thinketh finds what can move between you."
+                onPress={() => closeTo("/playground")}
+                last
+              />
+            ) : null}
           </ListCard>
         </Gutter>
       </Screen>

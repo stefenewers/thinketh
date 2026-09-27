@@ -98,7 +98,7 @@ export function MindLibrary({ world, width, reduced, onSelect }: { world: MindWo
 function Room({ G }: { G: ReturnType<typeof libraryGeometry> }) {
   const plantH = PROPS.plant.height;
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
       <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: G.floorTop, backgroundColor: pixel.wall }} />
       <View style={{ position: "absolute", left: 0, right: 0, top: G.floorTop - U * 2, height: U * 2, backgroundColor: pixel.trim }} />
       <View style={{ position: "absolute", left: 0, right: 0, top: G.floorTop, bottom: 0, backgroundColor: pixel.floor }} />
@@ -141,7 +141,7 @@ function ShelfBook({ book, x, y, w, reduced, onPress }: { book: Book; x: number;
     <Animated.View style={[{ position: "absolute", left: x, top: y }, liftStyle]}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: book.selected }} accessibilityLabel={`${book.a11y} ${book.selected ? "Selected." : "Opens its details."}`} hitSlop={4}>
         <BookCover evidence={book.evidence} uncertain={book.uncertain} changed={book.changed} selected={book.selected} title={book.title} width={w} height={BOOK_H} />
-        {glow ? <Animated.View pointerEvents="none" style={[styles.ring, ringStyle]} /> : null}
+        {glow ? <Animated.View style={[styles.ring, { pointerEvents: "none" }, ringStyle]} /> : null}
       </Pressable>
     </Animated.View>
   );

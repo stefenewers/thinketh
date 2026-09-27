@@ -1,6 +1,7 @@
 import { Component, createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import type { CollaborativeDeltaItem, PlaygroundRoom } from "@thinketh/contracts";
@@ -159,7 +160,7 @@ export default function PlaygroundScreen() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + 2 }]}>
         <View style={styles.headerLeft}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+          <Pressable onPress={() => goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
             <Icon name="back" size={19} color={color.ink} />
           </Pressable>
           {following ? (
@@ -189,7 +190,7 @@ export default function PlaygroundScreen() {
           )}
         </View>
         {room && (scene === "peer_teaching" || scene === "transfer") ? (
-          <Pressable onPress={() => run(null, () => playground.leave(room.id, me)).then(() => router.back())} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
+          <Pressable onPress={() => run(null, () => playground.leave(room.id, me)).then(() => goBack())} accessibilityRole="button" hitSlop={10} style={{ minHeight: 44, justifyContent: "center" }}>
             <T variant="meta" style={{ color: color.ink2, fontSize: 14 }}>
               Leave
             </T>
@@ -734,7 +735,7 @@ function Transfer({ room, me, busy, onAnswer }: { room: PlaygroundRoom; me: stri
                 You&apos;re typing for {learner}, a seeded demo persona on this phone. Thinketh grades it as {learner}&apos;s answer.
               </T>
             ) : null}
-            <View style={!text.trim() || busy ? { opacity: 0.4 } : undefined} pointerEvents={!text.trim() || busy ? "none" : "auto"}>
+            <View style={!text.trim() || busy ? { opacity: 0.4, pointerEvents: "none" } : undefined}>
               <Pill label={busy ? "Thinketh is checking…" : "Submit"} busy={busy} onPress={() => onAnswer(text.trim())} />
             </View>
           </>
