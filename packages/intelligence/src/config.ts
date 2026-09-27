@@ -127,6 +127,35 @@ export function loadConfig() {
       model: env("MUSE_MODEL"),
       timeoutMs: Number(env("MUSE_TIMEOUT_MS") ?? 8000),
     },
+    /**
+     * Agent exchange (Playground): two participants' agents on Muse. Conservative bounds; the
+     * exchange stops early when a grounded takeaway is saved.
+     */
+    exchange: {
+      /** Agent messages (explanations, questions, answers, takeaways), not counting tool results. */
+      maxMessages: Number(env("THINKETH_EXCHANGE_MAX_MESSAGES") ?? 6),
+      maxToolCalls: Number(env("THINKETH_EXCHANGE_MAX_TOOL_CALLS") ?? 12),
+      deadlineMs: Number(env("THINKETH_EXCHANGE_DEADLINE_MS") ?? 300_000),
+      /** One Muse call; a turn may take up to three (retrieve, then speak). */
+      callTimeoutMs: Number(env("THINKETH_EXCHANGE_CALL_TIMEOUT_MS") ?? 25_000),
+    },
+    /**
+     * Grokbot (optional visiting challenger, xAI Responses API). Enabled only when both the key and
+     * the model are set: no default model id is assumed. Server-side only.
+     */
+    xai: {
+      apiKey: env("XAI_API_KEY"),
+      model: env("XAI_MODEL"),
+      baseUrl: (env("XAI_API_BASE") ?? "https://api.x.ai/v1").replace(/\/+$/, ""),
+      /** Only sent when set; supported values depend on the model. */
+      reasoningEffort: env("XAI_REASONING_EFFORT"),
+    },
+    challenge: {
+      deadlineMs: Number(env("THINKETH_CHALLENGE_DEADLINE_MS") ?? 240_000),
+      /** One model call (Grokbot or the defending agent); a turn may take a few. */
+      callTimeoutMs: Number(env("THINKETH_CHALLENGE_CALL_TIMEOUT_MS") ?? 45_000),
+      maxToolCalls: Number(env("THINKETH_CHALLENGE_MAX_TOOL_CALLS") ?? 18),
+    },
     port: Number(env("PORT") ?? 8787),
   };
 }

@@ -26,7 +26,10 @@ export function BookCover({
   width,
   height,
   compact = false,
+  material = false,
 }: {
+  /** Your agent retained material on this concept: a paper slip tucked in the pages (not a change in evidence). */
+  material?: boolean;
   /** Small preview covers: tighter padding so the title keeps its size. */
   compact?: boolean;
   evidence: Evidence;
@@ -67,12 +70,13 @@ export function BookCover({
         </T>
       </View>
       {changed ? <View style={[styles.ribbon, { backgroundColor: changed === "up" ? color.coral : pixel.stoneMid }]} /> : null}
+      {material ? <View style={styles.slip} /> : null}
     </View>
   );
 }
 
 /** The small book: legend swatches and the handoff motif on other screens. */
-export function BookGlyph({ evidence = "developing", uncertain = false, changed = null, size = 14, style }: { evidence?: Evidence; uncertain?: boolean; changed?: "up" | "down" | null; size?: number; style?: ViewStyle }) {
+export function BookGlyph({ evidence = "developing", uncertain = false, changed = null, material = false, size = 14, style }: { evidence?: Evidence; uncertain?: boolean; changed?: "up" | "down" | null; material?: boolean; size?: number; style?: ViewStyle }) {
   const c = COVER[evidence];
   const w = Math.round(size * 0.78);
   return (
@@ -81,6 +85,7 @@ export function BookGlyph({ evidence = "developing", uncertain = false, changed 
         <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2.5, backgroundColor: c.spine }} />
       </View>
       {changed ? <View style={{ position: "absolute", right: 2, top: -2, width: 3, height: 7, backgroundColor: changed === "up" ? color.coral : pixel.stoneMid }} /> : null}
+      {material ? <View style={{ position: "absolute", left: 3, top: -3, width: 4, height: 5, backgroundColor: pixel.paper, borderWidth: 1, borderColor: pixel.ink }} /> : null}
     </View>
   );
 }
@@ -91,5 +96,6 @@ const styles = StyleSheet.create({
   pageLine: { position: "absolute", left: U * 2, right: U * 2, top: U, height: 1, backgroundColor: pixel.paperEdge },
   band: { position: "absolute", top: U * 5, bottom: 0, width: U * 1.5 },
   title: { fontFamily: font.sansSemibold, fontSize: 11.5, lineHeight: 14 },
+  slip: { position: "absolute", left: U * 7, top: -U * 3, width: U * 5, height: U * 5, backgroundColor: pixel.paper, borderWidth: U / 2, borderColor: pixel.ink },
   ribbon: { position: "absolute", right: U * 5, top: -U * 2, width: U * 3, height: U * 9 },
 });

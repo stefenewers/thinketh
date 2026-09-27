@@ -1,3 +1,5 @@
+import { takeawaysApi } from "@/api/takeaways";
+import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { useState } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
@@ -90,6 +92,7 @@ export function ConceptInspector({
 
       {tab === "overview" ? (
         <View style={{ marginTop: space.l }}>
+          <AgentTakeaways conceptId={concept.id} />
           <T style={styles.h}>What&apos;s changed for you</T>
           {transition ? (
             <View style={styles.changeRow}>
@@ -416,3 +419,31 @@ const styles = StyleSheet.create({
   flag: { marginTop: space.m, padding: space.m, backgroundColor: color.surfaceMuted, borderRadius: 12 },
   historyRow: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.hairline },
 });
+
+/**
+ * "From Nadani's agent": takeaways this person's agent retained on this concept in agent exchanges. Agent
+ * material in the library, never part of the knowledge state; each opens the takeaway and its exchange.
+ */
+function AgentTakeaways({ conceptId }: { conceptId: string }) {
+  const { data } = useApi(() => (PLAYGROUND_AVAILABLE ? takeawaysApi.list(conceptId).catch(() => []) : Promise.resolve([])), [conceptId]);
+  if (!data?.length) return null;
+  return (
+    <View style={{ marginBottom: space.l }}>
+      <T style={[styles.h, { marginBottom: space.s }]}>From your agent</T>
+      <ListCard>
+        {data.slice(0, 3).map((t, i, arr) => (
+          <InsightRow
+            key={t.id}
+            topic={{ conceptIds: [t.conceptId] }}
+            category={`From ${t.fromName}'s agent`}
+            title={t.text}
+            summary={`${t.sources.length} source${t.sources.length === 1 ? "" : "s"} · ${t.grounding === "supported" ? "supported" : "partly supported"} · not yet checked with you`}
+            last={i === arr.length - 1}
+            onPress={() => router.push({ pathname: "/takeaway/[id]", params: { id: t.id } })}
+            accessibilityLabel={`From ${t.fromName}'s agent: ${t.text}. Open the takeaway and its exchange.`}
+          />
+        ))}
+      </ListCard>
+    </View>
+  );
+}

@@ -10,6 +10,8 @@ import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
 import { color, font, pixel } from "@/theme/tokens";
 import { AGENT_SPRITES, PROPS } from "./assets";
+import { GrokbotLayer } from "../grokbot/GrokbotLayer";
+import { projectGrokbot } from "../grokbot/grokbotState";
 import { Character } from "./Character";
 import { CheckpointGate, ConceptToken, MindRing } from "./ConceptToken";
 import { sceneLayout } from "./layout";
@@ -48,6 +50,7 @@ export function WorldCanvas({
 }) {
   const paused = usePaused();
   const L = sceneLayout(width, height);
+  const grok = projectGrokbot(room);
 
   if (room && !firstSeen.has(room.id)) firstSeen.set(room.id, room.seq);
   const fx = freshEffects(room, room ? firstSeen.get(room.id) : undefined, played);
@@ -138,7 +141,8 @@ export function WorldCanvas({
                 onPress={() => onSelect({ kind: "agent", userId: a.userId })}
               />
           ))}
-          {world.concept && conceptPt ? (
+          {/* In an exchange the idea shows once a takeaway is actually saved; until then the agents' own words carry it. */}
+          {world.concept && conceptPt && !(world.phase === "exchange" && world.concept.state === "with_teacher") ? (
             <ConceptToken
               concept={world.concept}
               to={conceptPt}
@@ -149,6 +153,16 @@ export function WorldCanvas({
               onPress={() => onSelect({ kind: "concept" })}
             />
           ) : null}
+          {/* Agent exchange: the latest message beside the agent that sent it; "…" only while a turn is in flight. */}
+          {world.phase === "exchange" && !grok.present
+            ? present.map((a) => {
+                const typing = world.speaking === a.userId;
+                const text = !typing && world.speech?.userId === a.userId ? world.speech.text : null;
+                return typing || text ? <SpeechBubble key={`bubble-${a.userId}`} at={L.at(a.at)} width={width} text={text} tone={TONE[a.tone]} /> : null;
+              })
+            : null}
+          {/* Grokbot (optional visiting challenger): arrives, speaks and answers only from the recorded challenge. */}
+          <GrokbotLayer view={grok} layout={L} defenderAt={grok.defender ? present.find((a) => a.userId === grok.defender!.userId)?.at : undefined} width={width} paused={paused} reduced={reduced} />
           {world.muse.state !== "absent" ? <MuseCue at={musePt} state={world.muse.state} by={world.muse.by} pointing={museTargetPt !== null} paused={paused} reduced={reduced} onPress={() => onSelect({ kind: "muse" })} /> : null}
         </Animated.View>
       </GestureDetector>
@@ -172,6 +186,25 @@ export function WorldCanvas({
           </Pressable>
         )}
       </View>
+    </View>
+  );
+}
+
+/** A short speech bubble above an agent. Static (no animation), so reduced motion needs nothing extra. */
+function SpeechBubble({ at, width, text, tone }: { at: { x: number; y: number }; width: number; text: string | null; tone: string }) {
+  // "…" (a turn in flight) is a small bubble; a message gets room for a few short lines.
+  const w = text ? Math.min(168, width * 0.42) : 44;
+  // Open toward the agent's outer side, away from the idea travelling between the two agents.
+  const outward = text ? (at.x > width / 2 ? at.x - 34 : at.x - w + 34) : at.x - w / 2;
+  const left = Math.max(6, Math.min(width - w - 6, outward));
+  return (
+    <View style={{ position: "absolute", left, top: Math.max(4, at.y - 158), width: w, pointerEvents: "none" }} accessibilityLiveRegion="polite">
+      <View style={[styles.bubble, { borderColor: tone }]}>
+        <T style={styles.bubbleText} numberOfLines={4}>
+          {text ?? "…"}
+        </T>
+      </View>
+      <View style={[styles.bubbleTail, { left: Math.max(10, Math.min(w - 20, at.x - left - 5)), borderTopColor: tone }]} />
     </View>
   );
 }
@@ -262,5 +295,8 @@ const styles = StyleSheet.create({
   museDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: color.ink, alignItems: "center", justifyContent: "center" },
   museM: { fontFamily: font.sansSemibold, fontSize: 10, lineHeight: 12, color: color.onInk },
   museText: { fontFamily: font.sansSemibold, fontSize: 11.5, color: color.ink },
+  bubble: { backgroundColor: "#FFFFFF", borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
+  bubbleText: { fontFamily: font.sans, fontSize: 11.5, lineHeight: 15, color: color.ink },
+  bubbleTail: { position: "absolute", bottom: -6, width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: "transparent", borderRightColor: "transparent" },
   caret: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6, borderLeftColor: "transparent", borderRightColor: "transparent", borderTopColor: color.edge, marginTop: -1 },
 });

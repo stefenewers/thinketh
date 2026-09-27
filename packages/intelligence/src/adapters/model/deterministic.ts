@@ -2,6 +2,7 @@
  * Deterministic IntelligenceModel: the always-available fallback. It returns
  * seeded content where it exists and simple, honest templates otherwise.
  */
+import { deterministicSupport, type SupportInput, type SupportResult } from "../../engine/grounding.ts";
 import { deterministicExchange, type ExchangeContext, type ExchangeDraft } from "../../engine/exchange.ts";
 import {
   normalizeVisualization,
@@ -224,6 +225,10 @@ export class DeterministicModel implements IntelligenceModel {
 
   async prepareExchange(input: ExchangeContext): Promise<ExchangeDraft> {
     return deterministicExchange(input);
+  }
+
+  async checkSupport(input: SupportInput): Promise<SupportResult[]> {
+    return deterministicSupport(input);
   }
 }
 

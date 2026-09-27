@@ -357,18 +357,21 @@ export class DiscoveryRunner {
     const conceptIds = [...new Set([...v.development.conceptIds, ...claims.flatMap((c) => c.conceptIds)])];
     const newConcepts = v.newConcepts.filter((c) => conceptIds.includes(c.id)).slice(0, 2);
     const known = new Set([...this.deps.service.conceptList().map((c) => c.id), ...newConcepts.map((c) => c.id)]);
+    // Only claims still tied to a known concept survive; the development references exactly those.
+    const kept = claims.map((c) => ({ ...c, conceptIds: c.conceptIds.filter((id) => known.has(id)) })).filter((c) => c.conceptIds.length);
+    if (kept.length === 0) return undefined;
     const dates = group.map((c) => c.publishedAt!).sort();
     return {
       ...v,
       newConcepts,
       sources,
-      claims: claims.map((c) => ({ ...c, conceptIds: c.conceptIds.filter((id) => known.has(id)) })).filter((c) => c.conceptIds.length),
+      claims: kept,
       development: {
         ...v.development,
         id: devId,
         happenedAt: dates.at(-1)!,
         conceptIds: conceptIds.filter((id) => known.has(id)),
-        claimIds: claims.map((c) => c.id),
+        claimIds: kept.map((c) => c.id),
         sourceIds: sources.map((s) => s.id),
       },
     };
