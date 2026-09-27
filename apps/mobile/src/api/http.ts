@@ -26,6 +26,8 @@ const TIMEOUT_MS = 8000;
 const GENERATIVE_TIMEOUT_MS = 15000;
 /** Visualize plans a diagram (server allows 20 s) behind a skeleton, and is cached once drawn. */
 const VISUALIZE_TIMEOUT_MS = 24000;
+/** Adding a source reads the page first (it isn't saved if it can't be read): direct, then a reader service. */
+const ADD_RESOURCE_TIMEOUT_MS = 35000;
 
 /** POST /visualize: a plan, or (from an older server) a before/after diagram drawn the same way. */
 const VisualizeResponseSchema = z
@@ -142,7 +144,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
     listResources: async () =>
       (await call(ResourceListResponseSchema, "GET", "/resources", undefined, async (a) => ({ resources: await a.listResources() }))).resources,
-    addResource: (url) => call(ResourceSchema, "POST", "/resources", { url }, (a) => a.addResource(url)),
+    addResource: (url) => call(ResourceSchema, "POST", "/resources", { url }, (a) => a.addResource(url), ADD_RESOURCE_TIMEOUT_MS),
     getResource: (resId) => call(ResourceSchema, "GET", `/resources/${id(resId)}`, undefined, (a) => a.getResource(resId)),
     teachResource: (resId) =>
       call(TeachDeltaResponseSchema, "POST", `/resources/${id(resId)}/teach`, {}, (a) => a.teachResource(resId), GENERATIVE_TIMEOUT_MS),

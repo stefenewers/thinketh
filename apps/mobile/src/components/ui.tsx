@@ -7,6 +7,7 @@ import {
   View,
   type PressableProps,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -58,10 +59,12 @@ type ButtonProps = Omit<PressableProps, "children"> & {
   icon?: Parameters<typeof Icon>[0]["name"];
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Per-screen label sizing (e.g. Learn's larger primary action); colour stays the button's. */
+  labelStyle?: StyleProp<TextStyle>;
 };
 
 // primary = charcoal; decisive = charcoal with a coral arrow (the learning moment: a signal, not a fill).
-export function Button({ label, kind = "primary", icon, loading, style, disabled, onPress, ...rest }: ButtonProps) {
+export function Button({ label, kind = "primary", icon, loading, style, labelStyle, disabled, onPress, ...rest }: ButtonProps) {
   const filled = kind === "primary" || kind === "decisive";
   const fg = filled ? color.onInk : color.ink;
   return (
@@ -89,7 +92,7 @@ export function Button({ label, kind = "primary", icon, loading, style, disabled
         <ActivityIndicator color={fg} />
       ) : (
         <>
-          <T style={[styles.buttonLabel, { color: fg }]}>{label}</T>
+          <T style={[styles.buttonLabel, { color: fg }, labelStyle]}>{label}</T>
           {icon ? <Icon name={icon} size={16} color={kind === "decisive" ? color.coral : fg} /> : null}
         </>
       )}
