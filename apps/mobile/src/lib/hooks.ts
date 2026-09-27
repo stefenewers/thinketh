@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, Keyboard, Platform } from "react-native";
 import { useFocusEffect } from "expo-router";
 
 type AsyncState<T> = { data: T | null; error: unknown; loading: boolean; reload: () => void };
@@ -61,4 +61,18 @@ export function useReducedMotion() {
     return () => sub.remove();
   }, []);
   return reduced;
+}
+
+/** Whether the software keyboard is up (iOS: as it starts to show, so layouts move with it). */
+export function useKeyboardVisible(): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setShown(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setShown(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return shown;
 }

@@ -15,6 +15,9 @@ export const color = {
   edge: "#E7E7E4",
   fog: "#F2F2F0",
   coral: "#C0553A",
+  /** Bottom navigation: the current destination (burnt orange), and the rest (warm charcoal). */
+  navActive: "#C65D2E",
+  navInactive: "#5F5F5B",
   coralTint: "#F7ECE8",
   onInk: "#FFFFFF",
   // Semantic surfaces. Raised = cards and sheets; muted = explanation panels

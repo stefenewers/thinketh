@@ -4,13 +4,13 @@
 // the microphone. Hidden while the keyboard is up, on screens that host it themselves (Ask's
 // composer: AgentComposerButton) and on Catch Me Up, which shows the full conversation itself.
 import { useEffect, useState } from "react";
-import { Keyboard, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
-import { useReducedMotion } from "@/lib/hooks";
+import { useKeyboardVisible, useReducedMotion } from "@/lib/hooks";
 import { color, depth, font, gutter, radius, space } from "@/theme/tokens";
 import { Pulse } from "@/voice/CatchUpScene";
 import { isActive, useAgentControls, useAgentState, type AgentState } from "./agentContext";
@@ -25,18 +25,6 @@ export function useCurrentScreen(): PublishedScreen | null {
   return s;
 }
 
-function useKeyboardVisible(): boolean {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setShown(true));
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setShown(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  return shown;
-}
 
 /** One short word for what the conversation is doing. */
 export function phaseLabel(s: Pick<AgentState, "status" | "phase" | "isMuted" | "ending">): string {
