@@ -2,6 +2,16 @@
 
 Written for Nadani and her Claude Code sessions. It explains the changes made on `stefen-integration-mobile` that touch backend-owned or shared code. Read this before editing `packages/contracts` or `packages/intelligence/src/contracts.ts`.
 
+## 2026-09-27: voice session activities (additive)
+
+Stefen's persistent voice companion (see `docs/VOICE-AGENT.md`) made one small change to backend code:
+
+- **`POST /voice/session`** now accepts an optional body `{ activity?: "assist" | "catch_up" }` (`VoiceSessionRequestSchema` in `packages/contracts/src/agent.ts`). With no body it behaves exactly as before (Catch Me Up).
+- **`VoiceContext.activity?`**, passed through by `service.voiceSession(userId, activity?)`.
+- **`dynamicVariables`** gain `activity` and `opening_line` (see `OPENING_LINES` in `adapters/voice.ts`).
+- **Tests:** a new test in `test/adapters.test.ts` covers this.
+- **Stale README:** the `POST /voice/session` section of `packages/intelligence/README.md` was already out of date (it shows `sessionId`/`fallbackScript`) and has not been edited here.
+
 ## 2026-09-25: canonical API envelopes moved to `packages/contracts`
 
 This follows JOINT-INTEGRATION-CHECKLIST.md step 2: "Move response envelopes into `packages/contracts`".
