@@ -10,7 +10,8 @@ import { Button, Divider, Gutter, ModalHeader, Screen, SectionLabel } from "@/co
 import { useApi } from "@/lib/hooks";
 import { clearChecks } from "@/lib/lastCheck";
 import { fmt2 } from "@/lib/knowledge";
-import { clearProfile } from "@/lib/profile";
+import { clearProfile, resetProfileCache } from "@/lib/profile";
+import { AUTH_AVAILABLE, setMode, useSession } from "@/lib/session";
 import { color, font, radius, space } from "@/theme/tokens";
 
 // Dev-only demo controls, opened by long-pressing the Thinketh mark on Today.
@@ -23,6 +24,7 @@ export default function DemoPanel() {
 
 function DemoControls() {
   const health = useApi(() => fetchHealth(), []);
+  const session = useSession();
   const [resetting, setResetting] = useState(false);
   const [resetResult, setResetResult] = useState<string | null>(null);
 
@@ -64,6 +66,28 @@ function DemoControls() {
           <T variant="support" style={{ marginTop: space.s }}>
             Set with EXPO_PUBLIC_USE_MOCK_API, EXPO_PUBLIC_API_URL and EXPO_PUBLIC_API_FALLBACK_TO_MOCK, then restart Expo with --clear.
           </T>
+        </Gutter>
+
+        <Gutter style={{ marginTop: space.xxl }}>
+          <SectionLabel>Identity</SectionLabel>
+          <T variant="body" style={{ fontFamily: font.sansSemibold }}>
+            {session.mode === "demo" ? "Demo persona (demo-user)" : session.session ? `Own Mind · ${session.session.email ?? "anonymous session"}` : "Own Mind · signed out"}
+          </T>
+          <T variant="support">
+            {AUTH_AVAILABLE ? "Switching reloads Today with that identity." : "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to allow your own Mind."}
+          </T>
+          {AUTH_AVAILABLE ? (
+            <Button
+              kind="secondary"
+              label={session.mode === "demo" ? "Use my own Mind" : "Use the demo persona"}
+              style={{ marginTop: space.m }}
+              onPress={async () => {
+                await setMode(session.mode === "demo" ? "personal" : "demo");
+                resetProfileCache();
+                closeAll();
+              }}
+            />
+          ) : null}
         </Gutter>
 
         <Gutter style={{ marginTop: space.xxl }}>

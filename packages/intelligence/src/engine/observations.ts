@@ -61,11 +61,13 @@ export function makeObservation(input: {
   sourceRef?: string;
   now?: Date;
   weightScale?: number;
+  /** A stable id (derived from an operation id) makes a retried observation findable instead of duplicated. */
+  id?: string;
 }): KnowledgeObservation {
   const rule = OBSERVATION_RULES[input.kind];
   const correctness = input.correctness ?? DEFAULT_CORRECTNESS[input.kind];
   return {
-    id: newId("obs"),
+    id: input.id ?? newId("obs"),
     userId: input.userId,
     conceptId: input.conceptId,
     kind: input.kind,

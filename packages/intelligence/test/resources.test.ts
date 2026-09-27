@@ -268,8 +268,8 @@ describe("Learning Queue API", () => {
     const added = await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://example.com/posts/1" }) });
     expect(added.status).toBe(200);
     const created = (await added.json()) as { id: string; status: string; stage: string };
-    // Read before it's saved: the entry already carries the page's title and moves on to mapping.
-    expect(created).toMatchObject({ status: "processing", stage: "mapping", title: "Agents that remember & learn" });
+    // Read before it's saved (unreadable links are refused); analysis then runs in the background.
+    expect(created).toMatchObject({ status: "processing", stage: "reading" });
 
     const ready = (await settle(app, created.id)) as Record<string, unknown>;
     expect(ready).toMatchObject({ status: "ready", stage: "done", title: "Agents that remember & learn", publisher: "Example Research", analyzedBy: "deterministic" });

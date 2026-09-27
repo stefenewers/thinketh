@@ -35,7 +35,7 @@ export function buildBrief(input: {
   ingestion: IngestionStats;
   now: Date;
   timeZone?: string;
-}): { brief: DailyBrief; ordered: Development[] } {
+}): { brief: DailyBrief; ordered: Development[]; alreadyUnderstood: number } {
   const kept: Development[] = [];
   let alreadyUnderstood = 0;
   for (const d of input.developments) {
@@ -68,5 +68,6 @@ export function buildBrief(input: {
       developmentIds: ordered.map((d) => d.id),
     },
     ordered,
+    alreadyUnderstood,
   };
 }

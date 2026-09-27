@@ -31,6 +31,11 @@ import type {
   Resource,
   TeachDeltaResponse,
   VoiceSession,
+  DiscoveryAccounting,
+  IdentityKind,
+  LearnerProfile,
+  ProfileResponse,
+  PreparedLesson,
 } from "./contracts.ts";
 import { CONCEPT_LABELS } from "./contracts.ts";
 import { adapterHealth, circuitOpen, guarded, recordCall, runInBackground, withTimeout } from "./adapters/guard.ts";
@@ -41,20 +46,21 @@ import { MongoSemanticStore } from "./adapters/semantic.ts";
 import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import { lexicalScore } from "./adapters/model/deterministic.ts";
-import type { AdapterName, AskContext, LearningContext, RawSourceBundle, VisualizeContext } from "./adapters/types.ts";
+import type { AdapterName, AskContext, LearningContext, NormalizedDevelopment, RawSourceBundle, VisualizeContext } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
 import { evaluateMultipleChoice, evaluateShortAnswerKeywords, InvalidAnswerError, scoreRubric, type Evaluation } from "./engine/evaluation.ts";
 import { knowledgeLevel, transition, type Graph, type TransitionResult, type UpdateOptions } from "./engine/knowledgeState.ts";
 import { kindForCorrectness, makeObservation } from "./engine/observations.ts";
+import { deterministicExchange, pitchFor, validateExchange, type ExchangeContext, type ExchangeGap, type ExchangeMaterial } from "./engine/exchange.ts";
 import { hasGroundedChallenge, sanitizeDraft, TransferNotAssessableError, validateTransferDraft, type TransferContext, type TransferDraft } from "./engine/transfer.ts";
 import { explainSelection, pickItem, scoreConcepts, toPublicQuestion } from "./engine/selection.ts";
 import { logEvent } from "./log.ts";
 import { MISCONCEPTIONS } from "./seed/misconceptions.ts";
 import { TRANSFER_QUESTION_FOR } from "./seed/personas.ts";
 import type { DevelopmentMeta, DiagnosticItem, SeedCorpus } from "./seed/types.ts";
-import { firstSentence, newId, round } from "./util.ts";
+import { DAY_MS, firstSentence, newId, round } from "./util.ts";
 import {
   enforceAnalysis,
   inferSourceType,
@@ -65,7 +71,11 @@ import {
   type ConceptView,
   type TeachContext,
 } from "./resources/analyze.ts";
-import { fetchPage, ResourceReadError, validateUrl, youtubeId, type Page } from "./resources/fetchPage.ts";
+import { fetchPage, ResourceReadError, validateUrl, youtubeId } from "./resources/fetchPage.ts";
+import type { LearnerProfileRow } from "./adapters/supabase.ts";
+import type { DiscoveryRunRecord } from "./discovery/types.ts";
+import { conceptsForInterest, DEMO_LEARNER_PROFILE, depthOf, toPersonaProfile } from "./profile/learnerProfile.ts";
+import type { DocStore } from "./store/docStore.ts";
 
 /** Background analysis of a saved resource: nobody waits on it, so Claude gets room. */
 const RESOURCE_ANALYSIS_TIMEOUT_MS = 50_000;
@@ -79,9 +89,47 @@ export class NotFoundError extends Error {}
 export class BadRequestError extends Error {}
 /** The link is fine but its content can't be read: the source is not added. */
 export class UnreadableSourceError extends Error {}
+/** Not allowed for this identity (e.g. resetting a real user, editing a demo persona's profile). */
+export class ForbiddenError extends Error {}
+/** The same operation is already in progress. */
+export class ConflictError extends Error {}
 export { InvalidAnswerError };
 
 const MEMORY_TIMEOUT_MS = 2000;
+/** A saved read is resumed after an interrupted run this many times before it's shown as failed. */
+const MAX_READ_ATTEMPTS = 2;
+const INTERRUPTED = "Reading was interrupted. Save it again to retry.";
+/** A pending answer claim younger than this is still being recorded by another request. */
+const PENDING_OPERATION_MS = 60_000;
+const PROFILE_TTL_MS = 60_000;
+/** A discovered development stays brief-eligible this long after it was found. */
+const BRIEF_WINDOW_DAYS = 7;
+const MAX_BRIEF_CANDIDATES = 12;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Where a person with no evidence starts: low mastery, HIGH uncertainty and zero evidence. It is a
+ * prior, not a measurement. The first observations move it quickly because uncertainty is high.
+ */
+export const NO_EVIDENCE_PRIOR = { mastery: 0.2, confidence: 0.2, uncertainty: 0.7, evidenceCount: 0 } as const;
+
+type StoredResource = Resource & { ownerId: string; attempts?: number };
+type OperationRecord = { status: "pending" | "done"; at: string; result?: DiagnosticAnswerResponse };
+
+async function digest(text: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+  return [...bytes.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function profileFromRow(row: LearnerProfileRow): LearnerProfile {
+  return {
+    displayName: row.display_name?.trim() || "You",
+    interests: Array.isArray(row.interests) ? row.interests.filter((x): x is string => typeof x === "string") : [],
+    goals: row.goals ?? [],
+    teaching: row.explanation_preferences ?? [],
+    completedAt: row.created_at ?? null,
+  };
+}
 const PROBE_TIMEOUT_MS = 6000;
 const SEMANTIC_TIMEOUT_MS = 3000;
 const VOICE_TIMEOUT_MS = 5000;
@@ -142,36 +190,140 @@ export class ThinkethService {
     return { concepts: this.concepts, edges: this.seed.edges };
   }
 
+  private get store(): DocStore {
+    return this.adapters.store;
+  }
+
+  /** Seeded demo personas: explicit, resettable, with a fixed profile and seeded history. */
+  isDemoIdentity(userId: string): boolean {
+    return this.isDemoLearner(userId) || !!this.seed.personas[userId];
+  }
+
+  /** The demo learner (Stefen), or an explicitly configured rehearsal clone of it. */
+  private isDemoLearner(userId: string): boolean {
+    const prefix = this.config.identity.demoAliasPrefix;
+    return userId === this.config.demoUserId || (!!prefix && userId.startsWith(prefix));
+  }
+
+  /**
+   * Claims this person's answers may draw on. The seeded corpus is illustrative demo data, so it
+   * grounds only the demo personas; everyone else is grounded in what discovery actually read.
+   */
+  claimsFor(scope: string | "live" | "demo"): Claim[] {
+    const demo = scope === "demo" || (scope !== "live" && this.isDemoIdentity(scope));
+    return [...this.claims.values()].filter((c) => this.discoveredClaimIds.has(c.id) !== demo);
+  }
+
+  /** The concepts in this person's Mind: demo personas keep the seeded graph; everyone else also gets discovered concepts. */
+  conceptsFor(userId: string): Concept[] {
+    const all = [...this.concepts.values()];
+    return this.isDemoIdentity(userId) ? all.filter((c) => !this.discoveredConceptIds.has(c.id)) : all;
+  }
+
   profileFor(userId: string): PersonaProfile {
     const persona = this.seed.personas[userId];
-    return { ...this.seed.profile, id: userId, ...(persona ? { displayName: persona.displayName } : {}) };
+    if (persona || this.isDemoLearner(userId)) {
+      return { ...this.seed.profile, id: userId, ...(persona ? { displayName: persona.displayName } : {}) };
+    }
+    // Loaded by prepareUser()/loadProfile() before any request uses it; empty until onboarding is saved.
+    return toPersonaProfile(userId, this.learnerProfiles.get(userId)?.profile ?? null, this.conceptsFor(userId));
   }
 
-  /** Seeded Playground personas start from their own baseline; everyone else from the demo persona's. */
+  /**
+   * Demo personas start from their seeded baseline. Everyone else starts with NO baseline: every
+   * concept gets the conservative prior below, and nothing moves until there is an observation.
+   */
   private baselineFor(userId: string): KnowledgeState[] {
-    return this.seed.personas[userId]?.baselineStates ?? this.seed.baselineStates;
+    if (this.seed.personas[userId]) return this.seed.personas[userId]!.baselineStates;
+    return this.isDemoLearner(userId) ? this.seed.baselineStates : [];
   }
 
-  /** Baseline persona state (new users start from the demo persona) overlaid with temporal history. */
+  /** Baseline (demo personas) or the no-evidence prior, overlaid with temporal history. */
   async statesFor(userId: string): Promise<Map<string, KnowledgeState>> {
     const states = new Map<string, KnowledgeState>();
     for (const s of this.baselineFor(userId)) states.set(s.conceptId, { ...s, userId });
-    for (const c of this.concepts.values()) {
-      if (!states.has(c.id)) {
-        states.set(c.id, {
-          userId,
-          conceptId: c.id,
-          mastery: 0.2,
-          confidence: 0.2,
-          uncertainty: 0.6,
-          evidenceCount: 0,
-          lastObservedAt: this.now().toISOString(),
-          misconceptionFlags: [],
-        });
-      }
+    for (const c of this.conceptsFor(userId)) {
+      if (!states.has(c.id)) states.set(c.id, { userId, conceptId: c.id, ...NO_EVIDENCE_PRIOR, lastObservedAt: this.now().toISOString(), misconceptionFlags: [] });
     }
-    for (const s of await this.adapters.temporal.getLatestStates(userId)) states.set(s.conceptId, s);
+    for (const s of await this.adapters.temporal.getLatestStates(userId)) if (states.has(s.conceptId)) states.set(s.conceptId, s);
     return states;
+  }
+
+  // -------------------------------------------------------------------------
+  // Learner profiles (server-side, per verified identity)
+  // -------------------------------------------------------------------------
+
+  private readonly learnerProfiles = new Map<string, { at: number; profile: LearnerProfile | null }>();
+
+  /** Everything a request needs loaded before synchronous reads (profileFor): the corpus and the profile. */
+  async prepareUser(userId: string): Promise<void> {
+    await this.ensureCorpus();
+    await this.loadProfile(userId);
+  }
+
+  /** The saved learner profile, or null before onboarding. Demo personas answer with their seeded frame. */
+  async loadProfile(userId: string): Promise<LearnerProfile | null> {
+    if (this.isDemoIdentity(userId)) return { ...DEMO_LEARNER_PROFILE, displayName: this.profileFor(userId).displayName };
+    const cached = this.learnerProfiles.get(userId);
+    if (cached && Date.now() - cached.at < PROFILE_TTL_MS) return cached.profile;
+    const { supabase } = this.adapters;
+    const fromStore = async () => (await this.store.get<LearnerProfile>("profiles", userId)) ?? null;
+    const profile = (
+      await guarded(
+        "supabase",
+        "getProfile",
+        supabase && UUID.test(userId)
+          ? async () => {
+              const row = await supabase.getProfile(userId);
+              return row ? profileFromRow(row) : await fromStore();
+            }
+          : undefined,
+        fromStore,
+        MEMORY_TIMEOUT_MS,
+      )
+    ).value;
+    this.learnerProfiles.set(userId, { at: Date.now(), profile });
+    return profile;
+  }
+
+  /** Save onboarding / profile edits. Preferences only: this never touches the knowledge state. */
+  async saveProfile(userId: string, input: Omit<LearnerProfile, "completedAt"> & { completedAt?: string | null }): Promise<LearnerProfile> {
+    if (this.isDemoIdentity(userId)) throw new ForbiddenError("The demo persona's profile is part of the seeded demo.");
+    const previous = await this.loadProfile(userId);
+    const profile: LearnerProfile = {
+      displayName: input.displayName.trim(),
+      interests: [...new Set(input.interests)],
+      goals: [...new Set(input.goals)],
+      teaching: [...new Set(input.teaching)],
+      completedAt: previous?.completedAt ?? input.completedAt ?? this.now().toISOString(),
+    };
+    await this.store.put("profiles", userId, profile, userId);
+    const { supabase } = this.adapters;
+    await guarded(
+      "supabase",
+      "upsertProfile",
+      supabase && UUID.test(userId)
+        ? () => supabase.upsertProfile(userId, { display_name: profile.displayName, interests: profile.interests, goals: profile.goals, explanation_preferences: profile.teaching })
+        : undefined,
+      () => undefined,
+      MEMORY_TIMEOUT_MS,
+    );
+    this.learnerProfiles.set(userId, { at: Date.now(), profile });
+    // Phrasing followed the old preferences.
+    for (const k of this.phrasedDeltas.keys()) if (k.startsWith(`${userId}|`)) this.phrasedDeltas.delete(k);
+    logEvent("profile.saved", { userId, interests: profile.interests, teaching: profile.teaching });
+    return profile;
+  }
+
+  async profileResponse(userId: string, kind: IdentityKind): Promise<ProfileResponse> {
+    const profile = await this.loadProfile(userId);
+    const concepts = this.conceptsFor(userId);
+    return {
+      profile,
+      identity: { userId, kind, displayName: profile?.displayName ?? this.profileFor(userId).displayName },
+      editable: !this.isDemoIdentity(userId),
+      coverage: (profile?.interests ?? []).map((interest) => ({ interest, conceptIds: conceptsForInterest(interest, concepts) })),
+    };
   }
 
   /** Serialize state-changing operations per user so double taps can't race. */
@@ -207,7 +359,7 @@ export class ThinkethService {
     userId: string,
     conceptId: string,
     kind: Parameters<typeof makeObservation>[0]["kind"],
-    extra: { correctness?: number; sourceRef?: string; options?: UpdateOptions; states?: Map<string, KnowledgeState> } = {},
+    extra: { correctness?: number; sourceRef?: string; options?: UpdateOptions; states?: Map<string, KnowledgeState>; observationId?: string } = {},
   ): Promise<TransitionResult> {
     const now = this.now();
     const states = extra.states ?? (await this.statesFor(userId));
@@ -217,6 +369,7 @@ export class ThinkethService {
       kind,
       ...(extra.correctness !== undefined ? { correctness: extra.correctness } : {}),
       ...(extra.sourceRef ? { sourceRef: extra.sourceRef } : {}),
+      ...(extra.observationId ? { id: extra.observationId } : {}),
       now,
     });
     const result = transition({ states, observation, graph: this.graph(), now, ...(extra.options ? { options: extra.options } : {}) });
@@ -307,16 +460,25 @@ export class ThinkethService {
   }
 
   async brief(userId: string): Promise<BriefResponse> {
+    await this.prepareUser(userId);
+    if (!this.isDemoIdentity(userId)) await this.syncWithLatestRun();
     const states = await this.statesFor(userId);
-    const { brief, ordered } = buildBrief({
-      developments: [...this.developments.values()],
+    const demo = this.isDemoIdentity(userId);
+    const built = buildBrief({
+      developments: this.developmentsFor(userId),
       meta: this.meta,
       states,
       profile: this.profileFor(userId),
-      ingestion: this.seed.ingestion,
+      // Fixture counts belong to the seeded demo only; a real brief reports its recorded run.
+      ingestion: demo ? this.seed.ingestion : { processedItems: 0, skipped: {} },
       now: this.now(),
       timeZone: this.config.timeZone,
     });
+    const { ordered } = built;
+    const pipeline = demo ? this.demoAccounting(built) : await this.liveAccounting(built);
+    // Live: the filtered numbers are the run's source items; developments this person already
+    // understands are counted separately (pipeline.developmentsAlreadyUnderstood), never mixed in.
+    const brief = demo ? built.brief : { ...built.brief, skippedCount: pipeline.itemsFiltered, skippedBreakdown: pipeline.filteredBreakdown };
     logEvent("brief.built", { userId, meaningful: brief.meaningfulCount, skipped: brief.skippedBreakdown, hero: brief.heroDevelopmentId });
     // Warm the Claude phrasing of the hero card so the first tap is already personalized.
     const hero = ordered[0];
@@ -337,12 +499,175 @@ export class ThinkethService {
       concepts: [...this.concepts.values()],
       understoodDevelopmentIds: ordered.filter((d) => d.conceptIds[0] && passedToday.has(d.conceptIds[0])).map((d) => d.id),
       recentTransitions,
+      pipeline,
     };
+  }
+
+  /** The seeded demo's illustrative ingestion counts, labeled as such (mode "demo_fixture"). */
+  private demoAccounting(built: ReturnType<typeof buildBrief>): DiscoveryAccounting {
+    const fixture = this.seed.ingestion;
+    const filteredBreakdown = { ...fixture.skipped };
+    const itemsFiltered = Object.values(filteredBreakdown).reduce((a, b) => a + b, 0);
+    return {
+      mode: "demo_fixture",
+      sourcesChecked: 0,
+      sourcesFailed: 0,
+      itemsInspected: fixture.processedItems,
+      itemsFiltered,
+      filteredBreakdown,
+      developmentsProduced: fixture.processedItems - itemsFiltered,
+      developmentsAvailable: built.ordered.length + built.alreadyUnderstood,
+      developmentsSelected: built.ordered.length,
+      developmentsAlreadyUnderstood: built.alreadyUnderstood,
+    };
+  }
+
+  /** The last successful discovery run's recorded accounting (never fixture numbers). */
+  private async liveAccounting(built: ReturnType<typeof buildBrief>): Promise<DiscoveryAccounting> {
+    const run = await this.store.get<DiscoveryRunRecord>("discovery_state", "last_successful_run");
+    const base = {
+      developmentsAvailable: this.discoveredDevelopmentIds.size,
+      developmentsSelected: built.ordered.length,
+      developmentsAlreadyUnderstood: built.alreadyUnderstood,
+    };
+    if (!run) return { mode: "none", sourcesChecked: 0, sourcesFailed: 0, itemsInspected: 0, itemsFiltered: 0, filteredBreakdown: {}, developmentsProduced: 0, ...base };
+    return {
+      mode: "live",
+      runId: run.id,
+      startedAt: run.startedAt,
+      ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+      status: run.status === "partial" ? "partial" : run.status === "failed" ? "failed" : "succeeded",
+      sourcesChecked: run.sources.length,
+      sourcesFailed: run.sources.filter((x) => x.error).length,
+      itemsInspected: run.itemsInspected,
+      itemsFiltered: Object.values(run.filtered).reduce((a, b) => a + b, 0),
+      filteredBreakdown: { ...run.filtered },
+      developmentsProduced: run.developmentIds.length,
+      ...base,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Corpus: the seeded demo corpus plus everything discovery has stored
+  // -------------------------------------------------------------------------
+
+  private readonly discoveredConceptIds = new Set<string>();
+  private readonly discoveredDevelopmentIds = new Set<string>();
+  private readonly discoveredClaimIds = new Set<string>();
+  private corpusLoad: Promise<void> | undefined;
+
+  /** Load the stored corpus once (retried on the next request if the store was unreachable). */
+  ensureCorpus(): Promise<void> {
+    this.corpusLoad ??= this.loadCorpus().catch((err) => {
+      this.corpusLoad = undefined;
+      logEvent("corpus.load_failed", { error: String(err) }, "warn");
+    });
+    return this.corpusLoad;
+  }
+
+  /** A run in another process (the CLI, another host) stored developments this process hasn't loaded yet. */
+  private async syncWithLatestRun(): Promise<void> {
+    const run = await this.store.get<DiscoveryRunRecord>("discovery_state", "last_successful_run");
+    if (run?.developmentIds.some((id) => !this.developments.has(id))) {
+      this.corpusLoad = this.loadCorpus();
+      await this.corpusLoad;
+    }
+  }
+
+  private async loadCorpus(): Promise<void> {
+    const [developments, claims, sources, concepts, metas] = await Promise.all([
+      this.store.list<Development>("corpus_developments", undefined, 2000),
+      this.store.list<Claim>("corpus_claims", undefined, 10_000),
+      this.store.list<Source>("corpus_sources", undefined, 5000),
+      this.store.list<Concept>("corpus_concepts", undefined, 1000),
+      this.store.list<DevelopmentMeta & { developmentId: string }>("corpus_meta", undefined, 2000),
+    ]);
+    for (const c of concepts) {
+      if (this.seed.concepts.some((x) => x.id === c.id)) continue;
+      this.concepts.set(c.id, c);
+      this.discoveredConceptIds.add(c.id);
+    }
+    for (const c of claims) {
+      this.claims.set(c.id, c);
+      this.discoveredClaimIds.add(c.id);
+    }
+    for (const x of sources) this.sources.set(x.id, x);
+    for (const { developmentId, ...m } of metas) this.meta[developmentId] = m;
+    for (const d of developments) {
+      this.developments.set(d.id, d);
+      this.discoveredDevelopmentIds.add(d.id);
+    }
+    if (developments.length) logEvent("corpus.loaded", { developments: developments.length, claims: claims.length, sources: sources.length, concepts: concepts.length });
+  }
+
+  /** Store a normalized development (discovery, /admin/ingest) so every later brief and restart sees it. */
+  async addToCorpus(value: NormalizedDevelopment, discoveredAt: string): Promise<Development> {
+    await this.ensureCorpus();
+    const development: Development = { ...value.development, discoveredAt };
+    const meta: DevelopmentMeta = {
+      readMinutes: round(Math.max(1, value.claims.length * 0.5), 1),
+      mentalModelShift: value.mentalModelShift,
+      newClaimIds: value.claims.map((c) => c.id),
+    };
+    for (const c of value.newConcepts) {
+      if (this.concepts.has(c.id)) continue;
+      this.concepts.set(c.id, c);
+      this.discoveredConceptIds.add(c.id);
+      await this.store.put("corpus_concepts", c.id, c);
+    }
+    for (const c of value.claims) {
+      this.claims.set(c.id, c);
+      this.discoveredClaimIds.add(c.id);
+      await this.store.put("corpus_claims", c.id, c);
+    }
+    for (const x of value.sources) {
+      this.sources.set(x.id, x);
+      await this.store.put("corpus_sources", x.id, x);
+    }
+    this.meta[development.id] = meta;
+    await this.store.put("corpus_meta", development.id, { developmentId: development.id, ...meta });
+    this.developments.set(development.id, development);
+    this.discoveredDevelopmentIds.add(development.id);
+    await this.store.put("corpus_developments", development.id, development);
+    const { semantic } = this.adapters;
+    await guarded("mongo", "upsertDevelopment", semantic ? () => semantic.upsertDevelopment(development) : undefined, () => undefined, SEMANTIC_TIMEOUT_MS);
+    return development;
+  }
+
+  /**
+   * Candidate developments for this person's brief. Demo personas read the seeded demo corpus;
+   * everyone else reads what discovery actually found (recent first), never the illustrative seed.
+   */
+  private developmentsFor(userId: string): Development[] {
+    const all = [...this.developments.values()];
+    if (this.isDemoIdentity(userId)) return all.filter((d) => !this.discoveredDevelopmentIds.has(d.id));
+    const discovered = all
+      .filter((d) => this.discoveredDevelopmentIds.has(d.id))
+      .sort((a, b) => (b.discoveredAt ?? b.happenedAt).localeCompare(a.discoveredAt ?? a.happenedAt));
+    const cutoff = new Date(this.now().getTime() - BRIEF_WINDOW_DAYS * DAY_MS).toISOString();
+    const recent = discovered.filter((d) => (d.discoveredAt ?? d.happenedAt) >= cutoff);
+    return (recent.length ? recent : discovered).slice(0, MAX_BRIEF_CANDIDATES);
   }
 
   // -------------------------------------------------------------------------
   // Development detail + delta
   // -------------------------------------------------------------------------
+
+  /**
+   * How much of the delta to show, from the person's teaching choices ("Concise explanations" keeps
+   * the two most important items per section; "Go deep" keeps everything). Presentation only: the
+   * items, their order and every number stay the engine's.
+   */
+  private atDepth(delta: DeltaExplanation, userId: string): DeltaExplanation {
+    if (depthOf(this.profileFor(userId).explanationPreferences) !== "concise") return delta;
+    return {
+      ...delta,
+      whatHappened: delta.whatHappened.slice(0, 2),
+      alreadyKnew: delta.alreadyKnew.slice(0, 2),
+      whatChanged: delta.whatChanged.slice(0, 2),
+      affectedConcepts: delta.affectedConcepts.slice(0, 2),
+    };
+  }
 
   deterministicDelta(userId: string, development: Development, states: Map<string, KnowledgeState>): DeltaExplanation {
     return computeDelta({
@@ -388,7 +713,7 @@ export class ThinkethService {
     const states = await this.statesFor(userId);
     const cached = this.phrasedDeltas.get(this.deltaCacheKey(userId, development, states));
     // Never make the detail screen wait on Claude: serve the cached phrasing or the deterministic delta, and warm the cache.
-    const delta = cached ?? this.deterministicDelta(userId, development, states);
+    const delta = this.atDepth(cached ?? this.deterministicDelta(userId, development, states), userId);
     if (!cached) runInBackground("warm-delta", this.phrasedDelta(userId, development, states));
 
     runInBackground(
@@ -492,16 +817,45 @@ export class ThinkethService {
       () => this.adapters.fallbackModel.generateDiagnostic(ctx),
       this.diagnosticClaudeTimeout(),
     );
-    this.diagnostics.set(value.id, value);
+    await this.rememberDiagnostic(value);
     return value;
   }
 
-  async answerDiagnostic(userId: string, questionId: string, answer: string): Promise<DiagnosticAnswerResponse> {
-    const item = this.diagnostics.get(questionId);
+  /** Generated questions outlive the process: an open question (or a Playground transfer) must still grade after a restart. */
+  private async rememberDiagnostic(item: DiagnosticItem): Promise<void> {
+    this.diagnostics.set(item.id, item);
+    await this.store.put("diagnostics", item.id, item);
+  }
+
+  private async getDiagnostic(id: string): Promise<DiagnosticItem | undefined> {
+    const cached = this.diagnostics.get(id);
+    if (cached) return cached;
+    const stored = await this.store.get<DiagnosticItem>("diagnostics", id);
+    if (stored) this.diagnostics.set(id, stored);
+    return stored;
+  }
+
+  /**
+   * Grade an answer and record exactly one observation for it. With an `operationId` (the client's
+   * Idempotency-Key, or a Playground transfer's stable id), a retry, a double tap or a replay after a
+   * restart returns the recorded result instead of recording the evidence twice.
+   */
+  async answerDiagnostic(userId: string, questionId: string, answer: string, opts: { operationId?: string } = {}): Promise<DiagnosticAnswerResponse> {
+    const opKey = opts.operationId ? `${userId}:${opts.operationId}` : undefined;
+    if (opKey) {
+      const done = await this.store.get<OperationRecord>("operations", opKey);
+      if (done?.result) return done.result;
+    }
+    const item = await this.getDiagnostic(questionId);
     if (!item) throw new NotFoundError(`Diagnostic not found: ${questionId}`);
     const evaluation = await this.evaluate(item, answer);
 
     return this.withUserLock(userId, async () => {
+      const observationId = opKey ? `obs_op_${await digest(opKey)}` : undefined;
+      if (opKey) {
+        const replay = await this.claimOperation(userId, opKey, observationId!, questionId, answer);
+        if (replay) return replay;
+      }
       const states = await this.statesFor(userId);
       const kind = kindForCorrectness(evaluation.correctness);
       // Same question (or the same prompt under a new id, as generated ones get) answered before.
@@ -521,6 +875,7 @@ export class ThinkethService {
         sourceRef: `diagnostic:${item.id}`,
         options,
         states,
+        ...(observationId ? { observationId } : {}),
       });
 
       if (evaluation.misconception) {
@@ -532,12 +887,42 @@ export class ThinkethService {
           createdAt: this.now().toISOString(),
         });
       }
-      logEvent("diagnostic.answered", { userId, questionId, correctness: evaluation.correctness, kind, misconception: evaluation.misconception });
-      return {
+      logEvent("diagnostic.answered", { userId, questionId, correctness: evaluation.correctness, kind, misconception: evaluation.misconception, operationId: opts.operationId });
+      const response: DiagnosticAnswerResponse = {
         answer: { questionId, userId, answer, correctness: evaluation.correctness, feedback: evaluation.feedback },
         transition: result.transition,
       };
+      if (opKey) await this.store.put("operations", opKey, { status: "done", at: this.now().toISOString(), result: response } satisfies OperationRecord, userId);
+      return response;
     });
+  }
+
+  /**
+   * Claim an answer operation. Returns the recorded response when this operation already ran;
+   * throws while another request is still recording it; returns undefined when this call owns it.
+   * A claim left "pending" by a crash is recovered from the temporal store (the observation id is
+   * derived from the operation), so a replay never records the evidence twice.
+   */
+  private async claimOperation(userId: string, opKey: string, observationId: string, questionId: string, answer: string): Promise<DiagnosticAnswerResponse | undefined> {
+    const at = this.now().toISOString();
+    if (await this.store.create("operations", opKey, { status: "pending", at } satisfies OperationRecord, userId)) return undefined;
+    const existing = await this.store.get<OperationRecord>("operations", opKey);
+    if (existing?.result) return existing.result;
+    const recorded = await this.adapters.temporal.findTransitionByObservation(userId, observationId);
+    if (recorded) {
+      const result: DiagnosticAnswerResponse = {
+        answer: { questionId, userId, answer, correctness: recorded.observation.correctness ?? 0, feedback: "Thinketh had already recorded this answer." },
+        transition: recorded,
+      };
+      await this.store.put("operations", opKey, { status: "done", at, result } satisfies OperationRecord, userId);
+      return result;
+    }
+    if (existing && this.now().getTime() - new Date(existing.at).getTime() < PENDING_OPERATION_MS) {
+      throw new ConflictError("Thinketh is still recording this answer.");
+    }
+    // A stale claim with nothing recorded: the earlier attempt died before recording. Take it over.
+    await this.store.put("operations", opKey, { status: "pending", at } satisfies OperationRecord, userId);
+    return undefined;
   }
 
   private async evaluate(item: DiagnosticItem, answer: string): Promise<Evaluation> {
@@ -566,7 +951,8 @@ export class ThinkethService {
   /** The persona's seeded prior history, re-addressed to this user. */
   private seedHistory(userId: string, conceptId?: string): KnowledgeStateTransition[] {
     const readdress = (s: KnowledgeState) => ({ ...s, userId });
-    return (this.seed.personas[userId]?.history ?? this.seed.history)
+    const history = this.seed.personas[userId]?.history ?? (this.isDemoLearner(userId) ? this.seed.history : []);
+    return history
       .filter((t) => !conceptId || t.conceptId === conceptId)
       .map((t) => ({ ...t, userId, before: readdress(t.before), after: readdress(t.after), observation: { ...t.observation, userId } }));
   }
@@ -576,7 +962,7 @@ export class ThinkethService {
     const recent = await this.adapters.temporal.getRecentTransitions(userId, 200);
     const lastByConcept = new Map<string, KnowledgeStateTransition>();
     for (const t of [...recent, ...this.seedHistory(userId).reverse()]) if (!lastByConcept.has(t.conceptId)) lastByConcept.set(t.conceptId, t);
-    const items = [...this.concepts.values()].flatMap((concept) => {
+    const items = this.conceptsFor(userId).flatMap((concept) => {
       const state = states.get(concept.id);
       if (!state) return [];
       const last = lastByConcept.get(concept.id);
@@ -612,7 +998,7 @@ export class ThinkethService {
       if (e.fromConceptId === conceptId) relatedIds.add(e.toConceptId);
       if (e.toConceptId === conceptId) relatedIds.add(e.fromConceptId);
     }
-    const claims = [...this.claims.values()].filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6);
+    const claims = this.claimsFor(userId).filter((c) => c.conceptIds.includes(conceptId)).slice(0, 6);
     return {
       concept,
       state: states.get(conceptId),
@@ -711,14 +1097,16 @@ export class ThinkethService {
     // Expand search hits into candidate claims: claims directly, developments/concepts via their claims.
     const devClaimIds = new Set(input.developmentId ? (await this.getDevelopment(input.developmentId)).claimIds : []);
     const candidateIds = new Set(devClaimIds);
-    for (const c of this.claims.values()) if (c.conceptIds.some((id) => namedIds.has(id))) candidateIds.add(c.id);
+    const allowed = this.claimsFor(userId);
+    const allowedIds = new Set(allowed.map((c) => c.id));
+    for (const c of allowed) if (c.conceptIds.some((id) => namedIds.has(id))) candidateIds.add(c.id);
     for (const h of hits) {
       if (h.kind === "claim") candidateIds.add(h.id);
       if (h.kind === "development") for (const id of this.developments.get(h.id)?.claimIds ?? []) candidateIds.add(id);
-      if (h.kind === "concept") for (const c of this.claims.values()) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
+      if (h.kind === "concept") for (const c of allowed) if (c.conceptIds.includes(h.id)) candidateIds.add(c.id);
     }
     const ranked = [...candidateIds]
-      .flatMap((id) => (this.claims.has(id) ? [this.claims.get(id)!] : []))
+      .flatMap((id) => (allowedIds.has(id) ? [this.claims.get(id)!] : []))
       .map((c) => ({ c, score: lexicalScore(query, c.text) + (devClaimIds.has(c.id) ? 0.5 : 0) + (c.conceptIds.some((id) => namedIds.has(id)) ? 0.5 : 0) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
@@ -771,7 +1159,8 @@ export class ThinkethService {
       const shiftDev = citedDevelopmentIds.map((id) => this.meta[id]?.mentalModelShift).find((m) => m?.after);
       const ctx: AskContext = {
         question: input.question,
-        mode: input.mode ?? "quick",
+        // Unasked, the depth follows the person's teaching choices.
+        mode: input.mode ?? ({ concise: "quick", standard: "quick", deep: "deep" } as const)[depthOf(this.profileFor(userId).explanationPreferences)],
         profile: this.profileFor(userId),
         memories,
         sourcesSay: said.map((c) => c.text),
@@ -852,12 +1241,23 @@ export class ThinkethService {
   // -------------------------------------------------------------------------
 
   async voiceSession(userId: string): Promise<VoiceSession> {
-    const { brief, developments } = await this.brief(userId);
+    const { brief, developments, pipeline } = await this.brief(userId);
     const states = await this.statesFor(userId);
     const profile = this.profileFor(userId);
+    // Concise listeners get the two stories that matter most; everyone else three.
+    const count = depthOf(profile.explanationPreferences) === "concise" ? 2 : 3;
+    const goal = profile.goals[0];
+    const skipped =
+      pipeline?.mode === "live"
+        ? `Thinketh read ${pipeline.itemsInspected} items from its sources and left out ${pipeline.itemsFiltered} that were duplicates, off-topic or outdated.`
+        : pipeline?.mode === "none"
+          ? ""
+          : `I skipped ${brief.skippedCount ?? 0} items that were duplicates, low signal, or things you already understand.`;
     const script = [
-      `Good morning, ${profile.displayName}. You have about ${Math.round(brief.estimatedMinutes)} minutes. ${brief.meaningfulCount} developments materially changed topics you follow today.`,
-      ...developments.slice(0, 3).map((d, i) => {
+      developments.length
+        ? `Good morning, ${profile.displayName}. You have about ${Math.round(brief.estimatedMinutes)} minutes. ${brief.meaningfulCount} ${brief.meaningfulCount === 1 ? "development" : "developments"} changed topics you follow${goal ? `, with your goal in mind: ${goal.replace(/\.$/, "").toLowerCase()}` : ""}.`
+        : `Good morning, ${profile.displayName}. Nothing new changed enough to interrupt you today.`,
+      ...developments.slice(0, count).map((d, i) => {
         const delta = this.deterministicDelta(userId, d, states);
         const changed = delta.whatChanged[0] ?? d.summaryBullets[0] ?? "";
         // Personalize the lead story; keep the rest short so the briefing stays brisk.
@@ -865,8 +1265,8 @@ export class ThinkethService {
         const tail = i === 0 && lead ? ` ${/[.!?]$/.test(lead) ? lead : `${lead}.`}` : "";
         return `${i === 0 ? "First" : i === 1 ? "Next" : "And"}: ${d.title}. ${changed}${tail}`;
       }),
-      `I skipped ${brief.skippedCount ?? 0} items that were duplicates, low signal, or things you already understand. Want to go deeper on any of these?`,
-    ];
+      [skipped, developments.length ? "Want to go deeper on any of these?" : ""].filter(Boolean).join(" "),
+    ].filter(Boolean);
     const ctx = { userId, displayName: profile.displayName, script, briefDate: brief.date, minutes: brief.estimatedMinutes };
     const { voice, transcriptVoice } = this.adapters;
     return (await guarded("elevenlabs", "createSession", voice ? () => voice.createSession(ctx) : undefined, () => transcriptVoice.createSession(ctx), VOICE_TIMEOUT_MS)).value;
@@ -930,36 +1330,76 @@ export class ThinkethService {
 
   // -------------------------------------------------------------------------
   // Learning Queue: save to learn. Reading and analysis never change knowledge
-  // state; the diagnostic stays the only path that does.
+  // state. Resources, their analyses and lessons are stored (owner-scoped), so a
+  // restart never loses them; the Maps below are caches.
 
-  private readonly resources = new Map<string, Map<string, Resource>>();
+  private readonly resources = new Map<string, Map<string, StoredResource>>();
+  private readonly resourceLoads = new Map<string, Promise<Map<string, StoredResource>>>();
   private readonly resourceText = new Map<string, { excerpt: string }>();
   private readonly teachings = new Map<string, TeachDeltaResponse>();
   private readonly teachPending = new Map<string, Promise<TeachDeltaResponse>>();
+  /** Resources being read by THIS process. Anything "processing" outside it was interrupted. */
+  private readonly inFlight = new Set<string>();
 
-  private queue(userId: string): Map<string, Resource> {
-    let q = this.resources.get(userId);
-    if (!q) {
-      q = new Map();
-      this.resources.set(userId, q);
+  /** This user's queue: loaded from the store once per process, then kept in step with it. */
+  private queue(userId: string): Promise<Map<string, StoredResource>> {
+    const cached = this.resources.get(userId);
+    if (cached) return Promise.resolve(cached);
+    let load = this.resourceLoads.get(userId);
+    if (!load) {
+      load = (async () => {
+        const stored = await this.store.list<StoredResource>("resources", { ownerId: userId }, MAX_QUEUE * 2);
+        const q = new Map(stored.map((r) => [r.id, r]));
+        this.resources.set(userId, q);
+        for (const r of q.values()) if (r.status === "processing") this.recoverInterrupted(userId, r);
+        return q;
+      })().finally(() => this.resourceLoads.delete(userId));
+      this.resourceLoads.set(userId, load);
     }
-    return q;
+    return load;
   }
 
-  listResources(userId: string): Resource[] {
-    return [...this.queue(userId).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  /** A read that a restart interrupted: resume it (bounded), else say so and let the user retry. */
+  private recoverInterrupted(userId: string, r: StoredResource): void {
+    if (this.inFlight.has(r.id)) return;
+    if ((r.attempts ?? 1) < MAX_READ_ATTEMPTS) {
+      logEvent("resource.resumed", { userId, id: r.id, attempts: r.attempts });
+      void this.updateResource(userId, r.id, { stage: "reading", attempts: (r.attempts ?? 1) + 1 }).then(() => this.startProcessing(userId, r.id));
+    } else {
+      void this.updateResource(userId, r.id, { status: "failed", stage: "done", error: INTERRUPTED });
+      logEvent("resource.interrupted", { userId, id: r.id, attempts: r.attempts }, "warn");
+    }
   }
 
-  getResource(userId: string, id: string): Resource {
-    const r = this.queue(userId).get(id);
-    if (!r) throw new NotFoundError(`No resource ${id}`);
-    return r;
+  private startProcessing(userId: string, id: string): void {
+    this.inFlight.add(id);
+    runInBackground("resource.analyze", this.processResource(userId, id).finally(() => this.inFlight.delete(id)));
   }
 
-  private updateResource(userId: string, id: string, patch: Partial<Resource>): void {
-    const q = this.queue(userId);
+  /** Public view (drops the owner and attempt bookkeeping). */
+  private publicResource(r: StoredResource): Resource {
+    const { ownerId: _o, attempts: _a, ...rest } = r;
+    return rest;
+  }
+
+  async listResources(userId: string): Promise<Resource[]> {
+    return [...(await this.queue(userId)).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((r) => this.publicResource(r));
+  }
+
+  /** Only the owner can read a resource; anyone else gets "not found", never someone else's source. */
+  async getResource(userId: string, id: string): Promise<Resource> {
+    const r = (await this.queue(userId)).get(id);
+    if (!r || r.ownerId !== userId) throw new NotFoundError(`No resource ${id}`);
+    return this.publicResource(r);
+  }
+
+  private async updateResource(userId: string, id: string, patch: Partial<StoredResource>): Promise<void> {
+    const q = await this.queue(userId);
     const r = q.get(id);
-    if (r) q.set(id, { ...r, ...patch });
+    if (!r) return;
+    const next = { ...r, ...patch };
+    q.set(id, next);
+    await this.store.put("resources", id, next, userId);
   }
 
   /** Save a URL and start reading it in the background. Returns immediately with status "processing". */
@@ -973,30 +1413,46 @@ export class ThinkethService {
     // One video, one entry: youtu.be, shorts and watch links all normalize to the watch URL.
     const video = youtubeId(url);
     if (video) url = new URL(`https://www.youtube.com/watch?v=${video}`);
-    const q = this.queue(userId);
-    const existing = [...q.values()].find((r) => r.url === url.toString() && r.status !== "failed");
-    if (existing) return existing;
-    // Read before saving: a source Thinketh can't read is never added to the queue.
-    let page: Page;
+    const q = await this.queue(userId);
+    const same = [...q.values()].find((r) => r.url === url.toString() || r.canonicalUrl === url.toString());
+    if (same && same.status !== "failed") return this.publicResource(same);
+    // Read before saving: a source Thinketh can't read is never added. A successful read stays in the
+    // shared page cache, so processing below reuses it instead of fetching twice.
     const started = Date.now();
     try {
-      page = await this.fetchShared(url.toString());
+      await this.fetchShared(url.toString());
     } catch (err) {
       logEvent("resource.unreadable", { userId, url: url.toString(), ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) }, "warn");
+      // An old failed entry for a link that still can't be read goes too: the list only holds what can be read.
+      if (same) {
+        q.delete(same.id);
+        await this.forgetResource(same.id);
+      }
       throw new UnreadableSourceError(err instanceof ResourceReadError ? err.message : READ_FAILED);
     }
-    if (q.size >= MAX_QUEUE) {
-      const oldest = this.listResources(userId).at(-1);
-      if (oldest) q.delete(oldest.id);
+    if (same) {
+      // Saving a failed source again retries it in place (same id, so links to it keep working).
+      await this.updateResource(userId, same.id, { status: "processing", stage: "reading", attempts: 1, error: undefined });
+      this.startProcessing(userId, same.id);
+      return this.publicResource(q.get(same.id)!);
     }
-    const resource: Resource = {
+    if (q.size >= MAX_QUEUE) {
+      const oldest = [...q.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+      if (oldest) {
+        q.delete(oldest.id);
+        await this.forgetResource(oldest.id);
+      }
+    }
+    const resource: StoredResource = {
       id: newId("res"),
+      ownerId: userId,
+      attempts: 1,
       url: url.toString(),
       title: url.hostname.replace(/^www\./, ""),
       sourceType: inferSourceType(url.toString()),
       createdAt: this.now().toISOString(),
       status: "processing",
-      stage: "mapping",
+      stage: "reading",
       extractedConcepts: [],
       matchedConceptIds: [],
       alreadyUnderstood: [],
@@ -1004,9 +1460,23 @@ export class ThinkethService {
       relevantConnections: [],
     };
     q.set(resource.id, resource);
-    this.applyPage(userId, resource.id, page);
-    runInBackground("resource.analyze", this.processResource(userId, resource.id, page, started));
-    return this.getResource(userId, resource.id);
+    await this.store.put("resources", resource.id, resource, userId);
+    this.startProcessing(userId, resource.id);
+    return this.publicResource(resource);
+  }
+
+  private async forgetResource(id: string): Promise<void> {
+    this.resourceText.delete(id);
+    this.teachings.delete(id);
+    await Promise.all([this.store.remove("resources", id), this.store.remove("resource_text", id), this.store.remove("resource_lessons", id)]);
+  }
+
+  private async excerptOf(r: Resource): Promise<string | undefined> {
+    const cached = this.resourceText.get(r.id);
+    if (cached) return cached.excerpt;
+    const stored = await this.store.get<{ excerpt: string }>("resource_text", r.id);
+    if (stored) this.resourceText.set(r.id, stored);
+    return stored?.excerpt;
   }
 
   /**
@@ -1029,7 +1499,7 @@ export class ThinkethService {
 
   private async conceptViews(userId: string): Promise<ConceptView[]> {
     const states = await this.statesFor(userId);
-    return [...this.concepts.values()].map((c) => {
+    return this.conceptsFor(userId).map((c) => {
       const s = states.get(c.id);
       return {
         id: c.id,
@@ -1041,32 +1511,31 @@ export class ThinkethService {
     });
   }
 
-  /** What reading the page established: title, publisher, length, how it was read. */
-  private applyPage(userId: string, id: string, page: Page): void {
-    const readMin = page.durationMinutes ?? readMinutes(page.words);
-    this.updateResource(userId, id, {
-      title: page.title ?? this.getResource(userId, id).title,
-      ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
-      ...((page.publisher ?? publisherFromUrl(page.url)) ? { publisher: page.publisher ?? publisherFromUrl(page.url)! } : {}),
-      ...(page.author ? { author: page.author } : {}),
-      ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
-      fetchedAt: this.now().toISOString(),
-      estimatedReadMinutes: readMin,
-      readVia: page.readVia,
-      // PDFs and videos are typed by what they are; web pages keep the URL-based class.
-      ...(page.kind === "video" ? { sourceType: "video" as const } : page.kind === "pdf" && this.getResource(userId, id).sourceType === "article" ? { sourceType: "document" as const } : {}),
-      url: page.url,
-      stage: "mapping",
-      });
-  }
-
-  private async processResource(userId: string, id: string, page: Page, started: number): Promise<void> {
+  private async processResource(userId: string, id: string): Promise<void> {
+    const started = Date.now();
     try {
+      const current = await this.getResource(userId, id);
+      const page = await this.fetchShared(current.url);
       const readMin = page.durationMinutes ?? readMinutes(page.words);
+      await this.updateResource(userId, id, {
+        title: page.title ?? current.title,
+        ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
+        ...((page.publisher ?? publisherFromUrl(page.url)) ? { publisher: page.publisher ?? publisherFromUrl(page.url)! } : {}),
+        ...(page.author ? { author: page.author } : {}),
+        ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
+        fetchedAt: this.now().toISOString(),
+        estimatedReadMinutes: readMin,
+        readVia: page.readVia,
+        // PDFs and videos are typed by what they are; web pages keep the URL-based class.
+        ...(page.kind === "video" ? { sourceType: "video" as const } : page.kind === "pdf" && current.sourceType === "article" ? { sourceType: "document" as const } : {}),
+        url: page.url,
+        stage: "mapping",
+      });
       const concepts = await this.conceptViews(userId);
       const excerpt = page.text.slice(0, MAX_EXCERPT_CHARS);
       this.resourceText.set(id, { excerpt });
-      this.updateResource(userId, id, { stage: "comparing" });
+      await this.store.put("resource_text", id, { excerpt }, userId);
+      await this.updateResource(userId, id, { stage: "comparing" });
       const profile = this.profileFor(userId);
       const ctx = { page, excerpt, concepts, preferences: profile.explanationPreferences, interests: profile.interests.map((i) => i.topic) };
       const model = this.model();
@@ -1078,7 +1547,7 @@ export class ThinkethService {
         RESOURCE_ANALYSIS_TIMEOUT_MS,
       );
       const a = enforceAnalysis(r.value, concepts);
-      this.updateResource(userId, id, {
+      await this.updateResource(userId, id, {
         status: "ready",
         stage: "done",
         summary: a.summary,
@@ -1098,7 +1567,7 @@ export class ThinkethService {
       runInBackground("resource.teach", this.pendingTeach(userId, id).catch(() => undefined));
     } catch (err) {
       const message = err instanceof ResourceReadError ? err.message : READ_FAILED;
-      this.updateResource(userId, id, { status: "failed", stage: "done", error: message });
+      await this.updateResource(userId, id, { status: "failed", stage: "done", error: message }).catch(() => undefined);
       logEvent("resource.failed", { userId, id, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) }, "warn");
     }
   }
@@ -1107,7 +1576,7 @@ export class ThinkethService {
     return {
       title: r.title,
       summary: r.summary ?? "",
-      excerpt: this.resourceText.get(r.id)?.excerpt ?? r.summary ?? "",
+      excerpt: (await this.excerptOf(r)) ?? r.summary ?? "",
       newToYou: r.newToYou,
       alreadyUnderstood: r.alreadyUnderstood,
       concepts: (await this.conceptViews(userId)).filter((c) => r.matchedConceptIds.includes(c.id)),
@@ -1122,7 +1591,12 @@ export class ThinkethService {
     let p = this.teachPending.get(id);
     if (!p) {
       p = (async () => {
-        const r = this.getResource(userId, id);
+        const r = await this.getResource(userId, id);
+        const stored = await this.store.get<TeachDeltaResponse>("resource_lessons", id);
+        if (stored) {
+          this.teachings.set(id, stored);
+          return stored;
+        }
         const ctx = await this.teachContext(userId, r);
         const model = this.model();
         const out = await guarded(
@@ -1140,7 +1614,10 @@ export class ThinkethService {
           ...(conceptId ? { conceptId } : {}),
           generatedBy: out.source === "live" ? "claude" : "deterministic",
         };
-        if (out.source === "live") this.teachings.set(id, lesson);
+        if (out.source === "live") {
+          this.teachings.set(id, lesson);
+          await this.store.put("resource_lessons", id, lesson, userId);
+        }
         return lesson;
       })().finally(() => this.teachPending.delete(id));
       this.teachPending.set(id, p);
@@ -1150,7 +1627,7 @@ export class ThinkethService {
 
   /** Teach the delta. Waits briefly for Claude's lesson, else answers from the source's own words. */
   async teachResource(userId: string, id: string): Promise<TeachDeltaResponse> {
-    const r = this.getResource(userId, id);
+    const r = await this.getResource(userId, id);
     if (r.status !== "ready" && r.status !== "learned") throw new BadRequestError("Thinketh is still reading this source.");
     try {
       return await withTimeout(this.pendingTeach(userId, id), this.claudeTimeout(), "teach");
@@ -1254,14 +1731,99 @@ export class ThinkethService {
       playgroundOnly: true,
       rubric: d.rubric,
     };
-    this.diagnostics.set(item.id, item);
+    await this.rememberDiagnostic(item);
     logEvent("playground.transfer_challenge", { conceptId, questionId: item.id, source: out.source === "live" ? "generated" : "fallback", ideas: d.rubric.length });
     return { item, source: out.source === "live" ? "generated" : "fallback", applicationContext: d.applicationContext };
   }
 
+  /**
+   * Playground: the teacher's agent prepares an explanation for the learner's gap. It may use the
+   * shared corpus on this concept and, only when the teacher chose to share them, the titles, links
+   * and summaries of sources the teacher saved on it. Never private questions or memories. Every
+   * point must cite a material; with nothing grounded, the room falls back to the person's own words.
+   * Preparing a lesson observes nothing: no knowledge state changes here.
+   */
+  async prepareExchange(input: {
+    conceptId: string;
+    teacherId: string;
+    learnerId: string;
+    teacherName: string;
+    learnerName: string;
+    gap: ExchangeGap;
+    shareSavedSources: boolean;
+    whyRelevant: string;
+    /** "demo" only when every participant is a seeded persona; otherwise real, discovered sources only. */
+    corpus: "demo" | "live";
+  }): Promise<PreparedLesson> {
+    const concept = this.concepts.get(input.conceptId);
+    if (!concept) throw new NotFoundError(`Concept not found: ${input.conceptId}`);
+    const materials: ExchangeMaterial[] = [];
+    const cited = new Map<string, NonNullable<PreparedLesson["sources"]>[number]>();
+    const claims = this.claimsFor(input.corpus)
+      .filter((c) => c.conceptIds.includes(concept.id) && c.sourceIds.some((id) => this.sources.has(id)))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 6);
+    for (const c of claims) {
+      const src = this.sources.get(c.sourceIds.find((id) => this.sources.has(id))!)!;
+      materials.push({ ref: `m${materials.length + 1}`, text: c.text, sourceId: src.id, via: "corpus", ...(c.stance === "challenges" ? { challenges: true } : {}) });
+      cited.set(src.id, { id: src.id, title: src.title, ...(src.url ? { url: src.url } : {}), ...(src.publisher ? { publisher: src.publisher } : {}), ...(src.publishedAt ? { publishedAt: src.publishedAt } : {}), via: "corpus" });
+    }
+    if (input.shareSavedSources) {
+      const saved = (await this.listResources(input.teacherId)).filter((r) => (r.status === "ready" || r.status === "learned") && r.summary && r.matchedConceptIds.includes(concept.id)).slice(0, 2);
+      for (const r of saved) {
+        const id = `resource:${r.id}`;
+        materials.push({ ref: `m${materials.length + 1}`, text: r.summary!, sourceId: id, via: "shared_resource" });
+        cited.set(id, { id, title: r.title, url: r.canonicalUrl ?? r.url, ...(r.publisher ? { publisher: r.publisher } : {}), ...(r.publishedAt ? { publishedAt: r.publishedAt } : {}), via: "shared_resource" });
+      }
+    }
+    const context = [
+      "Thinketh's shared source corpus on this concept",
+      ...(input.shareSavedSources ? [`Sources ${input.teacherName} saved on this topic, shared by ${input.teacherName}`] : []),
+      `${input.learnerName}'s shared knowledge snapshot (level, and whether it was ever verified)`,
+    ];
+    const g = input.gap;
+    const adaptedTo = `${input.learnerName}'s snapshot shows ${g.level} evidence on ${concept.name}${g.verified ? "" : ", never verified by a check"}${g.hasMisconception ? ", with a misconception flagged" : ""}. ${pitchFor(g)}`;
+    const base = { agentOf: input.teacherId, preparedFor: input.learnerId, adaptedTo, whyRelevant: input.whyRelevant, context, preparedAt: this.now().toISOString() };
+    if (materials.length === 0) {
+      logEvent("playground.lesson_unavailable", { conceptId: concept.id, teacherId: input.teacherId, reason: "no sourced material" });
+      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent found no sourced material on ${concept.name} to prepare from, so it teaches from Thinketh's concept description instead.` };
+    }
+    const ctx: ExchangeContext = { concept, teacherName: input.teacherName, learnerName: input.learnerName, learnerGap: g, materials };
+    const model = this.model();
+    const r = await guarded(
+      "claude",
+      "prepareExchange",
+      model
+        ? async () => {
+            const v = validateExchange(await model.prepareExchange(ctx), ctx);
+            if ("problem" in v) throw new Error(`exchange rejected: ${v.problem}`);
+            return v.draft;
+          }
+        : undefined,
+      () => deterministicExchange(ctx),
+      this.claudeTimeout(),
+    );
+    const checked = validateExchange(r.value, ctx);
+    if ("problem" in checked) {
+      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent couldn't ground an explanation in its sources, so it teaches from Thinketh's concept description instead.` };
+    }
+    const byRef = new Map(materials.map((m) => [m.ref, m.sourceId]));
+    const points = checked.draft.points.map((p) => ({ text: p.text, sourceIds: [...new Set(p.refs.map((ref) => byRef.get(ref)!))] }));
+    const used = new Set(points.flatMap((p) => p.sourceIds));
+    logEvent("playground.lesson_prepared", { conceptId: concept.id, teacherId: input.teacherId, learnerId: input.learnerId, by: r.source, points: points.length, sources: [...used] });
+    return {
+      status: "prepared",
+      ...base,
+      by: r.source === "live" ? "claude" : "deterministic",
+      text: checked.draft.explanation,
+      points,
+      sources: [...cited.values()].filter((x) => used.has(x.id)),
+    };
+  }
+
   /** Public prompt of a diagnostic (the answer key stays server-side). */
-  diagnosticPrompt(questionId: string): { conceptId: string; prompt: string } | undefined {
-    const q = this.diagnostics.get(questionId);
+  async diagnosticPrompt(questionId: string): Promise<{ conceptId: string; prompt: string } | undefined> {
+    const q = await this.getDiagnostic(questionId);
     return q ? { conceptId: q.conceptId, prompt: q.prompt } : undefined;
   }
 
@@ -1274,10 +1836,10 @@ export class ThinkethService {
   }
 
   /** A short, sourced lesson on one concept for two people at once (shared gaps). */
-  conceptLesson(conceptId: string): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
+  conceptLesson(conceptId: string, corpus: "demo" | "live" = "demo"): { sections: Array<{ heading: string; body: string }>; resourceTitle?: string } {
     const concept = this.concepts.get(conceptId);
     if (!concept) throw new NotFoundError(`Concept not found: ${conceptId}`);
-    const claims = [...this.claims.values()].filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
+    const claims = this.claimsFor(corpus).filter((c) => c.conceptIds[0] === conceptId || c.conceptIds.includes(conceptId)).sort((a, b) => b.confidence - a.confidence);
     const source = claims.flatMap((c) => c.sourceIds).map((id) => this.sources.get(id)).find(Boolean);
     const plain = CONCEPT_LABELS[conceptId]?.explanation;
     const sections = [
@@ -1288,12 +1850,19 @@ export class ThinkethService {
     return { sections, ...(source ? { resourceTitle: source.title } : {}) };
   }
 
+  /**
+   * Demo reset: put ONE seeded demo persona back to its seeded state for a rehearsal. It only ever
+   * touches that persona's own records; any other identity is refused (never a real user's history).
+   */
   async reset(userId: string): Promise<void> {
-    for (const id of this.queue(userId).keys()) {
-      this.resourceText.delete(id);
-      this.teachings.delete(id);
+    if (!this.isDemoIdentity(userId)) throw new ForbiddenError("Only a seeded demo persona can be reset.");
+    const owned = await this.store.list<StoredResource>("resources", { ownerId: userId }, 1000);
+    for (const r of owned) {
+      this.resourceText.delete(r.id);
+      this.teachings.delete(r.id);
     }
     this.resources.delete(userId);
+    await Promise.all(["resources", "resource_text", "resource_lessons", "operations"].map((c) => this.store.removeOwned(c, userId)));
     await this.adapters.temporal.reset(userId);
     await this.adapters.localMemory.reset(userId);
     // Rehearsals should start from the persona's seeded memories, not accumulated
@@ -1306,33 +1875,29 @@ export class ThinkethService {
         guarded("backboard", "reconcile", () => memory.reconcile!(userId, this.seed.memories), () => undefined, 30_000),
       );
     }
-    this.phrasedDeltas.clear();
+    for (const k of this.phrasedDeltas.keys()) if (k.startsWith(`${userId}|`)) this.phrasedDeltas.delete(k);
     logEvent("demo.reset", { userId });
   }
 
-  /** Normalize raw sources into a Development with Claude (claims, concepts), then store it. */
+  /** Normalize raw sources into a Development with Claude (claims, concepts), then store it in the corpus. */
   async ingest(bundle: Omit<RawSourceBundle, "knownConcepts">): Promise<Development> {
+    const { value, source } = await this.normalize(bundle);
+    const development = await this.addToCorpus(value, this.now().toISOString());
+    logEvent("development.ingested", { id: development.id, via: source, claims: value.claims.length, concepts: development.conceptIds });
+    return development;
+  }
+
+  /** Claude normalization (validated by the adapter) with the deterministic fallback. */
+  async normalize(bundle: Omit<RawSourceBundle, "knownConcepts">, timeoutMs = Math.max(this.claudeTimeout(), 45000)): Promise<{ value: NormalizedDevelopment; source: "live" | "fallback" }> {
+    await this.ensureCorpus();
     const full: RawSourceBundle = { ...bundle, knownConcepts: [...this.concepts.values()] };
     const model = this.model();
-    const { value, source } = await guarded(
+    return guarded(
       "claude",
       "normalizeDevelopment",
       model ? () => model.normalizeDevelopment(full) : undefined,
       () => this.adapters.fallbackModel.normalizeDevelopment(full),
-      Math.max(this.claudeTimeout(), 45000),
+      timeoutMs,
     );
-    for (const c of value.newConcepts) if (!this.concepts.has(c.id)) this.concepts.set(c.id, c);
-    for (const c of value.claims) this.claims.set(c.id, c);
-    for (const s of value.sources) this.sources.set(s.id, s);
-    this.developments.set(value.development.id, value.development);
-    this.meta[value.development.id] = {
-      readMinutes: round(Math.max(1, value.claims.length * 0.5), 1),
-      mentalModelShift: value.mentalModelShift,
-      newClaimIds: value.claims.map((c) => c.id),
-    };
-    const { semantic } = this.adapters;
-    await guarded("mongo", "upsertDevelopment", semantic ? () => semantic.upsertDevelopment(value.development) : undefined, () => undefined, SEMANTIC_TIMEOUT_MS);
-    logEvent("development.ingested", { id: value.development.id, via: source, claims: value.claims.length, concepts: value.development.conceptIds });
-    return value.development;
   }
 }

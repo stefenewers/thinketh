@@ -72,6 +72,12 @@ export const DevelopmentSchema = z.object({
   claimIds: z.array(z.string()),
   sourceIds: z.array(z.string()),
   storylineIds: z.array(z.string()),
+  /**
+   * Optional (additive): when Thinketh's discovery pipeline first found this development.
+   * `happenedAt` stays the sources' own publication time, so an old article found today
+   * never reads as published today.
+   */
+  discoveredAt: z.string().optional(),
 });
 export type Development = z.infer<typeof DevelopmentSchema>;
 

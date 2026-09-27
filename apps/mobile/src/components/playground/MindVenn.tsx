@@ -272,7 +272,7 @@ function a3(s: StageState, teacher?: string, learner?: string): string {
     case "found":
       return teacher && learner ? `${teacher} can teach ${learner}.` : "";
     case "teaching":
-      return `${teacher ?? "The teacher"} is explaining. Not yet learned.`;
+      return `${teacher ? `${teacher}'s agent` : "The teacher's agent"} is teaching. Not yet learned.`;
     case "checkpoint":
       return `Checkpoint: ${learner ?? "the learner"} applies it in a new case.`;
     case "grading":

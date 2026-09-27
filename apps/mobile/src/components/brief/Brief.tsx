@@ -1,45 +1,29 @@
 import { type ReactNode } from "react";
 import { BookGlyph } from "@/components/mind/world/Book";
-import { Pressable, StyleSheet, View, useWindowDimensions, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { Icon, type IconName } from "@/components/Icon";
 import { IconButton } from "@/components/system";
 import { T } from "@/components/Text";
-import { Texture } from "@/components/Texture";
+import { TopicArt, type TopicArtKind } from "@/components/TopicArt";
 import { color, font, space } from "@/theme/tokens";
 
 // Briefing primitives for the Resource and Development screens only.
 
-const BAND_H = 196;
 
-/** A subtle photographic band at the top of a briefing, fading into the white page, with a back control. */
 /**
- * A photographic header. "band" is a faded strip; "hero" (storyboard 06) is a tall, nearly
- * full-strength image that only fades into white at its bottom edge.
+ * The top of a briefing: the back control, then a modest tile with the topic's pixel object (decorative;
+ * the title below names the source). It replaces the old full-width photograph with something that says
+ * what the source is about, at the scale of the rest of the pixel vocabulary.
  */
-export function TextureHeader({ source, onBack, hero }: { source: ImageSourcePropType; onBack: () => void; hero?: boolean }) {
+export function ArtHeader({ conceptIds, fallback, onBack }: { conceptIds: readonly string[]; fallback?: TopicArtKind; onBack: () => void }) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const h = hero ? Math.round(height * 0.36) + insets.top : BAND_H + insets.top;
   return (
-    <View style={{ height: h, overflow: "hidden" }}>
-      <Texture source={source} style={[StyleSheet.absoluteFill, { opacity: hero ? 0.92 : 0.55 }]} />
-      <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
-        <Svg width={width} height={h}>
-          <Defs>
-            <LinearGradient id="briefFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color.ground} stopOpacity={hero ? 0 : 0.1} />
-              <Stop offset={hero ? "0.72" : "0.6"} stopColor={color.ground} stopOpacity={hero ? 0 : 0.35} />
-              <Stop offset="1" stopColor={color.ground} stopOpacity={1} />
-            </LinearGradient>
-          </Defs>
-          <Rect x={0} y={0} width={width} height={h} fill="url(#briefFade)" />
-        </Svg>
-      </View>
-      <View style={[styles.bandBar, { paddingTop: insets.top + space.xs }]}>
+    <View style={{ paddingTop: insets.top + space.xs, paddingHorizontal: space.m }}>
+      <View style={{ alignSelf: "flex-start" }}>
         <IconButton icon="back" round accessibilityLabel="Back" onPress={onBack} />
       </View>
+      <TopicArt conceptIds={conceptIds} fallback={fallback} unit={2.5} style={styles.artTile} />
     </View>
   );
 }
@@ -128,7 +112,7 @@ export function BriefRow({
 }
 
 const styles = StyleSheet.create({
-  bandBar: { position: "absolute", left: space.m, top: 0 },
+  artTile: { width: 96, height: 84, borderRadius: 18, backgroundColor: color.surfaceMuted, marginTop: space.l, marginLeft: space.m, marginBottom: space.xl },
   sectionTitle: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, letterSpacing: -0.3, color: color.ink, marginBottom: space.m },
   dotLine: { flexDirection: "row", gap: space.m, marginBottom: space.s },
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.ink3, marginTop: 9 },

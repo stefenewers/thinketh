@@ -207,7 +207,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
             />
           </View>
           <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
-            A signal, not a test: only a check shows Thinketh you understand it.
+            Thinketh distinguishes what you report from what you demonstrate: this counts a little, within a cap. A check provides stronger evidence.
           </T>
           {feedback ? (
             <View style={styles.feedbackNote} accessibilityLiveRegion="polite">

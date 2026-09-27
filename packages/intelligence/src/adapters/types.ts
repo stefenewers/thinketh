@@ -59,6 +59,8 @@ export interface TemporalStore {
   getLatestStates(userId: string): Promise<KnowledgeState[]>;
   /** Newest first. */
   getRecentTransitions(userId: string, limit: number): Promise<KnowledgeStateTransition[]>;
+  /** The primary transition recorded for one observation id, if any (idempotent retries). */
+  findTransitionByObservation(userId: string, observationId: string): Promise<KnowledgeStateTransition | undefined>;
   appendInteraction(input: { userId: string; kind: string; refId?: string; payload?: Record<string, unknown>; at: string }): Promise<void>;
   reset(userId: string): Promise<void>;
 }
@@ -124,6 +126,7 @@ export type AskContext = {
 export type AskResult = { thinkethInfers: string[] };
 
 import type { TransferContext, TransferDraft } from "../engine/transfer.ts";
+import type { ExchangeContext, ExchangeDraft } from "../engine/exchange.ts";
 
 export type ShortAnswerGrade = { coveredIdeaIndices: number[]; misconception?: string; feedback: string };
 
@@ -147,6 +150,11 @@ export interface IntelligenceModel {
   analyzeResource(input: ResourceContext): Promise<ResourceAnalysis>;
   /** Teach what's new in a resource, skipping what the user already understands. */
   teachDelta(input: TeachContext): Promise<TeachResult>;
+  /**
+   * Playground: the teacher's agent drafts an explanation for the learner's gap from the given
+   * materials only. Validated (every point must cite a material) before anyone sees it.
+   */
+  prepareExchange(input: ExchangeContext): Promise<ExchangeDraft>;
 }
 
 export type VoiceContext = { userId: string; displayName: string; script: string[]; briefDate: string; minutes: number };

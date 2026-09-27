@@ -69,7 +69,7 @@ describe("'What just happened' is the recorded sequence", () => {
     expect(labels(rooms.peer_teaching)).toEqual([
       "done:Thinketh:Found a teaching gap",
       "done:Muse:Assigned Nadani",
-      "current:Nadani:Explains",
+      "current:Nadani:Agent teaches",
       "pending:Thinketh:Transfer check",
       "pending:Stefen:Answers",
       "pending:Thinketh:Mind updates",

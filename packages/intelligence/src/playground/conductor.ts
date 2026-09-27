@@ -43,7 +43,7 @@ export const MUSE_TOOLS: Array<{ name: MuseTool; description: string; parameters
     description: "Ask one participant to teach another a concept they have stronger evidence on. Must be one of view.teachable.",
     parameters: obj({ conceptId: str(), teacherId: str(), learnerId: str(), say: str() }, ["conceptId", "teacherId", "learnerId"]),
   },
-  { name: "request_explanation", description: "Ask the assigned teacher to explain in their own words.", parameters: obj({ say: str() }) },
+  { name: "request_explanation", description: "Wait while the teacher's agent explains the concept to the learner's agent. No person types anything.", parameters: obj({ say: str() }) },
   { name: "ask_transfer_question", description: "After the explanation, ask the learner to apply it in a new context. Thinketh grades it.", parameters: obj({ say: str() }) },
   { name: "teach_shared_gap", description: "Teach a concept neither participant has strong evidence on. Must be one of view.sharedGaps.", parameters: obj({ conceptId: str(), say: str() }, ["conceptId"]) },
   { name: "introduce_resource", description: "Bring a shared source into the room; Thinketh computes each person's delta.", parameters: obj({ say: str() }) },
@@ -131,13 +131,13 @@ export function fallbackNext(v: ConductorView): MuseAction {
   }
 
   // Finish the peer teaching in progress first.
-  if (p.teacherAssigned && !p.explanationSubmitted) return act("request_explanation", { say: "Take your time. Explain it the way you'd explain it to a teammate." });
+  if (p.teacherAssigned && !p.explanationSubmitted) return act("request_explanation", { say: "Your agents are working it out." });
   if (p.explanationSubmitted && !p.transferAsked) return act("ask_transfer_question", { say: "Now apply it somewhere new." });
 
   // Then the plan, in order.
   const next = v.plan.find((i) => i.id === v.next);
   if (next?.type === "peer_teach" && next.conceptId && next.teacherId && next.learnerId) {
-    return act("assign_peer_teacher", { conceptId: next.conceptId, teacherId: next.teacherId, learnerId: next.learnerId, say: next.topic ? `${name(next.teacherId)}, teach ${name(next.learnerId)} ${next.topic}.` : `${name(next.teacherId)}, teach this in your own words.` });
+    return act("assign_peer_teacher", { conceptId: next.conceptId, teacherId: next.teacherId, learnerId: next.learnerId, say: next.topic ? `${name(next.teacherId)}'s agent will teach ${name(next.learnerId)}'s agent ${next.topic}.` : `${name(next.teacherId)}'s agent will teach this to ${name(next.learnerId)}'s agent.` });
   }
   if (next?.type === "shared_gap" && next.conceptId && !p.sharedGapTaught) {
     return act("teach_shared_gap", { conceptId: next.conceptId, say: gapLine(next.topic) });
@@ -220,7 +220,8 @@ export class MuseConductor implements Conductor {
             {
               role: "system",
               content:
-                "You conduct a short peer-learning session between two people in Thinketh. Always respond by calling exactly one tool (never plain text) to choose what the room does next. " +
+                "You conduct a short learning session in Thinketh's Playground, where two people's learning agents teach each other. Always respond by calling exactly one tool (never plain text) to choose what the room does next. " +
+                "When you assign peer teaching, the teacher's AGENT explains to the learner's AGENT; nobody types an explanation. Then the learner (the person) answers the transfer question. " +
                 "Thinketh has already planned the session: follow view.plan in order, starting with view.next. Only assign peer teaching or shared gaps that are unfinished plan items; finish a peer teaching (explanation, then transfer question) before the next. If view.intent is set, the people in the room asked for it: do exactly that. " +
                 "You cannot change anyone's knowledge; Thinketh grades answers. Keep 'say' to one warm, short sentence. " +
                 "Use plain language suitable for a smart general audience: name concepts by their 'topic' wording, not their technical name. Preserve the technical idea, but avoid jargon unless it is necessary. " +

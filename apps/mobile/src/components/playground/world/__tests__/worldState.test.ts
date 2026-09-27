@@ -70,7 +70,8 @@ describe("world: teaching in both directions", () => {
     expect(agent(w, ME)).toMatchObject({ role: "learner", at: PLACES.hostHome, facing: "right" });
     expect(w.concept!.state).toBe("with_teacher");
     expect(w.muse).toMatchObject({ state: "directing", target: "nadani" });
-    expect(n.doing).toMatch(/Stefen types for this demo persona/);
+    // Agents teach each other: nobody types an explanation, not even for the demo persona.
+    expect(n.doing).toBe("Teaching");
     expect(w.now.teaching).toBe("Nadani is teaching you");
   });
 
@@ -84,7 +85,7 @@ describe("world: teaching in both directions", () => {
     expect(w.concept).toMatchObject({ conceptId: "agent-tool-use", teacherId: ME, learnerId: "nadani" });
     expect(w.now.teaching).toBe("You are teaching Nadani");
     // Nobody types for you on your own device.
-    expect(me.doing).toBe("Explaining");
+    expect(me.doing).toBe("Teaching");
   });
 
   it("a real second device isn't labelled as typed by the host", () => {
@@ -92,7 +93,7 @@ describe("world: teaching in both directions", () => {
     r.participants.find((p) => p.userId === "nadani")!.demoPersona = false;
     const w = projectPlayground(r, ME, null);
     expect(agent(w, "nadani").persona).toBe(false);
-    expect(agent(w, "nadani").doing).toBe("Explaining");
+    expect(agent(w, "nadani").doing).toBe("Teaching");
   });
 });
 

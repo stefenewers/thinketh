@@ -107,7 +107,7 @@ function BookSheet({ knowledge, conceptId, live, onClose, onOpenInMind }: { know
             {item.concept.description}
           </T>
           <T variant="meta" style={{ color: color.ink3 }}>
-            Listening adds context. Only a check changes this book.
+            Listening adds context, not evidence. A check is the strongest evidence for this book.
           </T>
           <Button
             kind="secondary"

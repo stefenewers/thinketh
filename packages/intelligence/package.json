@@ -19,7 +19,8 @@
     "setup:backboard": "node --env-file-if-exists=../../.env scripts/setup-backboard.ts",
     "evidence:backboard": "node --env-file-if-exists=../../.env scripts/evidence-backboard.ts",
     "verify:backboard": "node --env-file-if-exists=../../.env scripts/verify-backboard.ts",
-    "secrets:remote": "node scripts/remote-secrets.ts"
+    "secrets:remote": "node scripts/remote-secrets.ts",
+    "discover": "node --env-file-if-exists=../../.env scripts/discover.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

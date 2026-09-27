@@ -1,6 +1,6 @@
 import { PlaygroundRoomSchema, type PlaygroundRoom } from "@thinketh/contracts";
-import { DEMO_USER_ID } from "./client";
 import { API_URL, USE_MOCK_API } from "./index";
+import { authHeaders, currentMode, SignInRequired } from "@/lib/session";
 
 // The Playground talks only to the Thinketh server (it owns every room; the
 // conductor and all secrets stay there). No mock: without a server the screen
@@ -24,7 +24,9 @@ async function call(method: "GET" | "POST", path: string, body?: unknown, opts: 
       method,
       headers: {
         "Content-Type": "application/json",
-        "x-thinketh-user-id": opts.as ?? DEMO_USER_ID,
+        // Demo mode may name a seeded persona (a second demo device joining as "nadani"); a person's
+        // own device always proves who it is with its session, whatever `as` says.
+        ...(await authHeaders(currentMode() === "demo" ? opts.as : undefined)),
         ...(APP_KEY ? { "x-thinketh-app-key": APP_KEY } : {}),
       },
       body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
@@ -35,6 +37,7 @@ async function call(method: "GET" | "POST", path: string, body?: unknown, opts: 
     return PlaygroundRoomSchema.parse(json);
   } catch (err) {
     if (err instanceof PlaygroundError) throw err;
+    if (err instanceof SignInRequired) throw new PlaygroundError(err.message);
     throw new PlaygroundError(err instanceof Error && err.name === "AbortError" ? "The server took too long. Try again." : "Couldn't reach the Thinketh server.");
   } finally {
     clearTimeout(timer);
@@ -52,8 +55,17 @@ export const playground = {
   compare: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/compare`, {}, { as }),
   conduct: (roomId: string, intent?: "next" | "shared_gap" | "resource" | "end", as?: string) =>
     call("POST", `/playground/rooms/${id(roomId)}/conduct`, intent ? { intent } : {}, { as }),
-  explain: (roomId: string, text: string, opts: { asUserId?: string; as?: string } = {}) =>
-    call("POST", `/playground/rooms/${id(roomId)}/explain`, { text, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS }),
+  /** `source`: the teacher's own words, their agent's prepared draft as-is, or that draft edited. */
+  explain: (roomId: string, text: string, opts: { asUserId?: string; as?: string; source?: "own" | "agent" | "agent_edited" } = {}) =>
+    call(
+      "POST",
+      `/playground/rooms/${id(roomId)}/explain`,
+      { text, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}), ...(opts.source ? { source: opts.source } : {}) },
+      { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS },
+    ),
+  /** Let (or stop letting) your agent use sources you saved on the topic being taught. */
+  share: (roomId: string, savedSources: boolean, opts: { asUserId?: string; as?: string } = {}) =>
+    call("POST", `/playground/rooms/${id(roomId)}/share`, { savedSources, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as }),
   answer: (roomId: string, answer: string, opts: { asUserId?: string; as?: string } = {}) =>
     call("POST", `/playground/rooms/${id(roomId)}/answer`, { answer, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS }),
   resource: (roomId: string, url: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/resource`, { url }, { as, timeoutMs: ANSWER_TIMEOUT_MS }),

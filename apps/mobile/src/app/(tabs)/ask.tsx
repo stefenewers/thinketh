@@ -8,7 +8,6 @@ import { Icon } from "@/components/Icon";
 import { AppTopBar, ConceptChip, IconButton, InsightRow, ListCard, RaisedCard, ReasoningStep, SectionHeader, SegmentedTabs, SignalPill, SourceCard } from "@/components/system";
 import { T } from "@/components/Text";
 import { Gutter, LoadingState } from "@/components/ui";
-import { imageFor } from "@/content/imagery";
 import { useApi } from "@/lib/hooks";
 import { color, font, layout, lift, radius, space } from "@/theme/tokens";
 
@@ -305,7 +304,6 @@ function ReasoningView({ answer, conceptName, initialAllSources }: { answer: Ans
   const [allSources, setAllSources] = useState(initialAllSources);
   const shownSources = allSources ? answer.citations : answer.citations.slice(0, 3);
   const conceptIds = answer.relatedConceptIds;
-  const thumbFor = (i: number) => imageFor(conceptIds.length ? [conceptIds[i % conceptIds.length]] : []);
 
   // Synthesis: key points, agreement, what's new for you, and what's still open.
   const synth: { label: string; lines: string[]; muted?: boolean }[] = s
@@ -346,8 +344,8 @@ function ReasoningView({ answer, conceptName, initialAllSources }: { answer: Ans
             Searched across {n} {n === 1 ? "source" : "sources"}.
           </T>
           <View style={{ marginTop: space.xs }}>
-            {shownSources.map((c, i) => (
-              <SourceCard key={c.sourceId} title={c.title} thumb={thumbFor(i)} />
+            {shownSources.map((c) => (
+              <SourceCard key={c.sourceId} title={c.title} />
             ))}
           </View>
           {n > 3 ? (

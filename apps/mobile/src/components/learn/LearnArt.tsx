@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Pressable, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
-import type { Resource, VisualIcon } from "@thinketh/contracts";
+import type { VisualIcon } from "@thinketh/contracts";
 import { Icon } from "@/components/Icon";
 import { PixelIcon } from "@/components/visualization/PixelIcon";
 import { LEARN } from "./learnStyles";
@@ -72,38 +72,6 @@ export const SourceStackArt = memo(function SourceStackArt({ scale = 1 }: { scal
 
 /** Learn's small pixel glyphs use the same softened line as the artwork, not the diagram ink. */
 const SOFT_PALETTE = { k: LINE, g: pixel.stoneMid, s: pixel.paperEdge, w: pixel.paper, c: brand.coral, p: "#F2C4AF", b: "#A9B8C7" };
-
-const GLYPH: Record<Resource["sourceType"], VisualIcon> = {
-  primary: "document",
-  documentation: "book",
-  research: "document",
-  preprint: "document",
-  repository: "database",
-  reporting: "document",
-  article: "document",
-  video: "screen",
-  document: "document",
-};
-
-/** What kind of source this is, as a small pixel glyph on a paper tile (never a stock photo). */
-export function SourceGlyph({ type, size = 44 }: { type: Resource["sourceType"]; size?: number }) {
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.round(size * 0.28),
-        backgroundColor: pixel.floor,
-        borderWidth: 0.5,
-        borderColor: color.hairline,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <PixelIcon name={GLYPH[type]} size={24} palette={SOFT_PALETTE} />
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Explore related ideas

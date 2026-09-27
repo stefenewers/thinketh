@@ -4,8 +4,7 @@ import { developmentDisplay, type Concept, type Development } from "@thinketh/co
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { BookGlyph } from "@/components/mind/world/Book";
-import { Texture } from "@/components/Texture";
-import { storyImageFor } from "@/content/imagery";
+import { TopicArt } from "@/components/TopicArt";
 import { significanceLabel } from "@/lib/knowledge";
 import { color, depth, DEPTH_INK, font, gutter, lift, space } from "@/theme/tokens";
 
@@ -95,7 +94,7 @@ export function LeadStory({ development, concepts, art, artHeight, onPress }: { 
   );
 }
 
-/** One row of Recent new insights: a photograph, the concept it touches, the headline, when. */
+/** One row of Recent new insights: a pixel object for its topic, the concept it touches, the headline, when. */
 export function InsightItem({ development, category, meta, understood, last, onPress }: { development: Development; category: string; meta: string; understood: boolean; last: boolean; onPress: () => void }) {
   return (
     <Pressable
@@ -104,7 +103,8 @@ export function InsightItem({ development, category, meta, understood, last, onP
       accessibilityLabel={`${development.title}. ${significanceLabel(development)}.${understood ? " Understood." : ""}`}
       style={({ pressed }) => [styles.insight, pressed && { backgroundColor: color.surfaceMuted }]}
     >
-      <Texture source={storyImageFor(development.conceptIds)} style={styles.insightThumb} />
+      {/* A pixel object for the topic (decorative; the text beside it says what the story is). */}
+      <TopicArt conceptIds={development.conceptIds} style={styles.insightThumb} />
       <View style={[styles.insightBody, !last && styles.insightDivided]}>
         <View style={{ flex: 1 }}>
           <View style={styles.categoryRow}>

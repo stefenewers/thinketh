@@ -49,6 +49,7 @@ export default function RootLayout() {
         <Stack.Screen name="voice" options={{ presentation: "fullScreenModal" }} />
         <Stack.Screen name="demo" options={{ presentation: "modal" }} />
         <Stack.Screen name="onboarding" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
+        <Stack.Screen name="account" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="profile" options={{ presentation: "modal" }} />
         <Stack.Screen name="storyline/[id]" />
         <Stack.Screen name="resource/[id]" />

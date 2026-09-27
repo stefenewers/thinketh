@@ -4,13 +4,14 @@ import { router } from "expo-router";
 import type { Resource } from "@thinketh/contracts";
 import { api } from "@/api";
 import { Icon } from "@/components/Icon";
-import { SourceGlyph, SourceStackArt } from "@/components/learn/LearnArt";
+import { SourceStackArt } from "@/components/learn/LearnArt";
 import { LEARN, learnStyles } from "@/components/learn/learnStyles";
 import { T } from "@/components/Text";
 import { Button, Gutter, Screen } from "@/components/ui";
+import { TopicArt } from "@/components/TopicArt";
 import { useApi } from "@/lib/hooks";
 import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
-import { color, font, space, warm } from "@/theme/tokens";
+import { color, font, pixel, space, warm } from "@/theme/tokens";
 
 const VISIBLE = 5;
 const addSource = () => router.push("/resource/add");
@@ -128,7 +129,8 @@ function QueueRow({ r, last }: { r: Resource; last: boolean }) {
       accessibilityLabel={`${r.title}. ${queueStatus(r)}.`}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.surfaceMuted }]}
     >
-      <SourceGlyph type={r.sourceType} />
+      {/* Decorative: the saved source's topic (or a plain document when it maps to none). */}
+      <TopicArt conceptIds={r.matchedConceptIds} fallback="document" unit={1.5} style={styles.thumb} />
       <View style={[styles.rowMain, !last && styles.divided]}>
         <View style={{ flex: 1 }}>
           <T style={styles.meta} numberOfLines={1}>
@@ -167,6 +169,8 @@ const styles = StyleSheet.create({
   softPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, marginTop: 16, minHeight: 38, paddingHorizontal: 16, borderRadius: 999, backgroundColor: LEARN.softPill },
   softPillText: { fontFamily: font.sansSemibold, fontSize: 14.5, lineHeight: 19, color: color.coral },
   row: { flexDirection: "row", alignItems: "center", paddingLeft: 16 },
+  // Main's pixel topic art, on the same paper tile the Learn system uses.
+  thumb: { width: 48, height: 48, borderRadius: 13, backgroundColor: pixel.floor, borderWidth: StyleSheet.hairlineWidth, borderColor: color.hairline },
   rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: 16, paddingRight: 16, marginLeft: 14 },
   divided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   meta: { fontFamily: font.sansMedium, fontSize: 12, lineHeight: 16, color: color.ink3 },

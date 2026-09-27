@@ -232,8 +232,8 @@ export function projectPlayground(room: PlaygroundRoom | null, me: string, pendi
                   : "In the room"
               : phase === "teaching"
                 ? a.role === "teacher"
-                  ? `Explaining${typedFor}`
-                  : "Listening"
+                  ? "Teaching"
+                  : "Learning it"
                 : phase === "checkpoint"
                   ? a.role === "learner"
                     ? `Answering Thinketh's transfer question${typedFor}`

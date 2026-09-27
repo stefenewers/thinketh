@@ -53,11 +53,14 @@ export function understoodDevelopmentIds(developments: Development[], items: Kno
 }
 
 const SKIP_LABELS: Record<string, string> = {
-  duplicate: "Duplicate reports",
-  low_signal: "Low-signal opinions",
+  duplicate: "Duplicates",
+  low_signal: "Low signal",
   already_understood: "Already understood",
   minor_update: "Minor updates",
   low_confidence: "Low-confidence claims",
+  outdated: "Outdated",
+  undated: "Undated",
+  over_budget: "Deferred to the next run",
 };
 
 export function skipLabel(key: string) {

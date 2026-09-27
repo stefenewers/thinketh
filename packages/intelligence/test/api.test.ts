@@ -216,14 +216,21 @@ describe("golden loop over HTTP", () => {
 
   });
 
-  it("isolates users and resets the demo", async () => {
-    await post(DiagnosticAnswerResponseSchema, "/diagnostics/dq-agent-memory-persistence/answer", { answer: "1" }, "alice");
+  it("isolates users; a new user starts from the no-evidence prior, and only demo personas reset", async () => {
     const mastery = async (user: string) =>
-      (await get(KnowledgeResponseSchema, "/knowledge", user)).items.find((i) => i.concept.id === "agent-memory")!.state.mastery;
-    expect(await mastery("alice")).toBeCloseTo(0.51, 2);
-    expect(await mastery("bob")).toBeCloseTo(0.42, 2);
-    await app.request("/demo/reset", { method: "POST", headers: headers("alice") });
-    expect(await mastery("alice")).toBeCloseTo(0.42, 2);
+      (await get(KnowledgeResponseSchema, "/knowledge", user)).items.find((i) => i.concept.id === "agent-memory")!.state;
+    // A new identity inherits nothing from the demo persona: no seeded mastery, no evidence.
+    const fresh = await mastery("alice");
+    expect(fresh).toMatchObject({ mastery: 0.2, uncertainty: 0.7, evidenceCount: 0, misconceptionFlags: [] });
+    await post(DiagnosticAnswerResponseSchema, "/diagnostics/dq-agent-memory-persistence/answer", { answer: "1" }, "alice");
+    expect((await mastery("alice")).evidenceCount).toBe(1);
+    expect((await mastery("alice")).mastery).toBeGreaterThan(0.2);
+    expect((await mastery("bob")).evidenceCount).toBe(0);
+    expect((await mastery(USER)).mastery).toBeCloseTo(0.42, 2);
+    // Reset is for seeded demo personas only: a real user's history is never deleted by it.
+    const refused = await app.request("/demo/reset", { method: "POST", headers: headers("alice") });
+    expect(refused.status).toBe(403);
+    expect((await mastery("alice")).evidenceCount).toBe(1);
   });
 
   it("returns typed errors, never stack traces", async () => {
