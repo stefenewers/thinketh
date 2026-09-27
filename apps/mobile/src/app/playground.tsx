@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CollaborativeDeltaItem, PlaygroundRoom } from "@thinketh/contracts";
 import { narrativeLabel, topicLabel } from "@thinketh/contracts";
 import { DEMO_USER_ID } from "@/api";
@@ -50,7 +51,11 @@ const RAIL_SCENES = new Set(["overview", "peer_teaching", "transfer", "knowledge
 /** "Following Muse" (Figma Spotlight): the view goes where the conductor points until you stop following. */
 const FollowContext = createContext(true);
 
-type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange" | "challenge";
+/** The room this identity was last in, so leaving the Playground (or the app) never loses it. */
+const lastRoomKey = (userId: string) => `thinketh.playground.lastRoom.v1.${userId}`;
+type LastRoom = { roomId: string; me: string };
+
+type Busy = null | "quick" | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange" | "challenge";
 
 export default function PlaygroundScreen() {
   const params = useLocalSearchParams<{ code?: string; as?: string }>();
@@ -115,6 +120,51 @@ export default function PlaygroundScreen() {
     setMe(as);
     run("join", () => playground.join(params.code!, personal ? hostName : params.as === "nadani" ? "Nadani" : "Guest", as));
   }, [params.code, params.as, run, personal, me, hostName]);
+
+  // Resume the room this identity was last in (unless a link is joining another one). An exchange or
+  // challenge only advances while this screen is open, so coming back must pick it up, not start over.
+  const [owner] = useState(() => currentUserId() ?? DEMO_USER_ID);
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || params.code) return;
+    resumed.current = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(lastRoomKey(owner));
+        if (!raw) return;
+        const last = JSON.parse(raw) as LastRoom;
+        const r = await playground.get(last.roomId, last.me);
+        if (r.scene === "ended") return void AsyncStorage.removeItem(lastRoomKey(owner)).catch(() => {});
+        setMe(last.me);
+        setRoom((prev) => prev ?? r);
+      } catch {
+        // Gone (or unreachable): start fresh.
+        AsyncStorage.removeItem(lastRoomKey(owner)).catch(() => {});
+      }
+    })();
+  }, [owner, params.code]);
+  useEffect(() => {
+    if (!roomId) return;
+    if (room?.scene === "ended") AsyncStorage.removeItem(lastRoomKey(owner)).catch(() => {});
+    else AsyncStorage.setItem(lastRoomKey(owner), JSON.stringify({ roomId, me } satisfies LastRoom)).catch(() => {});
+  }, [owner, roomId, me, room?.scene]);
+
+  /**
+   * One tap from an empty Playground to agents exchanging: open a room, bring in Nadani's seeded Mind,
+   * compare, and start the exchange. Each step is the same server call the guided path makes; if the
+   * exchange isn't available (no Muse, nothing to teach), it stops on the overview, which says why.
+   */
+  const quickExchange = () =>
+    run("quick", async () => {
+      let r = await playground.create(hostName, me);
+      setRoom(r);
+      r = await playground.demoGuest(r.id);
+      setRoom((prev) => acceptRoom(prev, r));
+      r = await playground.compare(r.id, me);
+      setRoom((prev) => acceptRoom(prev, r));
+      if (r.exchangeAvailability?.available) r = await playground.startExchange(r.id, undefined, me);
+      return r;
+    });
 
   // Agent exchange driver: while it runs, ask the server for the next step, one at a time. The server claims
   // each step durably, so two devices (or a retry) never run it twice; a step someone else holds just waits.
@@ -284,6 +334,7 @@ export default function PlaygroundScreen() {
               room={room}
               busy={busy}
               onInvite={() => run("invite", () => playground.create(hostName, me))}
+              onQuickExchange={quickExchange}
               onDemoGuest={() => room && run("invite", () => playground.demoGuest(room.id))}
               onJoin={(code, as) => {
                 if (personal) return void run("join", () => playground.join(code, hostName, me));
@@ -437,12 +488,14 @@ function Waiting({
   room,
   busy,
   onInvite,
+  onQuickExchange,
   onDemoGuest,
   onJoin,
 }: {
   room: PlaygroundRoom | null;
   busy: Busy;
   onInvite: () => void;
+  onQuickExchange: () => void;
   onDemoGuest: () => void;
   onJoin: (code: string, as: string) => void;
 }) {
@@ -467,6 +520,18 @@ function Waiting({
           <Button label="Invite a collaborator" accessibilityLabel="Invite a collaborator" icon="arrow" loading={busy === "invite"} onPress={onInvite} style={styles.cta} />
           <T variant="meta" style={{ marginTop: space.m, color: color.ink3, textAlign: "center" }}>
             Nothing is shared until you invite someone.
+          </T>
+          {/* The short path: Nadani's seeded Mind joins, both Minds are compared, and the agents start. */}
+          <Button
+            kind="secondary"
+            label="Let our agents exchange"
+            accessibilityLabel="Let our agents exchange, with Nadani"
+            loading={busy === "quick"}
+            onPress={onQuickExchange}
+            style={[styles.cta, { marginTop: space.l }]}
+          />
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink3, textAlign: "center" }}>
+            Brings in Nadani&apos;s Mind on this phone, compares, and starts your agents.
           </T>
           {joining ? (
             <RaisedCard style={{ marginTop: space.l, alignItems: "center" }}>

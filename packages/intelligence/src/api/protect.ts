@@ -33,7 +33,11 @@ function clientId(c: Context): string {
 
 export type RateRule = { name: string; limit: number; windowMs: number; match: (method: string, path: string) => boolean };
 
-/** Routes that spend money (Claude, ElevenLabs) or change demo state get tighter limits. */
+/**
+ * Routes that spend money (Claude, ElevenLabs) or change demo state get tighter limits. Starting an
+ * exchange or challenge counts; its /advance steps don't: the server claims each step once and bounds
+ * the run (messages, tool calls, deadline), and the client re-polls a held step every 1.5 s.
+ */
 export const DEFAULT_RATE_RULES: RateRule[] = [
   { name: "reset", limit: 10, windowMs: 60_000, match: (m, p) => m === "POST" && p === "/demo/reset" },
   {
@@ -41,7 +45,7 @@ export const DEFAULT_RATE_RULES: RateRule[] = [
     limit: 30,
     windowMs: 60_000,
     match: (m, p) =>
-      m === "POST" && (["/ask", "/visualize", "/make-it-stick", "/voice/session", "/resources"].includes(p) || /^\/resources\/[^/]+\/teach$/.test(p) || /^\/playground\/rooms\/[^/]+\/(exchange|challenge)(\/advance)?$/.test(p)),
+      m === "POST" && (["/ask", "/visualize", "/make-it-stick", "/voice/session", "/resources"].includes(p) || /^\/resources\/[^/]+\/teach$/.test(p) || /^\/playground\/rooms\/[^/]+\/(exchange|challenge)$/.test(p)),
   },
   { name: "all", limit: 300, windowMs: 60_000, match: () => true },
 ];
