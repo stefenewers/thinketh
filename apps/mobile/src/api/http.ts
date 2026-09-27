@@ -141,7 +141,8 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     ask: (req) => call(AskResponseSchema, "POST", "/ask", req, (a) => a.ask(req), GENERATIVE_TIMEOUT_MS),
     visualize: (req) => call(VisualizeResponseSchema, "POST", "/visualize", req, (a) => a.visualize(req), VISUALIZE_TIMEOUT_MS),
     makeItStick: (req) => call(MemoryAidSchema, "POST", "/make-it-stick", req, (a) => a.makeItStick(req), GENERATIVE_TIMEOUT_MS),
-    createVoiceSession: () => call(VoiceSessionSchema, "POST", "/voice/session", {}, (a) => a.createVoiceSession()),
+    createVoiceSession: (activity) =>
+      call(VoiceSessionSchema, "POST", "/voice/session", activity ? { activity } : {}, (a) => a.createVoiceSession(activity)),
     listResources: async () =>
       (await call(ResourceListResponseSchema, "GET", "/resources", undefined, async (a) => ({ resources: await a.listResources() }))).resources,
     addResource: (url) => call(ResourceSchema, "POST", "/resources", { url }, (a) => a.addResource(url), ADD_RESOURCE_TIMEOUT_MS),

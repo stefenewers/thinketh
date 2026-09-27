@@ -1,4 +1,5 @@
 import { StyleSheet, View } from "react-native";
+import { useAgentScreen } from "@/agent/screenContext";
 import { router, useLocalSearchParams } from "expo-router";
 import type { ConceptHistoryResponse, Development, KnowledgeStateTransition } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -21,6 +22,7 @@ export default function StorylineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const story = storylineFor(id);
   const back = () => (router.canGoBack() ? router.back() : router.replace("/library"));
+  useAgentScreen(story ? { screen: "storyline", route: "/storyline", title: story.title, focus: { kind: "concept", id: story.conceptId, label: story.title } } : null);
   if (!story) {
     return (
       <View style={{ flex: 1, backgroundColor: color.ground }}>

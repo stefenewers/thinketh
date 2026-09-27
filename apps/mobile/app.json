@@ -10,7 +10,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.thinketh.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Thinketh uses the microphone so you can talk with Catch Me Up.",
+        "NSMicrophoneUsageDescription": "Thinketh uses the microphone when you start a conversation with it.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bitcode": false,

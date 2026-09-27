@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAgentScreen } from "@/agent/screenContext";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Resource, ResourceIdea, TeachDeltaResponse } from "@thinketh/contracts";
@@ -73,6 +74,13 @@ export default function ResourceScreen() {
   }, [id, attempt]);
 
   const briefing = !!resource && (resource.status === "ready" || resource.status === "learned");
+  useAgentScreen({
+    screen: "resource",
+    route: "/resource",
+    title: resource?.title ?? "Source",
+    focus: { kind: "resource", id, label: resource?.title ?? id },
+    ...(resource ? { visible: [`Status: ${resource.status}`] } : {}),
+  });
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       {!briefing ? <AppTopBar onBack={goBack} /> : null}

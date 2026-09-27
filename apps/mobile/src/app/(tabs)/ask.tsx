@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AgentComposerButton } from "@/agent/AgentDock";
+import { useAgentControls } from "@/agent/agentContext";
+import { useAgentScreen } from "@/agent/screenContext";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { AskResponse } from "@thinketh/contracts";
@@ -39,6 +42,7 @@ export default function Ask() {
   // Storyboard 05: "Why this answer?" is its own view (not a route); null = the answer view.
   const [why, setWhy] = useState<null | { allSources: boolean }>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const voice = useAgentControls();
   // Names for related concepts.
   const lookup = useApi(async () => (await api.getKnowledge()).items.map((i) => i.concept), []);
 
@@ -77,6 +81,18 @@ export default function Ask() {
   }, [q]);
 
   const conceptName = (id: string) => lookup.data?.find((c) => c.id === id)?.name;
+
+  // For the voice agent: the question and answer on screen. Ask hosts its own voice entry.
+  useAgentScreen(
+    {
+      screen: "ask",
+      route: "/ask",
+      title: "Ask",
+      ...(answer?.developmentId ? { focus: { kind: "development" as const, id: answer.developmentId, label: answer.question } } : {}),
+      ...(answer ? { visible: [`Question: ${answer.question.slice(0, 200)}`, `Answer: ${answer.answer.slice(0, 220)}`] } : {}),
+    },
+    "inline",
+  );
 
   const changeMode = (k: AskMode) => {
     if (k === mode) return;
@@ -172,16 +188,21 @@ export default function Ask() {
             editable={!asking}
             accessibilityLabel="Question"
           />
-          <Pressable
-            onPress={() => ask(input)}
-            disabled={!input.trim() || asking}
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            hitSlop={6}
-            style={[styles.send, (!input.trim() || asking) && { opacity: 0.3 }]}
-          >
-            <Icon name="send" size={16} color={color.onInk} />
-          </Pressable>
+          {/* Empty composer: talk instead (the same agent, with this answer as context). */}
+          {!input.trim() && voice.supported ? (
+            <AgentComposerButton />
+          ) : (
+            <Pressable
+              onPress={() => ask(input)}
+              disabled={!input.trim() || asking}
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              hitSlop={6}
+              style={[styles.send, (!input.trim() || asking) && { opacity: 0.3 }]}
+            >
+              <Icon name="send" size={16} color={color.onInk} />
+            </Pressable>
+          )}
         </View>
       </View>
       )}

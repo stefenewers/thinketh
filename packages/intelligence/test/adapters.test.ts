@@ -6,7 +6,7 @@ import { buildAdapters } from "../src/adapters/registry.ts";
 import { LocalTemporalStore, ResilientTemporalStore, TigerTemporalStore } from "../src/adapters/temporal.ts";
 import { loadConfig } from "../src/config.ts";
 import type { IntelligenceModel, MemoryProvider, SemanticStore } from "../src/adapters/types.ts";
-import { ElevenLabsVoice } from "../src/adapters/voice.ts";
+import { ElevenLabsVoice, OPENING_LINES } from "../src/adapters/voice.ts";
 import { buildSeed, FLAGSHIP_DEVELOPMENT_ID } from "../src/seed/corpus.ts";
 import { ThinkethService } from "../src/service.ts";
 import { NOW, offlineConfig } from "./helpers.ts";
@@ -348,6 +348,16 @@ describe("sponsor adapters call the documented endpoints", () => {
     expect(String(url)).toMatch(/^https:\/\/api\.elevenlabs\.io\/v1\/convai\/conversation\/token\?agent_id=agent-1/);
     expect((init.headers as Record<string, string>)["xi-api-key"]).toBe("xi");
     expect(JSON.stringify(session)).not.toContain("xi"); // the privileged key never leaves the server
+  });
+
+  it("voice session: general assistance opens without the briefing; no activity stays Catch Me Up", async () => {
+    const service = serviceWithBrokenSponsors();
+    const assist = await service.voiceSession("demo-user", "assist");
+    expect(assist.dynamicVariables).toMatchObject({ activity: "assist", opening_line: OPENING_LINES.assist });
+    const legacy = await service.voiceSession("demo-user");
+    expect(legacy.dynamicVariables).toMatchObject({ activity: "catch_up", opening_line: OPENING_LINES.catch_up });
+    // The briefing stays available to both, so "catch me up" works mid-conversation.
+    expect(assist.dynamicVariables.brief_script).toBe(legacy.dynamicVariables.brief_script);
   });
 
   it("Mongo getDevelopment failure falls back to the seeded corpus", async () => {

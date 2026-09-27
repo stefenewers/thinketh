@@ -1,4 +1,5 @@
 import { View } from "react-native";
+import { useAgentScreen } from "@/agent/screenContext";
 import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
 import { Button, ErrorState, Gutter, ModalHeader, Screen } from "@/components/ui";
@@ -11,6 +12,7 @@ import { color, space } from "@/theme/tokens";
 export default function VisualizeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { spec, loading, failed, retry } = useVisualization(id);
+  useAgentScreen({ screen: "visualize", route: "/visualize", title: "Visualize this", focus: { kind: "development", id, label: `the visualization for development ${id}` } });
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>

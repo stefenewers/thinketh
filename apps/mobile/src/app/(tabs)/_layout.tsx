@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { T } from "@/components/Text";
+import { setTabBarHeight } from "@/agent/dockLayout";
 import { color, DEPTH_INK, font, lift, space } from "@/theme/tokens";
 
 // Four jobs. Today: what matters to me now. Learn: what to read, save or explore next (the
@@ -32,7 +33,7 @@ const ORDER = ["index", "library", "mind", "ask"] as const;
 
 function TabBar({ state, navigation, insets }: BottomTabBarProps) {
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.m) }]} accessibilityRole="tablist">
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.m) }]} accessibilityRole="tablist" onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}>
       {ORDER.map((name) => {
         const index = state.routes.findIndex((r) => r.name === name);
         const route = state.routes[index];
