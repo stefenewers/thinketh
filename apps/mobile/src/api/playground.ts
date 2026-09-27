@@ -70,4 +70,11 @@ export const playground = {
     call("POST", `/playground/rooms/${id(roomId)}/answer`, { answer, ...(opts.asUserId ? { asUserId: opts.asUserId } : {}) }, { as: opts.as, timeoutMs: ANSWER_TIMEOUT_MS }),
   resource: (roomId: string, url: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/resource`, { url }, { as, timeoutMs: ANSWER_TIMEOUT_MS }),
   leave: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/leave`, {}, { as }),
+  /** Agent exchange: start (idempotent), advance one server step, stop, close, and the learner's own check. */
+  startExchange: (roomId: string, conceptId?: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange`, conceptId ? { conceptId } : {}, { as }),
+  // One step can be a model turn (retrieve, then speak): give it room; the server bounds it.
+  advanceExchange: (roomId: string, step: number, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/advance`, { step }, { as, timeoutMs: 120_000 }),
+  stopExchange: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/stop`, {}, { as }),
+  closeExchange: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/close`, {}, { as }),
+  exchangeCheck: (roomId: string, as?: string) => call("POST", `/playground/rooms/${id(roomId)}/exchange/check`, {}, { as, timeoutMs: ANSWER_TIMEOUT_MS }),
 };

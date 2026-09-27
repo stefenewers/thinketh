@@ -1,5 +1,5 @@
 import { Component, createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,14 +39,14 @@ const POLL_MS = 1500;
 /** Verified moments whose haptic already fired on this device. */
 const celebratedHaptics = new Set<string>();
 /** Scenes that happen in the one persistent room. */
-const ROOM_SCENES = new Set(["arrival", "comparing", "overview", "peer_teaching", "transfer", "knowledge_moved", "shared_gap", "resource"]);
+const ROOM_SCENES = new Set(["arrival", "comparing", "overview", "peer_teaching", "transfer", "knowledge_moved", "shared_gap", "resource", "agent_exchange"]);
 /** Scenes whose "What just happened" rail tracks a teaching exchange. */
 const RAIL_SCENES = new Set(["overview", "peer_teaching", "transfer", "knowledge_moved"]);
 
 /** "Following Muse" (Figma Spotlight): the view goes where the conductor points until you stop following. */
 const FollowContext = createContext(true);
 
-type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share";
+type Busy = null | "invite" | "compare" | "conduct" | "explain" | "answer" | "resource" | "join" | "share" | "exchange";
 
 export default function PlaygroundScreen() {
   const params = useLocalSearchParams<{ code?: string; as?: string }>();
@@ -112,6 +112,31 @@ export default function PlaygroundScreen() {
     run("join", () => playground.join(params.code!, personal ? hostName : params.as === "nadani" ? "Nadani" : "Guest", as));
   }, [params.code, params.as, run, personal, me, hostName]);
 
+  // Agent exchange driver: while it runs, ask the server for the next step, one at a time. The server claims
+  // each step durably, so two devices (or a retry) never run it twice; a step someone else holds just waits.
+  const advancing = useRef(false);
+  const [exTick, setExTick] = useState(0);
+  const exRunning = room?.exchange?.status === "running";
+  const exStep = room?.exchange?.step;
+  useEffect(() => {
+    if (!roomId || !exRunning || exStep === undefined || advancing.current) return;
+    advancing.current = true;
+    playground
+      .advanceExchange(roomId, exStep, me)
+      .then(
+        (r) => {
+          setRoom((prev) => acceptRoom(prev, r));
+          // Nothing moved (another device holds this step): look again shortly.
+          if (r.exchange?.step === exStep && r.exchange.status === "running") return new Promise((res) => setTimeout(res, 1500));
+        },
+        () => new Promise((res) => setTimeout(res, 2500)),
+      )
+      .finally(() => {
+        advancing.current = false;
+        setExTick((t) => t + 1);
+      });
+  }, [roomId, exRunning, exStep, me, exTick]);
+
   const other = room?.participants.find((p) => p.userId !== me);
   const actAs = (userId: string) => (userId !== me && other?.demoPersona && other.userId === userId ? userId : undefined);
 
@@ -160,6 +185,7 @@ export default function PlaygroundScreen() {
     knowledge_moved: "Overview",
     shared_gap: "Pause",
     resource: "Resource",
+    agent_exchange: "Exchange",
     ended: "Done",
   }[scene];
 
@@ -248,7 +274,26 @@ export default function PlaygroundScreen() {
           {room && scene === "arrival" ? <Arrival room={room} me={me} busy={busy === "compare"} onCompare={compare} /> : null}
           {/* The action area: what the room means right now, then the next human action. */}
           {stage?.waiting === "muse" ? <MuseWaiting /> : null}
-          {room && scene === "overview" ? <Overview room={room} me={me} busy={busy === "conduct"} onStart={() => run("conduct", () => playground.conduct(room.id, "next", me))} /> : null}
+          {room && scene === "overview" ? (
+            <Overview
+              room={room}
+              me={me}
+              busy={busy === "conduct"}
+              onStart={() => run("conduct", () => playground.conduct(room.id, "next", me))}
+              exchangeBusy={busy === "exchange"}
+              onExchange={() => run("exchange", () => playground.startExchange(room.id, undefined, me))}
+            />
+          ) : null}
+          {room && scene === "agent_exchange" && room.exchange ? (
+            <ExchangeScene
+              room={room}
+              me={me}
+              busy={busy}
+              onStop={() => run("exchange", () => playground.stopExchange(room.id, me))}
+              onCheck={() => run("exchange", () => playground.exchangeCheck(room.id, me))}
+              onClose={() => run("exchange", () => playground.closeExchange(room.id, me))}
+            />
+          ) : null}
           {room && scene === "peer_teaching" ? (
             <PeerTeaching room={room} me={me} />
           ) : null}
@@ -470,7 +515,21 @@ function Arrival({ room, me, busy, onCompare }: { room: PlaygroundRoom; me: stri
 }
 
 /** Storyboard 09 / Figma 1:197: the collaborative delta, computed and explainable. */
-function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: string; busy: boolean; onStart: () => void }) {
+function Overview({
+  room,
+  me,
+  busy,
+  onStart,
+  exchangeBusy,
+  onExchange,
+}: {
+  room: PlaygroundRoom;
+  me: string;
+  busy: boolean;
+  onStart: () => void;
+  exchangeBusy: boolean;
+  onExchange: () => void;
+}) {
   const d = room.delta!;
   const aName = nameOf(room, d.aId);
   const bName = nameOf(room, d.bId);
@@ -518,7 +577,224 @@ function Overview({ room, me, busy, onStart }: { room: PlaygroundRoom; me: strin
           </T>
         ) : null}
         {room.plan?.items.length ? <PlanDisclosure room={room} /> : null}
+        <ExchangeOffer room={room} me={me} busy={exchangeBusy} onStart={onExchange} />
       </View>
+    </View>
+  );
+}
+
+const agentOf = (room: PlaygroundRoom, id: string, me: string) => (id === me ? "Your agent" : `${nameOf(room, id)}'s agent`);
+const lowerAgent = (s: string) => s.replace(/^Your/, "your");
+
+/** "Let our agents exchange": one clear action, what will happen, and what it won't share or count. */
+function ExchangeOffer({ room, me, busy, onStart }: { room: PlaygroundRoom; me: string; busy: boolean; onStart: () => void }) {
+  const av = room.exchangeAvailability;
+  if (!av) return null;
+  const last = room.exchange && room.exchange.status !== "running" ? room.exchange : null;
+  return (
+    <View style={{ marginTop: space.xl }}>
+      <Divider />
+      <T variant="section" style={{ marginTop: space.l }}>
+        Or let your agents exchange
+      </T>
+      {av.available ? (
+        <>
+          <T variant="support" style={{ marginTop: space.xs }}>
+            {av.mode === "teach"
+              ? `${agentOf(room, av.teacherId!, me)} teaches ${lowerAgent(agentOf(room, av.learnerId!, me))} ${topic(av.conceptId!, av.conceptName ?? "")}. They'll ask questions, check each other's sources, and bring back a sourced takeaway.`
+              : `Neither of you has strong evidence on ${topic(av.conceptId!, av.conceptName ?? "")}, so your agents explore what the sources say together and bring back a sourced takeaway.`}
+          </T>
+          <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
+            They use only what&apos;s already shared here: your knowledge snapshots and Thinketh&apos;s sources. Nothing private. It doesn&apos;t count as anyone understanding it; you can check that yourself after.
+          </T>
+          <Button kind="secondary" label="Let our agents exchange" loading={busy} onPress={onStart} style={{ alignSelf: "flex-start", marginTop: space.m }} />
+        </>
+      ) : av.reason ? (
+        <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
+          {av.reason}
+        </T>
+      ) : null}
+      {last?.outcome ? (
+        <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+          Last exchange: {last.outcome}
+        </T>
+      ) : null}
+    </View>
+  );
+}
+
+const MESSAGE_VERB: Record<string, string> = {
+  explanation: "explained",
+  answer: "answered",
+  revision: "revised",
+  clarification: "asked",
+  evidence_request: "asked for evidence",
+  application: "proposed an application",
+  takeaway: "proposed a takeaway",
+};
+
+const STATUS_TITLE: Record<string, string> = {
+  running: "Your agents are exchanging",
+  completed: "A sourced takeaway, retained",
+  insufficient: "Not enough support to keep anything",
+  stopped: "Stopped",
+  failed: "The exchange couldn't finish",
+  interrupted: "Interrupted",
+};
+
+/**
+ * The exchange itself: what's actually in flight, the agents' concise messages with their sources, the
+ * full transcript on request, and the result. Stop is always there while it runs.
+ */
+function ExchangeScene({ room, me, busy, onStop, onCheck, onClose }: { room: PlaygroundRoom; me: string; busy: Busy; onStop: () => void; onCheck: () => void; onClose: () => void }) {
+  const ex = room.exchange!;
+  const [full, setFull] = useState(false);
+  const running = ex.status === "running";
+  const shown = full ? ex.messages : ex.messages.slice(-3);
+  const sourceOf = (ref: string) => ex.sources.find((s) => s.ref === ref);
+  const learner = room.participants.find((p) => p.userId === ex.learnerId);
+  const canApply = ex.status === "completed" && !!ex.savedTakeawayId && (ex.learnerId === me || (!!learner?.demoPersona && room.hostId === me)) && ex.humanChecks < 2;
+  const ownsTakeaway = ex.learnerId === me;
+  return (
+    <View style={{ paddingHorizontal: gutter, marginTop: space.m }}>
+      <DotTag tone={running ? "coral" : "muted"} label={ex.mode === "explore" ? "SHARED EXPLORATION" : "AGENT EXCHANGE"} />
+      <T variant="title" style={{ marginTop: space.s }}>
+        {STATUS_TITLE[ex.status]}
+      </T>
+      <T variant="support" style={{ marginTop: space.xs }}>
+        {agentOf(room, ex.teacherId, me)} → {lowerAgent(agentOf(room, ex.learnerId, me))} · {topic(ex.conceptId, ex.conceptName)}
+      </T>
+      <T variant="meta" style={{ marginTop: 2, color: color.ink3 }}>
+        {ex.reason}
+      </T>
+
+      {running ? (
+        <View style={styles.exPending} accessibilityLiveRegion="polite">
+          {ex.pending ? <ActivityIndicator size="small" color={color.ink3} /> : null}
+          <T variant="meta" style={{ flex: 1, color: color.ink2 }}>
+            {ex.pending ? `${ex.pending.label}…` : "Waiting for the next step"}
+          </T>
+        </View>
+      ) : ex.outcome ? (
+        <T variant="support" style={{ marginTop: space.m }}>
+          {ex.outcome}
+        </T>
+      ) : null}
+
+      {shown.length ? (
+        <View style={{ marginTop: space.m, gap: space.s }}>
+          {!full && ex.messages.length > shown.length ? (
+            <T variant="meta" style={{ color: color.ink3 }}>
+              {ex.messages.length - shown.length} earlier {ex.messages.length - shown.length === 1 ? "message" : "messages"}
+            </T>
+          ) : null}
+          {shown.map((m) => (
+            <ThreadCard key={m.id} who={`${agentOf(room, m.from, me)} ${MESSAGE_VERB[m.kind]}`} tone={room.hostId === m.from ? "coral" : "partner"}>
+              <T variant="body" style={{ fontSize: 15, lineHeight: 22 }} numberOfLines={full ? undefined : 5}>
+                {m.text}
+              </T>
+              {m.sourceRefs.length ? (
+                <View style={styles.exRefs}>
+                  {m.sourceRefs.map((r) => {
+                    const src = sourceOf(r);
+                    return (
+                      <Pressable
+                        key={r}
+                        onPress={src?.url ? () => Linking.openURL(src.url!).catch(() => {}) : undefined}
+                        disabled={!src?.url}
+                        accessibilityRole={src?.url ? "link" : undefined}
+                        accessibilityLabel={src ? `Source ${r}: ${src.title}` : `Source ${r}`}
+                        style={styles.exRef}
+                      >
+                        <T variant="meta" style={{ color: color.ink2 }} numberOfLines={1}>
+                          {r} · {src ? [src.publisher, src.title].filter(Boolean).join(" · ") : "source"}
+                        </T>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </ThreadCard>
+          ))}
+        </View>
+      ) : null}
+
+      {ex.messages.length || ex.actions.length ? (
+        <Pressable onPress={() => setFull((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: full }} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+          <T variant="meta" style={{ color: color.ink }}>
+            {full ? "Hide the full exchange" : "Show the full exchange, its sources and actions"}
+          </T>
+        </Pressable>
+      ) : null}
+      {full ? <ExchangeDetails room={room} me={me} /> : null}
+
+      {ex.savedTakeawayId && ex.takeaway ? (
+        <RaisedCard style={{ marginTop: space.m }}>
+          <T variant="label">Takeaway · retained by {lowerAgent(agentOf(room, ex.learnerId, me))}</T>
+          <T variant="body" style={{ marginTop: space.xs, fontSize: 15, lineHeight: 22 }}>
+            {ex.check?.verdict === "partial" ? ex.check.supported.join(" ") : ex.takeaway.text}
+          </T>
+          <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
+            {ex.check?.verdict === "partial" ? "Partly supported by its sources; the rest is marked unresolved." : "Supported by the passages it cites."} Checked by {ex.check?.checkedBy === "claude" ? "Claude" : "Thinketh's deterministic check"}.
+          </T>
+          <T variant="meta" style={{ marginTop: space.xs, color: color.ink3 }}>
+            This is agent material. It doesn&apos;t mean anyone has shown they understand it.
+          </T>
+        </RaisedCard>
+      ) : null}
+
+      {running ? (
+        <Button kind="secondary" label="Stop the exchange" loading={busy === "exchange"} onPress={onStop} style={{ alignSelf: "flex-start", marginTop: space.l }} />
+      ) : (
+        <View style={{ marginTop: space.l, gap: space.s, alignItems: "flex-start" }}>
+          {canApply ? <Button label={ex.humanChecks ? "Try a different application" : "Apply it yourself"} icon="arrow" loading={busy === "exchange"} onPress={onCheck} /> : null}
+          {ex.savedTakeawayId && ownsTakeaway ? (
+            <Button kind="secondary" label="Open it in your Mind" onPress={() => router.push({ pathname: "/takeaway/[id]", params: { id: ex.savedTakeawayId! } })} />
+          ) : ex.savedTakeawayId ? (
+            <T variant="meta" style={{ color: color.ink3 }}>
+              Saved to {nameOf(room, ex.learnerId)}&apos;s agent library.
+            </T>
+          ) : null}
+          <Button kind="quiet" label="Back to the room" loading={busy === "exchange" && !canApply} onPress={onClose} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Everything behind the exchange: each action (who did it, and which provider), and every source read. */
+function ExchangeDetails({ room, me }: { room: PlaygroundRoom; me: string }) {
+  const ex = room.exchange!;
+  const BY: Record<string, string> = { muse: "Muse", planner: "Planner", thinketh: "Thinketh", claude: "Claude", deterministic: "Deterministic check" };
+  const actor = (a: string) => (a === "coordinator" ? "Coordinator" : a === "thinketh" ? "Thinketh" : agentOf(room, a, me));
+  return (
+    <View style={{ gap: space.m }}>
+      <View style={{ gap: space.xs }}>
+        <T variant="label">Actions</T>
+        {ex.actions.map((a) => (
+          <T key={a.id} variant="meta" style={{ color: color.ink2 }}>
+            {actor(a.actor)} ({BY[a.by]}): {a.summary}
+          </T>
+        ))}
+      </View>
+      {ex.sources.length ? (
+        <View style={{ gap: space.xs }}>
+          <T variant="label">Sources read</T>
+          {ex.sources.map((s) => (
+            <Pressable key={s.ref} onPress={s.url ? () => Linking.openURL(s.url!).catch(() => {}) : undefined} disabled={!s.url} accessibilityRole={s.url ? "link" : undefined}>
+              <T variant="meta" style={{ color: color.ink2 }}>
+                {s.ref} · {[s.publisher, s.title].filter(Boolean).join(" · ")} · {s.kind === "claim" ? "an extracted claim" : s.kind === "summary" ? "a saved summary" : "an earlier agent takeaway"}
+              </T>
+              <T variant="meta" style={{ color: color.ink3 }}>
+                “{s.text}”
+              </T>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      <T variant="meta" style={{ color: color.ink3 }}>
+        {ex.used.messages} messages · {ex.used.toolCalls} tool calls · {ex.used.modelCalls} model calls
+      </T>
     </View>
   );
 }
@@ -1108,6 +1384,9 @@ function Offline() {
 }
 
 const styles = StyleSheet.create({
+  exPending: { flexDirection: "row", alignItems: "center", gap: space.s, marginTop: space.m, minHeight: 32 },
+  exRefs: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: space.s },
+  exRef: { maxWidth: "100%", paddingHorizontal: 8, minHeight: 26, justifyContent: "center", borderRadius: 8, backgroundColor: color.surfaceMuted },
   planRow: { flexDirection: "row", alignItems: "flex-start", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m },
   planDivided: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.hairline },
   planHead: { fontFamily: font.sansSemibold, fontSize: 15, lineHeight: 20, color: color.ink, marginTop: space.xs },

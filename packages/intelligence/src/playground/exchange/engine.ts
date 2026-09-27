@@ -71,7 +71,10 @@ const ACTION_TEXT: Record<ActionKey, string> = {
 
 const MAX_TEXT = 900;
 const MAX_TAKEAWAY = 500;
-const STEP_STALE_MS = 75_000;
+/** A turn's whole wall-clock bound (its model calls share it). */
+const TURN_BUDGET_MS = 75_000;
+/** A claimed step older than this is treated as dead. Longer than any step can run, so a takeover never overlaps a live runner. */
+const STEP_STALE_MS = 110_000;
 
 // ---------------------------------------------------------------------------
 // Valid actions: the only doors. Muse chooses among them; nothing else is possible.
@@ -336,7 +339,7 @@ export class AgentExchangeEngine {
         this.stopInto(
           r,
           unavailable
-            ? `Muse couldn't complete ${this.pendingLabel(r, decision?.action ?? "finish").toLowerCase()} (${message.slice(0, 80)}). Nothing more was saved; the guided session still works.`
+            ? `Muse didn't complete the step (${this.pendingLabel(r, decision?.action ?? "finish")}): ${message.slice(0, 80)}. Nothing more was saved; the guided session still works.`
             : "Something went wrong during the exchange. Nothing more was saved.",
           "failed",
           ev,
@@ -536,12 +539,16 @@ export class AgentExchangeEngine {
 
     const allowed = SPEAK_FOR[action];
     const tools = [...READ_TOOLS, ...allowed.map((n) => SPEAK_TOOLS[n]!)];
+    const turnStarted = Date.now();
     for (let call = 0; call < 3; call++) {
       if (p.used.toolCalls >= p.budgets.maxToolCalls) break;
+      const left = TURN_BUDGET_MS - (Date.now() - turnStarted);
+      if (left < 5000) break;
       p.used.modelCalls += 1;
-      const { message } = await this.model!.complete(ctx, tools, { timeoutMs: this.limits.callTimeoutMs, purpose: `${role}:${action}` });
-      ctx.push(message);
+      const { message } = await this.model!.complete(ctx, tools, { timeoutMs: Math.min(this.limits.callTimeoutMs, left), budgetMs: left, purpose: `${role}:${action}` });
       const calls = message.tool_calls ?? [];
+      // An empty assistant message (no content, no tool calls) can't be replayed: the API rejects it (HTTP 400).
+      if (calls.length || message.content) ctx.push(message);
       if (calls.length === 0) {
         ctx.push({ role: "user", content: `Respond by calling one of: ${allowed.join(", ")}.` });
         continue;

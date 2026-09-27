@@ -137,7 +137,7 @@ export function loadConfig() {
       maxToolCalls: Number(env("THINKETH_EXCHANGE_MAX_TOOL_CALLS") ?? 12),
       deadlineMs: Number(env("THINKETH_EXCHANGE_DEADLINE_MS") ?? 300_000),
       /** One Muse call; a turn may take up to three (retrieve, then speak). */
-      callTimeoutMs: Number(env("THINKETH_EXCHANGE_CALL_TIMEOUT_MS") ?? 20_000),
+      callTimeoutMs: Number(env("THINKETH_EXCHANGE_CALL_TIMEOUT_MS") ?? 25_000),
     },
     /**
      * Grokbot (optional visiting challenger, xAI Responses API). Enabled only when both the key and
