@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { AppState } from "react-native";
 import { router, type Href } from "expo-router";
 import { ConversationProvider, useConversationControls, useConversationInput, useConversationMode } from "@elevenlabs/react-native";
-import { AudioSession } from "@livekit/react-native";
 import { useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import type { AgentActivity, VoiceSession } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -42,18 +41,12 @@ const PREPARED_TTL_MS = 120_000;
 const THINKING_MAX_MS = 10_000;
 /**
  * A dead microphone: on iOS a call sometimes starts with the mic capturing pure digital silence for the
- * whole call (seen in recordings: exactly zero, where a quiet room still reads above zero). The input
- * level is a plain RMS, so a live mic is never exactly 0 for long. After this long at zero (unmuted,
- * agent not speaking, never heard anything), reconnect once for a fresh microphone.
+ * whole call (exactly zero, where a quiet room still reads above zero), and reconnecting doesn't revive
+ * it; reopening the app does. After this long at zero (unmuted, agent not speaking, nothing heard yet)
+ * the call says so, so the person can type instead of talking to nobody. No automatic reconnect: a
+ * rapid end-and-restart is what crashed the voice dock before.
  */
 const DEAD_MIC_MS = 4000;
-/**
- * Before that reconnect, release leftover activations of the shared iOS audio session. Two managers
- * activate it (LiveKit's automatic one and the SDK's per-call start/stop); if a hold is left over, iOS can
- * drop the real session while the count still says "active", and every later call skips re-activating it.
- * Deactivating a few times lets the count reach zero so the next call activates for real.
- */
-const SESSION_RELEASES = 3;
 const MAX_TURNS = 20;
 
 const log = (event: string, detail: Record<string, unknown> = {}) => {
@@ -469,66 +462,36 @@ function Controller({ children }: { children: ReactNode }) {
     lastIdentity.current = identity;
   }, [identity, settle]);
 
-  // Dead-mic watchdog (see DEAD_MIC_MS): one silent reconnect per call the user starts, then say so.
-  const connectRef = useRef<(a: AgentActivity) => Promise<void>>(async () => {});
-  useEffect(() => {
-    connectRef.current = connect;
-  }, [connect]);
-  const micRecovered = useRef(false);
+  // Dead-mic watchdog (see DEAD_MIC_MS): say so once per call; never reconnect on its own.
   useEffect(() => {
     if (status !== "live") return;
-    let heard = false;
     let silentSince: number | null = null;
-    let lastLog = 0;
     const mine = epoch.current;
     const id = setInterval(() => {
-      if (epoch.current !== mine || heard) return;
+      if (epoch.current !== mine) return;
       let v = 0;
       try {
         v = getInputVolume();
       } catch {
         return;
       }
-      const t = Date.now();
-      if (t - lastLog > 2000) {
-        lastLog = t;
-        log("mic level", { v: Number(v.toFixed(5)) });
-      }
       if (v > 0) {
-        heard = true;
         log("mic live");
-        return;
+        return clearInterval(id);
       }
       if (isMutedRef.current || isSpeakingRef.current) {
         silentSince = null;
         return;
       }
+      const t = Date.now();
       silentSince ??= t;
       if (t - silentSince < DEAD_MIC_MS) return;
       clearInterval(id);
-      if (micRecovered.current) {
-        log("mic still silent after reconnect");
-        setNotice("Thinketh can't hear your microphone. Close and reopen Thinketh to reset it, or type instead.");
-        return;
-      }
-      micRecovered.current = true;
-      const again = activityRef.current;
-      log("mic silent; resetting the audio session and reconnecting", { activity: again });
-      settle(null);
-      // After the call's own teardown has run: release leftover holds, then start a fresh call.
-      setTimeout(async () => {
-        for (let i = 0; i < SESSION_RELEASES; i++) {
-          try {
-            await AudioSession.stopAudioSession();
-          } catch {
-            break; // already fully inactive
-          }
-        }
-        void connectRef.current(again);
-      }, 800);
+      log("mic silent");
+      setNotice("Thinketh can't hear your microphone. Type instead, or close and reopen Thinketh to reset it.");
     }, 250);
     return () => clearInterval(id);
-  }, [status, getInputVolume, settle]);
+  }, [status, getInputVolume]);
 
   // End on unmount (app teardown / fast refresh).
   useEffect(() => () => settle(null), [settle]);
@@ -574,7 +537,6 @@ function Controller({ children }: { children: ReactNode }) {
       start: (next = "assist") => {
         const s = statusRef.current;
         if (s === "connecting") return; // one connection; a second tap never makes a second token
-        if (s !== "live") micRecovered.current = false; // a call the user starts gets its own one retry
         if (s === "live") {
           // Same agent, same call: only the activity changes.
           if (next === "catch_up" && activityRef.current !== "catch_up" && session.current) {
