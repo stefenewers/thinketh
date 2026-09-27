@@ -19,6 +19,7 @@ import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
+import { useSession } from "@/lib/session";
 import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
@@ -26,8 +27,11 @@ import { color, depth, DEPTH_INK, font, glow, lift, radius, space } from "@/them
 
 
 const SKIP_DEFINITIONS: Record<string, string> = {
-  duplicate: "Several sources covering the same event. You see the strongest version once.",
-  low_signal: "Commentary that reacts to events without adding new facts or evidence.",
+  duplicate: "The same item seen again, or several sources covering the same event. You see it once.",
+  low_signal: "Items that don't add enough about the topics Thinketh follows.",
+  outdated: "Published before the discovery window, even if Thinketh only found it now.",
+  undated: "No publication date, so Thinketh won't guess when it happened.",
+  over_budget: "Relevant, but past this run's limit. It's eligible in the next run.",
   already_understood: "Developments that fall within what your knowledge state already covers well.",
   minor_update: "Incremental changes that extend a known pattern without changing your mental model.",
   low_confidence: "Reports without enough corroboration or primary sources yet.",
@@ -36,16 +40,19 @@ const SKIP_DEFINITIONS: Record<string, string> = {
 const VISIBLE_ROWS = 3;
 
 export default function Today() {
+  const session = useSession();
   const profile = useProfile();
   const { data, error, loading, reload } = useApi(
     async () => {
       const [today, knowledge] = await Promise.all([api.getTodayBrief(), api.getKnowledge()]);
       return { today, knowledge };
     },
-    [],
+    [session.mode, session.session?.userId],
     { refetchOnFocus: true },
   );
 
+  // Your own Mind needs a verified session before anything else.
+  if (session.mode === "personal" && session.status === "signed_out" && !session.anonymousAvailable) return <Redirect href="/account" />;
   // First run: set up the learner profile before the first brief.
   if (profile === null) return <Redirect href="/onboarding" />;
   if ((loading && !data) || profile === undefined) {
@@ -62,11 +69,20 @@ export default function Today() {
       </Screen>
     );
   }
-  return <TodayContent today={data.today} knowledge={data.knowledge} />;
+  return <TodayContent today={data.today} knowledge={data.knowledge} name={session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME} />;
 }
 
-function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: KnowledgeResponse }) {
-  const { brief, developments } = today;
+/** "Last run 3h ago" style freshness for the discovery run behind a live brief. */
+function runAge(iso: string | undefined): string {
+  if (!iso) return "";
+  const h = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000));
+  return h < 1 ? "less than an hour ago" : h < 48 ? `${h}h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+function TodayContent({ today, knowledge, name }: { today: BriefResponse; knowledge: KnowledgeResponse; name: string }) {
+  const { brief, developments, pipeline } = today;
+  // Items and developments are different units: a live brief counts the source items its run read.
+  const live = pipeline && pipeline.mode !== "demo_fixture" ? pipeline : null;
   const concepts = today.concepts ?? knowledge.items.map((i) => i.concept);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -102,7 +118,11 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         <Gutter style={{ paddingTop: space.xl }}>
           <T variant="display">Nothing changed enough to interrupt you.</T>
           <T variant="support" style={{ marginTop: space.l }}>
-            Thinketh reviewed {brief.skippedCount ?? 0} items. Your knowledge is current.
+            {live?.mode === "none"
+              ? "Thinketh hasn't finished a discovery run yet, so there's nothing to compare against your Mind."
+              : live
+                ? `Thinketh's last run read ${live.itemsInspected} items (${runAge(live.finishedAt)}). Nothing in it changed what you know enough to show you.`
+                : `Thinketh reviewed ${brief.skippedCount ?? 0} items. Your knowledge is current.`}
           </T>
         </Gutter>
       </Screen>
@@ -112,13 +132,13 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   const shown = showAll ? rest : rest.slice(0, VISIBLE_ROWS);
   return (
     <Screen background={color.ground} contentStyle={{ paddingTop: 0 }} topInset={false}>
-      <HomeTopBar />
+      <HomeTopBar name={name} />
       <Gutter>
         <IntelligenceHero count={brief.meaningfulCount} />
         <TodayMetrics
           style={{ marginTop: space.xl + space.xs }}
           metrics={[
-            { value: String((brief.skippedCount ?? 0) + brief.meaningfulCount), label: "Items", sub: "scanned" },
+            { value: String(live ? live.itemsInspected : (brief.skippedCount ?? 0) + brief.meaningfulCount), label: "Items", sub: "scanned" },
             understood.size > 0
               ? { value: `${understood.size}/${brief.meaningfulCount}`, label: "Understood", sub: "so far" }
               : { value: String(brief.meaningfulCount), label: "New", sub: "for you" },
@@ -214,10 +234,19 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
         ) : null}
       </Gutter>
 
-      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={`${brief.skippedCount} items filtered`}>
+      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={`${brief.skippedCount} ${live ? "source items" : "items"} filtered`}>
         <T variant="support" style={{ marginBottom: space.l }}>
           Thinketh read more than it shows you. These were left out so your catch-up only contains what changes your understanding.
         </T>
+        {live ? (
+          <T variant="support" style={{ marginBottom: space.l }}>
+            {`Last run ${runAge(live.finishedAt)}: ${live.itemsInspected} items from ${live.sourcesChecked} sources${live.sourcesFailed ? ` (${live.sourcesFailed} unavailable)` : ""}, grouped into ${live.developmentsProduced} ${live.developmentsProduced === 1 ? "development" : "developments"}. ${live.developmentsSelected} ${live.developmentsSelected === 1 ? "is" : "are"} new for you${live.developmentsAlreadyUnderstood ? `; ${live.developmentsAlreadyUnderstood} left out because your knowledge already covers ${live.developmentsAlreadyUnderstood === 1 ? "it" : "them"}` : ""}.`}
+          </T>
+        ) : pipeline?.mode === "demo_fixture" ? (
+          <T variant="meta" style={{ marginBottom: space.l, color: color.ink3 }}>
+            Illustrative counts for the demo learner, not a live discovery run.
+          </T>
+        ) : null}
         {Object.entries(brief.skippedBreakdown ?? {}).map(([label, count]) => (
           <View key={label} style={styles.skipRow}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -240,7 +269,7 @@ function TodayContent({ today, knowledge }: { today: BriefResponse; knowledge: K
   );
 }
 
-function HomeTopBar() {
+function HomeTopBar({ name }: { name: string }) {
   const { top } = useSafeTop();
   return (
     <Gutter style={[styles.topBar, { paddingTop: top }]}>
@@ -253,7 +282,7 @@ function HomeTopBar() {
           <Icon name="search" size={19} color={color.ink} />
         </Pressable>
         <Pressable onPress={() => router.push("/profile")} accessibilityRole="button" accessibilityLabel="Your learning profile" style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}>
-          <Avatar name={DEMO_LEARNER_NAME} size={44} />
+          <Avatar name={name} size={44} />
         </Pressable>
       </View>
     </Gutter>

@@ -1,28 +1,39 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { Mark, Wordmark } from "@/components/Logo";
 import { SetupHeader, SetupRow, StepProgress } from "@/components/setup/Setup";
 import { IconButton, ListCard, SectionHeader } from "@/components/system";
 import { T } from "@/components/Text";
 import { Button, Gutter, Screen } from "@/components/ui";
-import { DEMO_PROFILE, GOALS, INTERESTS, type LearnerProfile, saveProfile, TEACHING, useProfile } from "@/lib/profile";
-import { color, space } from "@/theme/tokens";
+import { DEMO_PROFILE, GOALS, INTERESTS, legacyProfile, type LearnerProfile, saveProfile, TEACHING, useProfile } from "@/lib/profile";
+import { currentMode } from "@/lib/session";
+import { color, font, radius, space } from "@/theme/tokens";
 
 // First run: three short questions and one promise. It sets the frame
 // (what you follow, why, how you learn), never a mastery level.
 
 const STEPS = 4;
 
+/** Your own Mind starts with nothing chosen: the demo persona's answers are the demo's, not yours. */
+const EMPTY_PROFILE: LearnerProfile = { interests: [], goals: [], teaching: [], completedAt: null };
+
 export default function Onboarding() {
   const saved = useProfile();
+  const personal = currentMode() === "personal";
+  // Answers saved on this phone before profiles moved to the server: offered, never uploaded unasked.
+  const [legacy, setLegacy] = useState<LearnerProfile | null | undefined>(personal ? undefined : null);
+  useEffect(() => {
+    if (personal) legacyProfile().then(setLegacy, () => setLegacy(null));
+  }, [personal]);
   // Wait for the saved profile: the form seeds its state once, and Skip saves that state.
-  if (saved === undefined) return <View style={{ flex: 1, backgroundColor: color.ground }} />;
-  // Returning users (Profile -> Edit) start from their answers; first run from the demo defaults.
-  return <OnboardingForm start={saved ?? DEMO_PROFILE} />;
+  if (saved === undefined || legacy === undefined) return <View style={{ flex: 1, backgroundColor: color.ground }} />;
+  // Returning users (Profile -> Edit) start from their answers; the demo from its defaults.
+  const start = saved ?? (personal ? (legacy ?? EMPTY_PROFILE) : DEMO_PROFILE);
+  return <OnboardingForm start={start} personal={personal} fromDevice={!saved && !!legacy} />;
 }
 
-function OnboardingForm({ start }: { start: LearnerProfile }) {
+function OnboardingForm({ start, personal, fromDevice }: { start: LearnerProfile; personal: boolean; fromDevice: boolean }) {
   const [step, setStep] = useState(0);
   // Storyboard 12: an overview of what Thinketh will ask, before the questions.
   const [intro, setIntro] = useState(true);
@@ -30,14 +41,24 @@ function OnboardingForm({ start }: { start: LearnerProfile }) {
   const [goals, setGoals] = useState<string[]>(start.goals);
   const [teaching, setTeaching] = useState<string[]>(start.teaching);
   const [building, setBuilding] = useState(false);
+  const [name, setName] = useState(start.displayName ?? "");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
   const finish = async () => {
     setBuilding(true);
-    const profile: LearnerProfile = { interests, goals, teaching, completedAt: new Date().toISOString() };
-    await saveProfile(profile);
+    setSaveError(null);
+    const profile: LearnerProfile = { interests, goals, teaching, completedAt: start.completedAt ?? new Date().toISOString(), ...(personal ? { displayName: name.trim() || "You" } : {}) };
+    try {
+      await saveProfile(profile);
+    } catch (e) {
+      // Nothing was saved: say so, and keep the answers on screen.
+      setBuilding(false);
+      setSaveError(e instanceof Error ? e.message : "Couldn't save your profile. Try again.");
+      return;
+    }
     // A brief, honest pause: the next screen is Today, compared against this frame.
     setTimeout(() => (router.canGoBack() ? router.back() : router.replace("/")), 900);
   };
@@ -93,6 +114,11 @@ function OnboardingForm({ start }: { start: LearnerProfile }) {
           {intro ? (
             <View>
               <SetupHeader title="Let's learn about you" note="This helps Thinketh personalize what it reads for you and how it thinks with you." />
+              {fromDevice ? (
+                <T variant="support" style={{ marginTop: space.m }}>
+                  Your earlier answers from this phone are filled in. They're saved to your account only when you finish.
+                </T>
+              ) : null}
               <ListCard style={styles.list}>
                 <SetupRow icon="explore" title="Your interests" subtitle="The fields you want to stay ahead of" onPress={() => { setIntro(false); setStep(0); }} />
                 <SetupRow icon="sparkle" title="Your goals" subtitle="What you want to get from Thinketh" onPress={() => { setIntro(false); setStep(1); }} />
@@ -127,6 +153,18 @@ function OnboardingForm({ start }: { start: LearnerProfile }) {
           ) : (
             <View>
               <SetupHeader title="Thinketh will learn what you know as you use it." note="Here is the frame it starts from. You can change it any time from your profile." />
+              {personal ? (
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="What should Thinketh call you?"
+                  placeholderTextColor={color.ink3}
+                  maxLength={40}
+                  autoCapitalize="words"
+                  accessibilityLabel="Your name"
+                  style={styles.name}
+                />
+              ) : null}
               <ListCard style={styles.list}>
                 <SetupRow icon="explore" title="Your interests" subtitle={interests.join(", ")} onPress={building ? undefined : () => setStep(0)} accessibilityLabel={`Your interests: ${interests.join(", ")}. Edit`} />
                 <SetupRow icon="sparkle" title="Your goals" subtitle={goals.join(", ")} onPress={building ? undefined : () => setStep(1)} accessibilityLabel={`Your goals: ${goals.join(", ")}. Edit`} />
@@ -135,14 +173,19 @@ function OnboardingForm({ start }: { start: LearnerProfile }) {
 
               <SectionHeader title="How it treats what you know" />
               <ListCard>
-                <SetupRow icon="info" title="It doesn't assume mastery." subtitle="Every concept starts uncertain. Nothing is marked as understood until you show it." />
-                <SetupRow icon="check" title="It updates on evidence." subtitle="Answers, questions and the developments you read move your knowledge state, and each change comes with its reason." />
+                <SetupRow icon="info" title="It doesn't assume mastery." subtitle="Every concept starts uncertain. Choosing an interest isn't evidence that you know it." />
+                <SetupRow icon="check" title="It distinguishes what you report from what you demonstrate." subtitle="Saying you got it moves your knowledge state a little, within a cap. A check provides stronger evidence. Each change comes with its reason." />
                 <SetupRow icon="person" title="You can correct it." subtitle="Tell it you already knew something, or check your understanding, and it adjusts." last />
               </ListCard>
             </View>
           )}
 
           <View style={{ flexGrow: 1, minHeight: space.x3 }} />
+          {saveError ? (
+            <T variant="support" style={{ color: color.ink }} accessibilityLiveRegion="polite">
+              {saveError}
+            </T>
+          ) : null}
           {cta}
         </Gutter>
       </Screen>
@@ -182,4 +225,16 @@ const styles = StyleSheet.create({
   progressWrap: { flexDirection: "row", alignItems: "center", gap: space.m },
   list: { marginTop: space.xxl },
   cta: { marginTop: space.l },
+  name: {
+    marginTop: space.xl,
+    minHeight: 52,
+    paddingHorizontal: space.l,
+    borderRadius: radius.surface,
+    backgroundColor: color.canvas,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.edge,
+    fontFamily: font.sans,
+    fontSize: 16,
+    color: color.ink,
+  },
 });

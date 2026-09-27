@@ -232,8 +232,8 @@ export type AppConfigResponse = z.infer<typeof AppConfigResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Learning Queue: "save to learn". A user-supplied URL, read and compared with
-// the user's knowledge state. Analysis never changes knowledge state; the
-// diagnostic remains the only path that does.
+// the user's knowledge state. Reading and analysis never change knowledge
+// state; a check (diagnostic) is the strong evidence, self-reports a weak capped signal.
 
 /** What the URL is, judged only from where it lives (no claims beyond that). */
 export const ResourceSourceTypeSchema = z.enum(["primary", "documentation", "research", "preprint", "repository", "reporting", "article", "video", "document"]);

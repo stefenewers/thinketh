@@ -28,7 +28,8 @@ export interface ThinkethApi {
   getDevelopment(id: string): Promise<DevelopmentDetailResponse>; // GET  /developments/:id
   sendFeedback(developmentId: string, kind: FeedbackKind): Promise<FeedbackResponse>; // POST /developments/:id/feedback
   selectDiagnostic(req: DiagnosticSelectRequest): Promise<DiagnosticSelectResponse>; // POST /diagnostics/select
-  answerDiagnostic(questionId: string, answer: string): Promise<DiagnosticAnswerResponse>; // POST /diagnostics/:id/answer
+  /** `idempotencyKey`: the same key on a retried submit returns the recorded result instead of recording twice. */
+  answerDiagnostic(questionId: string, answer: string, opts?: { idempotencyKey?: string }): Promise<DiagnosticAnswerResponse>; // POST /diagnostics/:id/answer
   getKnowledge(): Promise<KnowledgeResponse>; // GET  /knowledge
   getConceptHistory(conceptId: string): Promise<ConceptHistoryResponse>; // GET  /knowledge/:conceptId/history
   ask(req: AskRequest): Promise<AskResponse>; // POST /ask
