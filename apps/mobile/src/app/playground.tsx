@@ -1,4 +1,5 @@
 import { Component, createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useAgentScreen } from "@/agent/screenContext";
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
@@ -177,6 +178,19 @@ export default function PlaygroundScreen() {
   const keyboard = useKeyboardVisible();
   // With the keyboard up the room shrinks (scaled, not re-laid-out, so nobody walks) to keep the input visible.
   const shownH = keyboard ? Math.min(worldH, 150) : worldH;
+  // For the voice agent: which room and scene, never the hidden rubric or another person's answer.
+  useAgentScreen({
+    screen: "playground",
+    route: "/playground",
+    title: "Playground",
+    ...(room
+      ? {
+          focus: { kind: "room" as const, id: room.id, label: "this Playground room" },
+          visible: [`With: ${room.participants.map((p) => (p.userId === me ? "you" : p.displayName)).join(", ")}`],
+          room: { id: room.id, scene, assessing: scene === "transfer", participants: room.participants.length },
+        }
+      : {}),
+  });
   const onWorldSelect = (s: WorldSelection) => {
     if (s.kind === "agent") setAgentSel(s.userId);
     else if (s.kind === "muse") setSel({ kind: "muse" });

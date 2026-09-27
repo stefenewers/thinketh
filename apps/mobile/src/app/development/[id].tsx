@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useAgentScreen } from "@/agent/screenContext";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
@@ -20,6 +21,13 @@ import { color, depth, font, space, warm } from "@/theme/tokens";
 export default function DevelopmentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, error, loading, reload } = useApi(() => api.getDevelopment(id), [id]);
+  useAgentScreen({
+    screen: "development",
+    route: "/development",
+    title: data?.development.title ?? "Development",
+    focus: { kind: "development", id, label: data?.development.title ?? id },
+    ...(data ? { visible: [...data.delta.whatChanged.slice(0, 2).map((w) => `What changed: ${w}`), `Sources: ${data.sources.length}`] } : {}),
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: warm.ground }}>

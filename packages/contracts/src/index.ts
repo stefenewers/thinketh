@@ -5,3 +5,4 @@ export * from "./api.ts";
 export * from "./playground.ts";
 export * from "./presentation.ts";
 export * from "./visualization.ts";
+export * from "./agent.ts";

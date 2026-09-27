@@ -19,7 +19,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 // Storyboard 03 "Mind — Concept": the selected concept as an object inspector.
 // Same data and actions as the old ConceptPanel/SelectedSheet, reorganised into tabs.
 
-type InspectorTab = "overview" | "evidence" | "sources" | "related";
+export type InspectorTab = "overview" | "evidence" | "sources" | "related";
 
 export function ConceptInspector({
   concept,
@@ -33,6 +33,7 @@ export function ConceptInspector({
   onSelectConcept,
   onClose,
   onExploreChanges,
+  initialTab = "overview",
 }: {
   concept: Concept;
   state: KnowledgeState;
@@ -48,8 +49,10 @@ export function ConceptInspector({
   onSelectConcept: (id: string) => void;
   onClose: () => void;
   onExploreChanges?: () => void;
+  /** Opened on a tab (a deep link such as "show me its sources"). */
+  initialTab?: InspectorTab;
 }) {
-  const [tab, setTab] = useState<InspectorTab>("overview");
+  const [tab, setTab] = useState<InspectorTab>(initialTab);
   const { data, loading } = useApi(() => api.getConceptHistory(concept.id), [concept.id, state.evidenceCount]);
   const history = data?.transitions;
   const askQ = `Explain ${concept.name} based on what I already know.`;

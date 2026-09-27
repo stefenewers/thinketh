@@ -5,6 +5,7 @@
  */
 import type { ResourceAnalysis, ResourceContext, TeachContext, TeachResult } from "../resources/analyze.ts";
 import type {
+  AgentActivity,
   Claim,
   Concept,
   DeltaExplanation,
@@ -160,7 +161,8 @@ export interface IntelligenceModel {
   checkSupport(input: SupportInput): Promise<SupportResult[]>;
 }
 
-export type VoiceContext = { userId: string; displayName: string; script: string[]; briefDate: string; minutes: number };
+/** `activity` defaults to catch_up (older app builds send no activity). */
+export type VoiceContext = { userId: string; displayName: string; script: string[]; briefDate: string; minutes: number; activity?: AgentActivity };
 
 export interface VoiceProvider {
   readonly name: "elevenlabs" | "transcript";

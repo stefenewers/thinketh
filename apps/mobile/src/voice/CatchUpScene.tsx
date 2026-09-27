@@ -29,7 +29,7 @@ export function CatchUpScene({
   /** The briefing's topic when no concept is linked: shown as text, never as an invented book. */
   fallbackTitle?: string | null;
   status?: React.ReactNode;
-  /** A live call is running: opening the Mind ends it, and the sheet says so. */
+  /** A live call is running (it keeps going while you open the Mind). */
   live: boolean;
   onOpenInMind: (conceptId: string) => void;
 }) {
@@ -111,7 +111,7 @@ function BookSheet({ knowledge, conceptId, live, onClose, onOpenInMind }: { know
           </T>
           <Button
             kind="secondary"
-            label={live ? "Open in your Mind (ends this catch-up)" : "Open in your Mind"}
+            label="Open in your Mind"
             onPress={() => {
               onClose();
               onOpenInMind(item.concept.id);
@@ -123,11 +123,11 @@ function BookSheet({ knowledge, conceptId, live, onClose, onOpenInMind }: { know
   );
 }
 
-export type VoiceState = "connecting" | "speaking" | "listening" | "user" | "ending" | "muted";
+export type VoiceState = "connecting" | "speaking" | "listening" | "user" | "thinking" | "ending" | "muted";
 
 /** What the call is doing right now, from the SDK's own state. Never "Speaking" unless audio is playing. */
 export function VoiceStatus({ state }: { state: VoiceState }) {
-  const label = { connecting: "Connecting", speaking: "Thinketh is speaking", listening: "Listening", user: "You're talking", ending: "Ending", muted: "Mic off" }[state];
+  const label = { connecting: "Connecting", speaking: "Thinketh is speaking", listening: "Listening", user: "You're talking", thinking: "Thinking", ending: "Ending", muted: "Mic off" }[state];
   const dot = state === "speaking" ? color.coral : state === "user" || state === "listening" ? color.ink : color.ink3;
   return (
     <View style={styles.status} accessible accessibilityLabel={label} accessibilityLiveRegion="polite">

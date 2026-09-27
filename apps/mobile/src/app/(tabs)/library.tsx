@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAgentScreen } from "@/agent/screenContext";
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import type { Resource } from "@thinketh/contracts";
@@ -23,6 +24,12 @@ const addSource = () => router.push("/resource/add");
  */
 export default function Learn() {
   const queue = useApi(() => api.listResources(), [], { refetchOnFocus: true });
+  useAgentScreen({
+    screen: "learn",
+    route: "/library",
+    title: "Learn",
+    ...(queue.data?.length ? { visible: queue.data.slice(0, 4).map((r) => `Saved source: ${r.title} (resource id ${r.id})`) } : {}),
+  });
   const resources = queue.data ?? [];
   const [showAll, setShowAll] = useState(false);
   const shown = showAll ? resources : resources.slice(0, VISIBLE);

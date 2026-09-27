@@ -18,3 +18,6 @@ apps/mobile/src/content/portraits.local.ts
 /playground/
 /playground.zip
 .thinketh-data/
+
+# ElevenLabs agent config backups (scripts/voice-agent/configure.ts)
+scripts/voice-agent/.backups/

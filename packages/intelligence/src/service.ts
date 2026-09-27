@@ -31,6 +31,7 @@ import type {
   Resource,
   TeachDeltaResponse,
   VoiceSession,
+  AgentActivity,
   DiscoveryAccounting,
   IdentityKind,
   LearnerProfile,
@@ -1240,7 +1241,7 @@ export class ThinkethService {
   // Voice
   // -------------------------------------------------------------------------
 
-  async voiceSession(userId: string): Promise<VoiceSession> {
+  async voiceSession(userId: string, activity?: AgentActivity): Promise<VoiceSession> {
     const { brief, developments, pipeline } = await this.brief(userId);
     const states = await this.statesFor(userId);
     const profile = this.profileFor(userId);
@@ -1267,7 +1268,7 @@ export class ThinkethService {
       }),
       [skipped, developments.length ? "Want to go deeper on any of these?" : ""].filter(Boolean).join(" "),
     ].filter(Boolean);
-    const ctx = { userId, displayName: profile.displayName, script, briefDate: brief.date, minutes: brief.estimatedMinutes };
+    const ctx = { userId, displayName: profile.displayName, script, briefDate: brief.date, minutes: brief.estimatedMinutes, activity };
     const { voice, transcriptVoice } = this.adapters;
     return (await guarded("elevenlabs", "createSession", voice ? () => voice.createSession(ctx) : undefined, () => transcriptVoice.createSession(ctx), VOICE_TIMEOUT_MS)).value;
   }
