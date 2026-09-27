@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { useDockSpace } from "@/agent/dockLayout";
+import { useTabBarInset } from "@/lib/tabBarInset";
 import {
   ActivityIndicator,
   Pressable,
@@ -32,6 +33,8 @@ export function Screen({
 }) {
   const insets = useSafeAreaInsets();
   const dock = useDockSpace();
+  // On a tab screen the floating tab bar covers the bottom: the content ends clear of it.
+  const tabBar = useTabBarInset();
   const pad = { paddingTop: topInset ? insets.top + layout.pageTop : layout.pageTop };
   if (!scroll) {
     return <View style={[styles.screen, background ? { backgroundColor: background } : null, pad, contentStyle]}>{children}</View>;
@@ -39,7 +42,7 @@ export function Screen({
   return (
     <ScrollView
       style={[styles.screen, background ? { backgroundColor: background } : null]}
-      contentContainerStyle={[pad, { paddingBottom: space.x4 + dock }, contentStyle]}
+      contentContainerStyle={[pad, { paddingBottom: space.x4 + dock + tabBar }, contentStyle]}
       showsVerticalScrollIndicator={false}
     >
       {children}

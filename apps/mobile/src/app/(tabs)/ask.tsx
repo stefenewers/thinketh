@@ -12,7 +12,8 @@ import { Icon } from "@/components/Icon";
 import { AppTopBar, Avatar, ConceptChip, IconButton, RaisedCard, ReasoningStep, SignalPill, SourceCard } from "@/components/system";
 import { T } from "@/components/Text";
 import { Gutter, LoadingState } from "@/components/ui";
-import { useApi } from "@/lib/hooks";
+import { useApi, useKeyboardVisible } from "@/lib/hooks";
+import { useTabBarInset } from "@/lib/tabBarInset";
 import { AskScene } from "@/components/ask/AskScene";
 import { TopicArt, type TopicArtKind } from "@/components/TopicArt";
 import { DEMO_LEARNER_NAME } from "@/content/demo";
@@ -53,6 +54,8 @@ export default function Ask() {
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
+  const tabBar = useTabBarInset();
+  const keyboardUp = useKeyboardVisible();
   const session = useSession();
   const profile = useProfile();
   const name = session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME;
@@ -264,6 +267,8 @@ export default function Ask() {
       )}
       {/* Tapping anywhere else closes the mode menu (the keyboard stays where it was). */}
       {modeMenu ? <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={() => setModeMenu(false)} accessibilityLabel="Close response modes" /> : null}
+      {/* Room for the floating tab bar under the composer; the bar steps aside while typing. */}
+      <View style={{ height: keyboardUp ? 0 : tabBar }} />
     </KeyboardAvoidingView>
   );
 }

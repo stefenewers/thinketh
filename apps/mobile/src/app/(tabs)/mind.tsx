@@ -7,6 +7,7 @@ import { PLAYGROUND_AVAILABLE } from "@/api/playground";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { useDockSpace } from "@/agent/dockLayout";
+import { useTabBarInset } from "@/lib/tabBarInset";
 import { useAgentScreen } from "@/agent/screenContext";
 import { SOURCES_TAB } from "@/agent/tools";
 import { ConceptInspector, changeSentence, direction, type InspectorTab } from "@/components/mind/ConceptInspector";
@@ -84,6 +85,7 @@ function Mind({
   const [tab, setTab] = useState<ViewTab>("map");
   const scrollRef = useRef<ScrollView>(null);
   const dock = useDockSpace();
+  const tabBar = useTabBarInset();
   const scrolledToInspector = useRef(false);
   const selected = selectedId ? conceptById.get(selectedId) : undefined;
   const selectedState = selectedId ? stateOf.get(selectedId) : undefined;
@@ -139,7 +141,7 @@ function Mind({
           </>
         }
       />
-    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 + dock }} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: space.x5 + dock + tabBar }} showsVerticalScrollIndicator={false}>
       <Gutter>
         <SegmentedTabs
           variant="pill"
