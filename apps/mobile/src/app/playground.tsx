@@ -113,8 +113,8 @@ export default function PlaygroundScreen() {
     run("join", () => playground.join(params.code!, personal ? hostName : params.as === "nadani" ? "Nadani" : "Guest", as));
   }, [params.code, params.as, run, personal, me, hostName]);
 
-  // Resume the room this identity was last in (unless a link is joining another one). An exchange or
-  // challenge only advances while this screen is open, so coming back must pick it up, not start over.
+  // Resume the room this identity was last in while its exchange or challenge is still running (unless a
+  // link is joining another one): they only advance while this screen is open, so coming back picks them up.
   const [owner] = useState(() => currentUserId() ?? DEMO_USER_ID);
   const resumed = useRef(false);
   useEffect(() => {
@@ -126,7 +126,8 @@ export default function PlaygroundScreen() {
         if (!raw) return;
         const last = JSON.parse(raw) as LastRoom;
         const r = await playground.get(last.roomId, last.me);
-        if (r.scene === "ended") return void AsyncStorage.removeItem(lastRoomKey(owner)).catch(() => {});
+        // Only a room whose agents are still working is picked back up; otherwise the Playground starts fresh.
+        if (r.exchange?.status !== "running" && r.challenge?.status !== "running") return void AsyncStorage.removeItem(lastRoomKey(owner)).catch(() => {});
         setMe(last.me);
         setRoom((prev) => prev ?? r);
       } catch {

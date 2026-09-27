@@ -29,7 +29,14 @@ import { MuseUnavailableError, type ChatMessage, type ExchangeModel, type ToolCa
 export type StoredRoom = Omit<PlaygroundRoom, "conductor" | "realtime">;
 export type RoomEventOut = { type: RoomEventType; actor: string; summary: string; data?: Record<string, string | number | boolean | null> };
 
-export type ExchangeLimits = { maxMessages: number; maxToolCalls: number; deadlineMs: number; callTimeoutMs: number };
+export type ExchangeLimits = {
+  maxMessages: number;
+  maxToolCalls: number;
+  deadlineMs: number;
+  callTimeoutMs: number;
+  /** Who picks each next turn (default "muse"). "planner" skips the coordinator call: see directChoice. */
+  coordinator?: "muse" | "planner";
+};
 
 /** What the host room service provides: its lock, its commit (save + broadcast) and its naming. */
 export interface ExchangeHost {
@@ -109,6 +116,20 @@ export function plannerChoice(valid: ActionKey[], p: AgentExchange): ActionKey {
   const msgsLeft = p.budgets.maxMessages - p.used.messages;
   const order: ActionKey[] = ["save_takeaway", "check_takeaway", "teacher_explain", ...(msgsLeft > 2 ? (["learner_respond"] as ActionKey[]) : []), "teacher_respond", "learner_takeaway", "learner_respond", "finish"];
   return order.find((a) => valid.includes(a)) ?? "finish";
+}
+
+/**
+ * The short, predictable exchange, chosen without a model call: explain, one question and its answer,
+ * then the takeaway, its check and saving it. A takeaway the check didn't support gets one revision.
+ */
+export function directChoice(valid: ActionKey[], p: AgentExchange): ActionKey {
+  const pick = (...order: ActionKey[]) => order.find((a) => valid.includes(a)) ?? "finish";
+  if (p.check) return pick("save_takeaway", "learner_takeaway", "finish");
+  const asked = p.messages.some((m) => m.from === p.learnerId);
+  const last = p.messages.at(-1);
+  if (!asked) return pick("check_takeaway", "teacher_explain", "learner_respond", "learner_takeaway", "finish");
+  if (last?.from === p.learnerId && !p.takeaway) return pick("check_takeaway", "teacher_respond", "learner_takeaway", "finish");
+  return pick("check_takeaway", "learner_takeaway", "finish");
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +434,10 @@ export class AgentExchangeEngine {
     const p = rec.pub;
     const valid = validActions(p, this.now().getTime());
     if (valid.length === 1) return { action: valid[0]!, note: this.noteFor(rec, valid[0]!), by: "thinketh" };
+    if (this.limits.coordinator === "planner") {
+      const action = directChoice(valid, p);
+      return { action, note: this.noteFor(rec, action), by: "thinketh" };
+    }
     const model = this.model!;
     const tools: ToolDef[] = [
       {

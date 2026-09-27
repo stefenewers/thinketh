@@ -138,6 +138,12 @@ export function loadConfig() {
       deadlineMs: Number(env("THINKETH_EXCHANGE_DEADLINE_MS") ?? 300_000),
       /** One Muse call; a turn may take up to three (retrieve, then speak). */
       callTimeoutMs: Number(env("THINKETH_EXCHANGE_CALL_TIMEOUT_MS") ?? 25_000),
+      /**
+       * Who picks each next turn. "planner" (default): Thinketh's deterministic order (explain, one
+       * question, one answer, takeaway, check, save), which saves a Muse call per turn (~3-7 s each).
+       * "muse": Muse chooses among the valid actions, as before.
+       */
+      coordinator: env("THINKETH_EXCHANGE_COORDINATOR") === "muse" ? ("muse" as const) : ("planner" as const),
     },
     /**
      * Grokbot (optional visiting challenger, xAI Responses API). Enabled only when both the key and

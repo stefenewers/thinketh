@@ -116,6 +116,8 @@ describe("agent exchange", () => {
     expect(ex.status).toBe("completed");
     expect(ex.messages.map((m) => m.kind)).toEqual(["explanation", "evidence_request", "answer", "takeaway"]);
     expect(ex.check).toMatchObject({ verdict: "supported", checkedBy: "deterministic" });
+    // The default coordinator is Thinketh's planner: no model call is spent choosing turns.
+    expect(muse.calls.some((c) => c.purpose === "coordinator")).toBe(false);
 
     // Separate contexts: the teacher's system prompt and the learner's differ, and neither sees the other's tool results.
     const teacherCalls = muse.calls.filter((c) => c.purpose.startsWith("teacher"));
@@ -264,8 +266,9 @@ describe("agent exchange", () => {
     expect(ex.outcome).toMatch(/Muse didn't complete the step .*guided session still works/);
     expect(ex.messages).toHaveLength(0);
 
-    // Coordinator returns no tool call: the deterministic planner decides, and says so.
+    // Muse as coordinator (THINKETH_EXCHANGE_COORDINATOR=muse) returns no tool call: the deterministic planner decides, and says so.
     const t2 = boot(new FakeMuse((purpose, messages, tools) => (purpose === "coordinator" ? [] : cooperative()(purpose, messages, tools))));
+    (t2.playground.exchange as unknown as { limits: { coordinator: string } }).limits.coordinator = "muse";
     const r2 = await comparedRoom(t2);
     await req(t2, "POST", `/playground/rooms/${r2.id}/exchange`, {});
     const ex2 = (await runToEnd(t2, r2.id)).exchange!;
