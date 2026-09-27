@@ -570,8 +570,15 @@ export class ThinkethService {
   private async syncWithLatestRun(): Promise<void> {
     const run = await this.store.get<DiscoveryRunRecord>("discovery_state", "last_successful_run");
     if (run?.developmentIds.some((id) => !this.developments.has(id))) {
-      this.corpusLoad = this.loadCorpus();
-      await this.corpusLoad;
+      const load = this.loadCorpus();
+      this.corpusLoad = load;
+      try {
+        await load;
+      } catch (err) {
+        // Don't cache the failure: the next request (or ensureCorpus) tries again.
+        if (this.corpusLoad === load) this.corpusLoad = undefined;
+        throw err;
+      }
     }
   }
 
@@ -857,45 +864,66 @@ export class ThinkethService {
         const replay = await this.claimOperation(userId, opKey, observationId!, questionId, answer);
         if (replay) return replay;
       }
-      const states = await this.statesFor(userId);
-      const kind = kindForCorrectness(evaluation.correctness);
-      // Same question (or the same prompt under a new id, as generated ones get) answered before.
-      const answered = await this.answeredQuestionIds(userId);
-      const repeat = [...answered].some((id) => {
-        const q = id === item.id ? item : this.diagnostics.get(id);
-        return !!q && q.conceptId === item.conceptId && q.prompt === item.prompt;
-      });
-      const options: UpdateOptions = {
-        ...(repeat ? { repeat } : {}),
-        ...(item.evidencePhrase ? { evidencePhrase: item.evidencePhrase } : {}),
-        ...(evaluation.misconception ? { addMisconception: evaluation.misconception } : {}),
-        ...(kind === "diagnostic_correct" && item.targetsMisconception ? { clearMisconception: item.targetsMisconception } : {}),
-      };
-      const result = await this.observe(userId, item.conceptId, kind, {
-        correctness: evaluation.correctness,
-        sourceRef: `diagnostic:${item.id}`,
-        options,
-        states,
-        ...(observationId ? { observationId } : {}),
-      });
-
-      if (evaluation.misconception) {
-        const description = MISCONCEPTIONS[evaluation.misconception] ?? evaluation.misconception;
-        await this.remember(userId, {
-          id: newId("mem"),
-          kind: "misconception",
-          content: `On ${this.concepts.get(item.conceptId)?.name}: showed the misconception ${description}.`,
-          createdAt: this.now().toISOString(),
-        });
+      try {
+        return await this.recordAnswer(userId, questionId, item, evaluation, answer, opKey, observationId, opts.operationId);
+      } catch (err) {
+        // Nothing recorded: release the claim so the client's retry (same key) runs instead of hitting a 409.
+        if (opKey && !(await this.adapters.temporal.findTransitionByObservation(userId, observationId!).catch(() => undefined))) {
+          await this.store.remove("operations", opKey).catch(() => {});
+        }
+        throw err;
       }
-      logEvent("diagnostic.answered", { userId, questionId, correctness: evaluation.correctness, kind, misconception: evaluation.misconception, operationId: opts.operationId });
-      const response: DiagnosticAnswerResponse = {
-        answer: { questionId, userId, answer, correctness: evaluation.correctness, feedback: evaluation.feedback },
-        transition: result.transition,
-      };
-      if (opKey) await this.store.put("operations", opKey, { status: "done", at: this.now().toISOString(), result: response } satisfies OperationRecord, userId);
-      return response;
     });
+  }
+
+  private async recordAnswer(
+    userId: string,
+    questionId: string,
+    item: DiagnosticItem,
+    evaluation: Evaluation,
+    answer: string,
+    opKey: string | undefined,
+    observationId: string | undefined,
+    operationId: string | undefined,
+  ): Promise<DiagnosticAnswerResponse> {
+    const states = await this.statesFor(userId);
+    const kind = kindForCorrectness(evaluation.correctness);
+    // Same question (or the same prompt under a new id, as generated ones get) answered before.
+    const answered = await this.answeredQuestionIds(userId);
+    const repeat = [...answered].some((id) => {
+      const q = id === item.id ? item : this.diagnostics.get(id);
+      return !!q && q.conceptId === item.conceptId && q.prompt === item.prompt;
+    });
+    const options: UpdateOptions = {
+      ...(repeat ? { repeat } : {}),
+      ...(item.evidencePhrase ? { evidencePhrase: item.evidencePhrase } : {}),
+      ...(evaluation.misconception ? { addMisconception: evaluation.misconception } : {}),
+      ...(kind === "diagnostic_correct" && item.targetsMisconception ? { clearMisconception: item.targetsMisconception } : {}),
+    };
+    const result = await this.observe(userId, item.conceptId, kind, {
+      correctness: evaluation.correctness,
+      sourceRef: `diagnostic:${item.id}`,
+      options,
+      states,
+      ...(observationId ? { observationId } : {}),
+    });
+
+    if (evaluation.misconception) {
+      const description = MISCONCEPTIONS[evaluation.misconception] ?? evaluation.misconception;
+      await this.remember(userId, {
+        id: newId("mem"),
+        kind: "misconception",
+        content: `On ${this.concepts.get(item.conceptId)?.name}: showed the misconception ${description}.`,
+        createdAt: this.now().toISOString(),
+      });
+    }
+    logEvent("diagnostic.answered", { userId, questionId, correctness: evaluation.correctness, kind, misconception: evaluation.misconception, operationId });
+    const response: DiagnosticAnswerResponse = {
+      answer: { questionId, userId, answer, correctness: evaluation.correctness, feedback: evaluation.feedback },
+      transition: result.transition,
+    };
+    if (opKey) await this.store.put("operations", opKey, { status: "done", at: this.now().toISOString(), result: response } satisfies OperationRecord, userId);
+    return response;
   }
 
   /**
@@ -1034,27 +1062,29 @@ export class ThinkethService {
 
   /**
    * "Visualize this": Claude plans the diagram for the topic (grammar, entities, relationships);
-   * curated or delta-derived plans stand in when it can't. A plan is about the topic, not the
-   * learner's progress, so a live plan is cached per development and reopening is instant.
+   * curated or delta-derived plans stand in when it can't. The plan is framed by this learner's
+   * delta and levels, so a live plan is cached per learner, per topic, per set of levels: reopening
+   * is instant, and a changed level (after a diagnostic) plans afresh.
    */
   async visualize(userId: string, input: { conceptId?: string; developmentId?: string }): Promise<VisualizationSpec> {
     const learning = await this.resolveLearningTarget(userId, input);
-    const key = `visualization:${learning.development?.id ?? learning.concept.id}`;
+    const states = await this.statesFor(userId);
+    const topicConcepts = learning.development?.conceptIds ?? [learning.concept.id];
+    const known = topicConcepts.flatMap((id) => {
+      const s = states.get(id);
+      const c = this.concepts.get(id);
+      return s && c ? [{ concept: c.name, level: knowledgeLevel(s) }] : [];
+    });
+    const key = `visualization:${userId}:${learning.development?.id ?? learning.concept.id}:${known.map((k) => k.level).join(",")}`;
     const cached = this.generated.get(key) as VisualizationSpec | undefined;
     if (cached) return cached;
-    const states = await this.statesFor(userId);
     const delta = learning.development ? this.deterministicDelta(userId, learning.development, states) : undefined;
-    const topicConcepts = learning.development?.conceptIds ?? [learning.concept.id];
     const ctx: VisualizeContext = {
       ...learning,
       ...(delta
         ? { delta: { whatHappened: delta.whatHappened, alreadyKnew: delta.alreadyKnew, whatChanged: delta.whatChanged, whyItMattersToYou: delta.whyItMattersToYou, mentalModelChange: delta.mentalModelChange } }
         : {}),
-      known: topicConcepts.flatMap((id) => {
-        const s = states.get(id);
-        const c = this.concepts.get(id);
-        return s && c ? [{ concept: c.name, level: knowledgeLevel(s) }] : [];
-      }),
+      known,
     };
     const model = this.model();
     // Planning a diagram measured 7-14 s live; the sheet shows a skeleton meanwhile and the plan is

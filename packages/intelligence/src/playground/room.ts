@@ -77,6 +77,10 @@ export class PlaygroundService {
   /** Cache of stored rooms. */
   private readonly rooms = new Map<string, Room>();
   private readonly locks = new Map<string, Promise<unknown>>();
+  /** Mutations queued or running per room: a poll during one reads the last commit instead of waiting behind it. */
+  private readonly busy = new Map<string, number>();
+  /** The last committed state of each room this process wrote (JSON, so in-flight edits never leak into it). */
+  private readonly committed = new Map<string, string>();
   /** Events emitted inside the current mutation, broadcast only after the room is saved. */
   private readonly unpublished = new Map<string, RoomEvent[]>();
   private readonly svc: ThinkethService;
@@ -268,14 +272,22 @@ export class PlaygroundService {
     this.rooms.set(room.id, room);
     if (this.rooms.size > MAX_ROOMS) {
       const oldest = [...this.rooms.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
-      if (oldest && oldest.id !== room.id) this.rooms.delete(oldest.id);
+      if (oldest && oldest.id !== room.id) {
+        this.rooms.delete(oldest.id);
+        this.committed.delete(oldest.id);
+      }
     }
   }
 
   /** One mutation at a time per room, so event order, seq and "already answered" checks hold under concurrency. */
   private locked<T>(roomId: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.locks.get(roomId) ?? Promise.resolve();
-    const next = prev.then(fn, fn);
+    this.busy.set(roomId, (this.busy.get(roomId) ?? 0) + 1);
+    const next = prev.then(fn, fn).finally(() => {
+      const n = (this.busy.get(roomId) ?? 1) - 1;
+      if (n > 0) this.busy.set(roomId, n);
+      else this.busy.delete(roomId);
+    });
     this.locks.set(roomId, next.catch(() => undefined));
     return next;
   }
@@ -283,6 +295,7 @@ export class PlaygroundService {
   /** Save, then broadcast what this mutation emitted (clients refetch; the stored room must already be there). */
   private async commit(room: Room): Promise<void> {
     await this.store.put("rooms", room.id, room);
+    this.committed.set(room.id, JSON.stringify(room));
     const events = this.unpublished.get(room.id) ?? [];
     this.unpublished.delete(room.id);
     for (const e of events) this.realtime.publish(this.channel(room), { seq: e.seq, type: e.type });
@@ -353,6 +366,14 @@ export class PlaygroundService {
   }
 
   async get(roomId: string, userId: string): Promise<PlaygroundRoom> {
+    // A mutation holds the lock across Claude calls and page reads; polls shouldn't queue behind it
+    // (the client times out at 8 s). Serve the room as it stands; the mutation's broadcast triggers a refetch.
+    const snapshot = this.busy.has(roomId) ? this.committed.get(roomId) : undefined;
+    if (snapshot) {
+      const room = JSON.parse(snapshot) as Room;
+      if (!room.participants.some((p) => p.userId === userId)) throw new NotFoundError("Playground not found.");
+      return this.view(room);
+    }
     return this.mutate(roomId, userId, async (room) => {
       await this.exchange.reconcile(room);
       await this.challenge.reconcile(room);
