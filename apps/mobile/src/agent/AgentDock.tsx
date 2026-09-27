@@ -5,7 +5,7 @@
 // composer: AgentComposerButton) and on Catch Me Up, which shows the full conversation itself.
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { Mark } from "@/components/Logo";
@@ -57,13 +57,15 @@ export function AgentDock() {
   const onTabs = !!screen && TAB_SCREENS.has(screen.screen);
   const bottom = (onTabs && tabBar ? tabBar : insets.bottom) + space.m;
   const enter = reduced ? undefined : FadeInDown.duration(220);
-  const exit = reduced ? undefined : FadeOut.duration(160);
+  // No exiting animation: the dock swaps between three views (call, notice, entry) and can change again
+  // within a second (a call ends, another starts). Overlapping exits crashed Reanimated 4.7's layout
+  // animation tree (SIGABRT in LightNode::toHostIndexForRemove), so the dock just leaves.
 
   if (isActive(state.status)) {
     const label = phaseLabel(state);
     const line = state.caption.current || state.caption.previous || (state.status === "connecting" ? "Starting your conversation…" : state.activity === "catch_up" ? "Catch Me Up" : "Ask anything, or say where to go.");
     return (
-      <Animated.View entering={enter} exiting={exit} style={[styles.dockWrap, { bottom }]} pointerEvents="box-none">
+      <Animated.View entering={enter} style={[styles.dockWrap, { bottom }]} pointerEvents="box-none">
         <View style={styles.dock}>
           <Pressable
             onPress={controls.expand}
@@ -92,7 +94,7 @@ export function AgentDock() {
 
   if (state.notice) {
     return (
-      <Animated.View entering={enter} exiting={exit} style={[styles.dockWrap, { bottom }]} pointerEvents="box-none">
+      <Animated.View entering={enter} style={[styles.dockWrap, { bottom }]} pointerEvents="box-none">
         <View style={styles.dock} accessibilityLiveRegion="polite">
           <View style={[styles.dot, { backgroundColor: color.ink3, marginLeft: space.s }]} />
           <T style={[styles.caption, { flex: 1, color: color.ink }]} numberOfLines={3}>
@@ -109,7 +111,7 @@ export function AgentDock() {
   // Idle entry. Only where the screen hasn't placed its own, and nothing is listening.
   if (!screen || screen.entry !== "float") return null;
   return (
-    <Animated.View entering={enter} exiting={exit} style={[styles.entryWrap, { bottom }]} pointerEvents="box-none">
+    <Animated.View entering={enter} style={[styles.entryWrap, { bottom }]} pointerEvents="box-none">
       <Pressable
         onPress={() => controls.start("assist")}
         accessibilityRole="button"
