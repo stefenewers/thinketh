@@ -7,8 +7,8 @@ import { color, font } from "@/theme/tokens";
 export const LEARN = {
   cardRadius: 18,
   cardBorder: "rgba(22,22,22,0.07)",
-  /** Icon tiles and the empty card's warmth: pale peach, never a fill colour. */
-  peachTile: "#FAEDE6",
+  /** Icon tiles: the same quiet neutral tile as every other pixel object in the app (not peach). */
+  peachTile: color.surfaceMuted,
   softPill: "#FAE6DD",
   warmCard: "#FDF9F6",
   warmCardBorder: "rgba(192,85,58,0.10)",

@@ -66,9 +66,7 @@ export default function Learn() {
           accessibilityLabel="Explore related ideas. Adjacent ideas Thinketh picked because they'd strengthen what you already know."
           style={({ pressed }) => [styles.card, styles.suggestion, pressed && styles.pressed]}
         >
-          <View style={styles.suggestionIcon}>
-            <Icon name="explore" size={22} color={color.coral} />
-          </View>
+          <TopicArt kind="book" unit={1.34} style={styles.suggestionIcon} />
           <View style={{ flex: 1 }}>
             <T style={styles.rowTitle}>Explore related ideas</T>
             <T style={[styles.rowBody, styles.suggestionBody]}>Adjacent ideas Thinketh picked because they&apos;d strengthen what you already know.</T>

@@ -75,7 +75,7 @@ function IdeaCard({ item, reason }: { item: Pick; reason: string }) {
       accessibilityLabel={`${item.title}. ${item.why}`}
       style={({ pressed }) => [learnStyles.card, styles.card, pressed && learnStyles.pressed]}
     >
-      <IdeaGlyph kind={ideaKind(reason, item)} />
+      <IdeaGlyph kind={ideaKind(reason, item)} conceptIds={item.conceptIds} />
       <View style={{ flex: 1 }}>
         <T style={learnStyles.cardTitle}>{item.title}</T>
         <T style={[learnStyles.cardBody, styles.why]}>{item.why}</T>
