@@ -7,7 +7,6 @@ import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { ConceptChip, IconButton, InsightRow, Kicker, ListCard, SegmentedTabs, SignalPill, SourceCard } from "@/components/system";
-import { imageFor } from "@/content/imagery";
 import { T } from "@/components/Text";
 import { agentMemoryStoryline } from "@/content/demo";
 import { useApi } from "@/lib/hooks";
@@ -116,7 +115,7 @@ export function ConceptInspector({
                 {developments.slice(0, 3).map((d, i, arr) => (
                   <InsightRow
                     key={d.id}
-                    thumb={imageFor(d.conceptIds)}
+                    topic={{ conceptIds: d.conceptIds }}
                     title={d.title}
                     meta={relativeTime(d.happenedAt)}
                     summary={`${d.sourceIds.length} source${d.sourceIds.length === 1 ? "" : "s"}`}
@@ -209,7 +208,6 @@ export function ConceptInspector({
                 key={src.id}
                 title={src.title}
                 meta={[src.publisher, src.sourceType, src.publishedAt ? shortDate(src.publishedAt) : undefined].filter(Boolean).join(" · ")}
-                thumb={imageFor([concept.id])}
                 onPress={src.url ? () => Linking.openURL(src.url!).catch(() => {}) : undefined}
               />
             ))

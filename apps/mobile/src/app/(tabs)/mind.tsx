@@ -8,7 +8,6 @@ import { Icon } from "@/components/Icon";
 import { MasteryBar } from "@/components/MindGraph";
 import { ConceptInspector, changeSentence, direction } from "@/components/mind/ConceptInspector";
 import { AppTopBar, IconButton, InsightRow, ListCard, MetricStrip, SectionHeader, SegmentedTabs } from "@/components/system";
-import { imageFor } from "@/content/imagery";
 import { FocusLabel, LibraryLegend, MindLibrary, playedHighlights } from "@/components/mind/world/MindLibrary";
 import { BookGlyph } from "@/components/mind/world/Book";
 import { EVIDENCE_OF, projectMindWorld } from "@/components/mind/world/mindWorld";
@@ -361,7 +360,7 @@ function ChangeList({
         return (
           <InsightRow
             key={t.id}
-            thumb={imageFor([t.conceptId])}
+            topic={{ conceptIds: [t.conceptId] }}
             category={signal ? "Stronger evidence" : direction(t)}
             signal={signal}
             title={name}

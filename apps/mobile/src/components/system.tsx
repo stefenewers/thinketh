@@ -1,3 +1,4 @@
+import { TopicArt, type TopicArtKind } from "@/components/TopicArt";
 import { type ReactNode } from "react";
 import { BookGlyph } from "@/components/mind/world/Book";
 import { Pressable, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
@@ -199,9 +200,16 @@ export function ListCard({ children, style }: { children: ReactNode; style?: Sty
   return <View style={[styles.listCard, style]}>{children}</View>;
 }
 
-/** One row in a ListCard: texture thumb, category, title, one line, time, chevron. */
+/**
+ * Decorative topic art in a thumbnail slot: the pixel object for these concepts (or an explicit kind).
+ * `thumb` stays for images that carry information (a real photo or figure); topic art never replaces those.
+ */
+export type TopicThumb = { conceptIds?: readonly string[]; kind?: TopicArtKind; fallback?: TopicArtKind };
+
+/** One row in a ListCard: thumb (a real image or topic art), category, title, one line, time, chevron. */
 export function InsightRow({
   thumb,
+  topic,
   category,
   title,
   summary,
@@ -213,6 +221,7 @@ export function InsightRow({
   accessibilityLabel,
 }: {
   thumb?: ImageSourcePropType;
+  topic?: TopicThumb;
   category?: string;
   title: string;
   summary?: string;
@@ -225,8 +234,8 @@ export function InsightRow({
 }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? "button" : undefined} accessibilityLabel={accessibilityLabel ?? title} style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.surfaceMuted }]}>
-      {thumb ? <Texture source={thumb} style={styles.thumb} /> : null}
-      <View style={[styles.rowBody, !thumb && { marginLeft: 0 }, !last && styles.rowDivided]}>
+      {thumb ? <Texture source={thumb} style={styles.thumb} /> : topic ? <TopicArt {...topic} unit={1.5} style={styles.thumb} /> : null}
+      <View style={[styles.rowBody, !thumb && !topic && { marginLeft: 0 }, !last && styles.rowDivided]}>
         <View style={{ flex: 1 }}>
           {category || understood ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -260,11 +269,11 @@ export function InsightRow({
   );
 }
 
-/** A source as a small row: texture thumb, title, publisher/date. */
+/** A source as a small row: its image if it has a meaningful one, else the document object; title, publisher/date. */
 export function SourceCard({ title, meta, thumb, onPress }: { title: string; meta?: string; thumb?: ImageSourcePropType; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? "link" : undefined} style={({ pressed }) => [styles.source, pressed && { opacity: 0.7 }]}>
-      {thumb ? <Texture source={thumb} style={styles.sourceThumb} /> : <View style={[styles.sourceThumb, { backgroundColor: color.surfaceMuted }]} />}
+      {thumb ? <Texture source={thumb} style={styles.sourceThumb} /> : <TopicArt kind="document" unit={1} style={[styles.sourceThumb, { backgroundColor: color.surfaceMuted }]} />}
       <View style={{ flex: 1 }}>
         <T style={styles.sourceTitle} numberOfLines={2}>
           {title}

@@ -6,9 +6,8 @@ import { api } from "@/api";
 import { Icon } from "@/components/Icon";
 import { ListCard, SectionHeader } from "@/components/system";
 import { T } from "@/components/Text";
-import { Texture } from "@/components/Texture";
 import { Button, Gutter, Screen } from "@/components/ui";
-import { storyImageFor } from "@/content/imagery";
+import { TopicArt } from "@/components/TopicArt";
 import { useApi } from "@/lib/hooks";
 import { consumeVerb, hostOf, SOURCE_TYPE_LABEL, STAGE_COPY } from "@/lib/resources";
 import { color, depth, font, glow, space, warm } from "@/theme/tokens";
@@ -94,7 +93,8 @@ function QueueRow({ r, last }: { r: Resource; last: boolean }) {
       accessibilityLabel={`${r.title}. ${queueStatus(r)}.`}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.surfaceMuted }]}
     >
-      <Texture source={storyImageFor(r.matchedConceptIds)} style={styles.thumb} />
+      {/* Decorative: the saved source's topic (or a plain document when it maps to none). */}
+      <TopicArt conceptIds={r.matchedConceptIds} fallback="document" unit={1.5} style={styles.thumb} />
       <View style={[styles.rowBody, !last && styles.divided]}>
         <View style={{ flex: 1 }}>
           <T style={styles.meta} numberOfLines={1}>

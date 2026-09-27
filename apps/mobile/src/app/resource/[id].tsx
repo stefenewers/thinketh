@@ -3,12 +3,11 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { Concept, Resource, ResourceIdea, TeachDeltaResponse } from "@thinketh/contracts";
 import { api } from "@/api";
-import { BriefRow, BriefSection, DotLine, TextureHeader } from "@/components/brief/Brief";
+import { ArtHeader, BriefRow, BriefSection, DotLine } from "@/components/brief/Brief";
 import { Icon } from "@/components/Icon";
 import { T } from "@/components/Text";
 import { Button, ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { AppTopBar, ListCard, SegmentedTabs } from "@/components/system";
-import { imageFor } from "@/content/imagery";
 import { openExternal } from "@/lib/links";
 import { StageSteps } from "@/components/StageSteps";
 import { consumeVerb, hostOf, READ_VIA_COPY, RELEVANCE_LABEL, SOURCE_TYPE_LABEL, sourceDate, STAGE_COPY } from "@/lib/resources";
@@ -195,8 +194,8 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
 
   return (
     <Screen topInset={false} contentStyle={{ paddingTop: 0 }}>
-      <TextureHeader hero source={imageFor(r.matchedConceptIds)} onBack={goBack} />
-      <Gutter style={{ marginTop: -space.l }}>
+      <ArtHeader conceptIds={r.matchedConceptIds} fallback="document" onBack={goBack} />
+      <Gutter>
         <T style={styles.typeLabel}>{SOURCE_TYPE_LABEL[r.sourceType]}</T>
         <T style={styles.title} accessibilityRole="header">
           {r.title}
