@@ -18,6 +18,7 @@ import { T } from "@/components/Text";
 import { ErrorState, Gutter, LoadingState, Screen } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile";
+import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { improved, isToday, relativeTime, significanceLabel, skipLabel, todaysTransitions, understoodDevelopmentIds } from "@/lib/knowledge";
 import { color, depth, font, glow, radius, space } from "@/theme/tokens";
@@ -240,7 +241,7 @@ function HomeTopBar() {
   return (
     <Gutter style={[styles.topBar, { paddingTop: top }]}>
       {/* Long-press opens dev-only demo controls (reset, adapter health). */}
-      <Pressable onLongPress={() => router.push("/demo")} delayLongPress={600} hitSlop={12} accessible={false} style={styles.brand}>
+      <Pressable onLongPress={DEMO_CONTROLS ? () => router.push("/demo") : undefined} delayLongPress={600} hitSlop={12} accessible={false} style={styles.brand}>
         <Wordmark height={22} />
       </Pressable>
       <View style={{ flexDirection: "row", gap: space.s }}>

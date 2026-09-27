@@ -60,7 +60,7 @@ type ButtonProps = Omit<PressableProps, "children"> & {
   style?: StyleProp<ViewStyle>;
 };
 
-// primary = charcoal; decisive = coral (reserved for the learning moment).
+// primary = charcoal; decisive = charcoal with a coral arrow (the learning moment: a signal, not a fill).
 export function Button({ label, kind = "primary", icon, loading, style, disabled, onPress, ...rest }: ButtonProps) {
   const filled = kind === "primary" || kind === "decisive";
   const fg = filled ? color.onInk : color.ink;
@@ -76,7 +76,7 @@ export function Button({ label, kind = "primary", icon, loading, style, disabled
       style={({ pressed }) => [
         styles.button,
         kind === "primary" && { backgroundColor: color.ink },
-        kind === "decisive" && { backgroundColor: color.coral },
+        kind === "decisive" && { backgroundColor: color.ink },
         kind === "secondary" && { borderWidth: 1, borderColor: color.edge, backgroundColor: color.panel },
         kind === "quiet" && { paddingHorizontal: 0, minHeight: 44 },
         (disabled || loading) && { opacity: 0.4 },
@@ -90,7 +90,7 @@ export function Button({ label, kind = "primary", icon, loading, style, disabled
       ) : (
         <>
           <T style={[styles.buttonLabel, { color: fg }]}>{label}</T>
-          {icon ? <Icon name={icon} size={16} color={fg} /> : null}
+          {icon ? <Icon name={icon} size={16} color={kind === "decisive" ? color.coral : fg} /> : null}
         </>
       )}
     </Pressable>

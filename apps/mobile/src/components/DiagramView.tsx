@@ -65,6 +65,6 @@ const styles = StyleSheet.create({
   before: { padding: space.l, borderRadius: radius.surface, backgroundColor: color.fog, gap: space.s },
   beforeText: { color: color.ink2, fontSize: 15, lineHeight: 22 },
   arrow: { alignItems: "center", paddingVertical: space.m, transform: [{ rotate: "90deg" }] },
-  after: { padding: space.l, borderRadius: radius.surface, backgroundColor: color.coralTint, borderWidth: 1, borderColor: color.coral, gap: space.s },
+  after: { padding: space.l, borderRadius: radius.surface, backgroundColor: color.canvas, borderWidth: 1, borderColor: color.coral, gap: space.s },
   afterText: { fontFamily: font.sansMedium, fontSize: 16, lineHeight: 23, color: color.ink },
 });

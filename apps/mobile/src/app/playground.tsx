@@ -26,6 +26,7 @@ import { Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, type DotTone } 
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
 import { Button, Divider } from "@/components/ui";
 import { useRoomChannel } from "@/lib/roomChannel";
+import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { fmt2 } from "@/lib/knowledge";
 import { color, font, gutter, radius, shadow, space } from "@/theme/tokens";
 
@@ -164,7 +165,7 @@ export default function PlaygroundScreen() {
           {following ? (
             <Pressable
               onPress={() => setFollowMuse((f) => !f)}
-              onLongPress={() => setShowDiag((v) => !v)}
+              onLongPress={DEMO_CONTROLS ? () => setShowDiag((v) => !v) : undefined}
               delayLongPress={600}
               accessibilityRole="button"
               accessibilityState={{ selected: followMuse }}
@@ -180,7 +181,7 @@ export default function PlaygroundScreen() {
             </Pressable>
           ) : (
             // Long-press shows the room's technical provenance (dev/demo diagnostics); never shown by default.
-            <Pressable onLongPress={() => setShowDiag((v) => !v)} delayLongPress={600} accessible={false}>
+            <Pressable onLongPress={DEMO_CONTROLS ? () => setShowDiag((v) => !v) : undefined} delayLongPress={600} accessible={false}>
               <T style={styles.headerTitle} accessibilityRole="header">
                 Playground
               </T>
