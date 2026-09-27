@@ -68,6 +68,8 @@ export type AgentToolSpec = {
   name: string;
   description: string;
   params: Record<string, Param & { required?: boolean }>;
+  /** Takes seconds (server + Claude): the agent says a short line first, and speech can't abandon the call. */
+  slow?: boolean;
 };
 
 const s = (description: string, extra: Partial<Param> & { required?: boolean } = {}) => ({ type: "string" as const, description, ...extra });
@@ -85,14 +87,15 @@ export const AGENT_TOOLS = [
       "Thinketh's own facts about the thing on screen (or a given concept/development/resource id): what it is, what changed, and what this user already knows. Use for 'explain this' instead of guessing.",
     params: {
       kind: s("Optional: concept, development or resource. Omit to use the current screen's focus.", { enum: ["concept", "development", "resource"] }),
-      id: s("Optional id from a previous tool result. Omit to use the current screen's focus."),
+      id: s("Optional id from a previous tool result or the Catch Me Up briefing. Omit to use the current screen's focus."),
     },
   },
   {
     name: "ask_thinketh",
     description:
-      "Answer a factual question from the user's Thinketh sources and memory (the same engine as the Ask tab). Returns the answer and its source titles. Use for questions you can't answer from context.",
+      "Answer a question about AI developments and ideas from the user's Thinketh sources and memory (the same engine as the Ask tab). Returns the answer and its source titles. Not for questions about how the app works: answer those from the app map in your instructions.",
     params: { question: s("The user's question, in their words.", { required: true }) },
+    slow: true,
   },
   {
     name: "find_concept",

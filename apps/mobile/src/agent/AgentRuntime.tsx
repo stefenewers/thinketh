@@ -57,6 +57,18 @@ function briefingContext(session: VoiceSession): string {
   ].join("\n");
 }
 
+/** The briefing's developments with their ids, so "this one" can be explained or opened mid-briefing. */
+async function briefingDevelopments(): Promise<string | null> {
+  const today = await api.getTodayBrief();
+  if (!today.developments.length) return null;
+  const hero = today.brief.heroDevelopmentId;
+  const ordered = [...today.developments].sort((a, b) => Number(b.id === hero) - Number(a.id === hero) || b.significance - a.significance);
+  return [
+    "[Catch Me Up developments] The developments in this briefing, in order, with the ids to pass to explain_focus (kind development) or open_development:",
+    ...ordered.map((d) => `- "${d.title}" (id ${d.id})`),
+  ].join("\n");
+}
+
 /** Same words as the server's assist opening (packages/intelligence/src/adapters/voice.ts), for servers that predate it. */
 const ASSIST_OPENING_FALLBACK = "I'm here. What would you like to look at?";
 
@@ -186,6 +198,17 @@ function Controller({ children }: { children: ReactNode }) {
     [sendContextualUpdate],
   );
 
+  /** Catch Me Up: follow the briefing with its development ids (best effort; the briefing works without them). */
+  const sendBriefingDevelopments = useCallback(() => {
+    const mine = epoch.current;
+    briefingDevelopments()
+      .then((text) => {
+        if (!text || epoch.current !== mine || statusRef.current !== "live") return;
+        sendContextualUpdate(text, { contextId: "briefing_developments" });
+      })
+      .catch(() => {});
+  }, [sendContextualUpdate]);
+
   // Client tools: built per conversation (fresh dedupe and loop guards); dependencies are read through refs at call time.
   const buildTools = useCallback(() => {
     const raw = createAgentTools({
@@ -308,6 +331,7 @@ function Controller({ children }: { children: ReactNode }) {
                 // The agent still has its own opening.
               }
               sendScreenContext(true);
+              if (next === "catch_up") sendBriefingDevelopments();
             },
             onMessage: ({ message, role }) => {
               if (stale()) return;
@@ -372,7 +396,7 @@ function Controller({ children }: { children: ReactNode }) {
       };
       return run(true);
     },
-    [buildTools, pushTurn, sendContextualUpdate, sendScreenContext, setActivity, setStatusBoth, setVolume, settle, startSession, stopTalking],
+    [buildTools, pushTurn, sendBriefingDevelopments, sendContextualUpdate, sendScreenContext, setActivity, setStatusBoth, setVolume, settle, startSession, stopTalking],
   );
 
   // A silenced reply stays silent until Thinketh's turn is over; the next reply is heard again.
@@ -476,6 +500,7 @@ function Controller({ children }: { children: ReactNode }) {
             setActivity("catch_up");
             try {
               sendContextualUpdate(briefingContext(session.current));
+              sendBriefingDevelopments();
               sendUserMessage("Catch me up.");
               pushTurn({ role: "user", text: "Catch me up." });
               setThinkingSince(Date.now());
@@ -518,7 +543,7 @@ function Controller({ children }: { children: ReactNode }) {
         return s;
       },
     }),
-    [connect, pushTurn, safeMute, sendContextualUpdate, sendUserMessage, setActivity, settle, stopTalking],
+    [connect, pushTurn, safeMute, sendBriefingDevelopments, sendContextualUpdate, sendUserMessage, setActivity, settle, stopTalking],
   );
 
   const lines = captionLines(caption, now);

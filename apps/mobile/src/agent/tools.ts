@@ -333,10 +333,16 @@ export function createAgentTools(deps: ToolDeps): Record<AgentToolName, ToolHand
       const script = deps.session.briefScript();
       if (!script) return fail("Today's briefing isn't available right now.");
       deps.session.setActivity("catch_up");
+      // Ids for "this one" mid-briefing (explain_focus / open_development). Best effort.
+      const developments = await deps.api
+        .getTodayBrief()
+        .then((t) => t.developments.map((d) => ({ id: d.id, title: d.title })))
+        .catch(() => undefined);
       return {
         ok: true,
         activity: "catch_up",
         briefing: script,
+        ...(developments?.length ? { developments } : {}),
         how: "Deliver this as the Catch Me Up, briefly, one development at a time. Stop when the user interrupts or asks for something else.",
       };
     },

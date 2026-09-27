@@ -61,6 +61,10 @@ function toolConfig(t: AgentToolSpec): Json {
     // The app answers every call with a structured result the agent must read before speaking.
     expects_response: true,
     response_timeout_secs: 20,
+    // Slow tools: a short line first ("One sec."), so the silence isn't mistaken for a dropped call,
+    // and nothing the mic picks up while it runs (the user, or a room) abandons it.
+    force_pre_tool_speech: !!t.slow,
+    disable_interruptions: !!t.slow,
   };
 }
 
@@ -109,7 +113,8 @@ async function main() {
   const ov = before.platform_settings?.overrides ?? {};
 
   console.log("\nPlan:");
-  for (const t of AGENT_TOOLS) console.log(`  tool ${t.name.padEnd(20)} ${existing.has(t.name) ? "update" : "create"} (client, expects a response)`);
+  for (const t of AGENT_TOOLS as readonly AgentToolSpec[])
+    console.log(`  tool ${t.name.padEnd(20)} ${existing.has(t.name) ? "update" : "create"} (client, expects a response${t.slow ? "; speaks first, not interruptible" : ""})`);
   console.log(`  prompt: general assistant + Catch Me Up activities (${prompt.length} chars; was ${String(cc.agent?.prompt?.prompt ?? "").length})`);
   console.log(`  first message: unchanged (Catch Me Up); the app overrides it for general assistance`);
   console.log(`  allow override: agent.first_message (was ${ov.conversation_config_override?.agent?.first_message ?? false})`);
