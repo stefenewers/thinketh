@@ -2,7 +2,8 @@ import type { BriefResponse, KnowledgeResponse, Resource } from "@thinketh/contr
 import { exploreGroups, type Recommendation } from "@/content/demo";
 import { improvedTodayIds, levelOf } from "@/lib/knowledge";
 
-export type Pick = Recommendation & { resourceId?: string };
+/** `conceptIds`: what the pick is about, for its topic art. */
+export type Pick = Recommendation & { resourceId?: string; conceptIds?: string[] };
 export type Group = { reason: string; items: Pick[] };
 
 const KNOWN = new Set(["strong", "intermediate"]);
@@ -96,6 +97,9 @@ export function buildGroups(today: BriefResponse, knowledge: KnowledgeResponse, 
     );
     if (item) add(g.reason, item);
   }
-  return groups;
+  // What each pick is about (for its topic art): its concept, its development's concepts, or its source's.
+  const conceptIdsOf = (i: Pick): string[] =>
+    i.conceptId ? [i.conceptId] : i.developmentId ? (today.developments.find((d) => d.id === i.developmentId)?.conceptIds ?? []) : i.resourceId ? (resources.find((r) => r.id === i.resourceId)?.matchedConceptIds ?? []) : [];
+  return groups.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, conceptIds: conceptIdsOf(i) })) }));
 }
 
