@@ -15,7 +15,7 @@ export const PLAYGROUND_AVAILABLE = !USE_MOCK_API && !!API_URL;
 
 export class PlaygroundError extends Error {}
 
-async function call(method: "GET" | "POST", path: string, body?: unknown, opts: { as?: string; timeoutMs?: number } = {}): Promise<PlaygroundRoom> {
+export async function call(method: "GET" | "POST", path: string, body?: unknown, opts: { as?: string; timeoutMs?: number } = {}): Promise<PlaygroundRoom> {
   if (!PLAYGROUND_AVAILABLE) throw new PlaygroundError("The Playground needs the Thinketh server.");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? TIMEOUT_MS);

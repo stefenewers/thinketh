@@ -50,3 +50,14 @@ export const PROPS = {
   window: prop(require("../../../../assets/playground/pixel-office/window.png"), 32, 32, "Environment/Environment.png x0 y0 32×32 (window)"),
   plant: prop(require("../../../../assets/playground/pixel-office/plant.png"), 20, 28, "Props/Props.png x294 y196 20×28 (potted plant)"),
 } as const;
+
+// Grokbot, the optional visiting challenger: drawn for Thinketh from the provided character design (a black
+// ball with two slanted eye marks), in the same strip format as the agents (scripts/pixel/grokbot.mjs).
+// Idle: bob, glance, blink. Moving: a small hop with a squash on landing.
+export const GROKBOT_SPRITE: SpriteStrip = {
+  source: require("../../../../assets/playground/grokbot/grokbot.png"),
+  frame: 32 * PT_PER_PX,
+  frames: 15,
+  clips: { idle: { start: 0, count: 5, fps: 4 }, step: { start: 5, count: 10, fps: 12 } },
+  provenance: "Original pixel art (scripts/pixel/grokbot.mjs) from the provided Grokbot design; not from the Pixel Office pack",
+};
