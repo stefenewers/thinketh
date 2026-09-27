@@ -29,12 +29,16 @@ export class SignInRequired extends Error {
     super("Sign in to use your own Mind.");
   }
 }
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  code?: string;
+  status?: number;
+}
 
 let state: SessionState = { mode: DEFAULT_MODE, status: "loading", session: null, anonymousAvailable: true };
 const listeners = new Set<(s: SessionState) => void>();
 let loading: Promise<void> | undefined;
-let refreshing: Promise<Session | null> | undefined;
+// One in-flight refresh or anonymous sign-up at a time: screens mounting together share it.
+let acquiring: Promise<Session | null> | undefined;
 
 function publish(patch: Partial<SessionState>) {
   state = { ...state, ...patch };
@@ -74,7 +78,8 @@ async function auth(path: string, body: unknown, token?: string): Promise<Record
   if (!res.ok) {
     const message = String(json.msg ?? json.error_description ?? json.message ?? `Sign-in failed (${res.status})`);
     const err = new AuthError(message);
-    (err as AuthError & { code?: string }).code = String(json.error_code ?? json.code ?? "");
+    err.code = String(json.error_code ?? json.code ?? "");
+    err.status = res.status;
     throw err;
   }
   return json;
@@ -104,34 +109,44 @@ export async function ensureSession(): Promise<Session | null> {
   if (state.mode !== "personal") return null;
   const s = state.session;
   if (s && s.expiresAt - Date.now() > REFRESH_EARLY_MS) return s;
-  if (s) {
-    refreshing ??= auth("/token?grant_type=refresh_token", { refresh_token: s.refreshToken })
-      .then(async (json) => {
-        const next = toSession(json);
-        await adopt(next);
-        return next;
-      })
-      .catch(async () => {
-        // The refresh token was revoked or expired: sign in again.
-        await adopt(null);
-        return null;
-      })
-      .finally(() => {
-        refreshing = undefined;
-      });
-    return refreshing;
-  }
-  if (state.anonymousAvailable) {
-    try {
-      const next = toSession(await auth("/signup", {}));
-      await adopt(next);
-      return next;
-    } catch {
-      // The project doesn't allow anonymous sign-ins: the person signs in with email instead.
-      publish({ anonymousAvailable: false });
+  if (!s && !state.anonymousAvailable) return null;
+  acquiring ??= (s ? refresh(s) : signUpAnonymously()).finally(() => {
+    acquiring = undefined;
+  });
+  return acquiring;
+}
+
+/** Supabase rejected the request itself (not a network failure or a server outage). */
+function rejected(err: unknown): boolean {
+  return err instanceof AuthError && err.status !== undefined && err.status >= 400 && err.status < 500;
+}
+
+async function refresh(s: Session): Promise<Session | null> {
+  try {
+    const next = toSession(await auth("/token?grant_type=refresh_token", { refresh_token: s.refreshToken }));
+    await adopt(next);
+    return next;
+  } catch (err) {
+    // The refresh token was revoked or expired: sign in again.
+    if (rejected(err)) {
+      await adopt(null);
+      return null;
     }
+    // Offline or Supabase unreachable: keep the session (an anonymous one can't be recovered) and retry next time.
+    return s;
   }
-  return null;
+}
+
+async function signUpAnonymously(): Promise<Session | null> {
+  try {
+    const next = toSession(await auth("/signup", {}));
+    await adopt(next);
+    return next;
+  } catch (err) {
+    // The project doesn't allow anonymous sign-ins: the person signs in with email instead.
+    if (rejected(err)) publish({ anonymousAvailable: false });
+    return null;
+  }
 }
 
 /** Headers that tell the server who this is. Demo mode names the seeded persona; personal mode proves it. */

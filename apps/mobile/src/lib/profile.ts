@@ -42,9 +42,9 @@ const KEY = "thinketh.profile.v1"; // demo mode, and profiles saved before serve
 const cacheKey = (userId: string) => `thinketh.profile.v2.${userId}`;
 let current: LearnerProfile | null | undefined; // undefined = not loaded yet
 let loadedFor: string | null | undefined;
-const listeners = new Set<(p: LearnerProfile | null) => void>();
+const listeners = new Set<(p: LearnerProfile | null | undefined) => void>();
 
-function publish(p: LearnerProfile | null) {
+function publish(p: LearnerProfile | null | undefined) {
   current = p;
   for (const l of listeners) l(p);
 }
@@ -121,10 +121,11 @@ export async function clearProfile(): Promise<void> {
   }
 }
 
-/** Forget the loaded profile (after signing in or out, or switching modes). */
+/** Forget the loaded profile (after signing in or out, or switching modes); mounted screens reload it for the new identity. */
 export function resetProfileCache(): void {
-  current = undefined;
   loadedFor = undefined;
+  publish(undefined);
+  if (listeners.size) void load().catch(() => {});
 }
 
 /** `undefined` while loading, `null` before onboarding, else the saved profile. */

@@ -139,13 +139,16 @@ export function createAgentTools(deps: ToolDeps): Record<AgentToolName, ToolHand
     return (await knowledge()).items.find((i) => i.concept.id === id) ?? null;
   }
 
-  /** The focus to act on: an explicit id, else what's on screen. */
+  /** The focus to act on: an explicit id (its kind given, or read from its prefix), else what's on screen. */
   function focusOf(kind?: string, id?: string): { kind: "concept" | "development" | "resource"; id: string } | null {
     if (id && (kind === "concept" || kind === "development" || kind === "resource")) return { kind, id };
     const f = deps.screen()?.focus;
-    if (f && (f.kind === "concept" || f.kind === "development" || f.kind === "resource")) return { kind: f.kind, id: f.id };
-    if (id) return { kind: "concept", id };
-    return null;
+    const onScreen = f && (f.kind === "concept" || f.kind === "development" || f.kind === "resource") ? { kind: f.kind, id: f.id } : null;
+    if (id) {
+      if (onScreen?.id === id) return onScreen;
+      return { kind: id.startsWith("dev_") ? "development" : id.startsWith("res_") ? "resource" : "concept", id };
+    }
+    return onScreen;
   }
 
   /** The development that best represents a concept today (the hero first). */

@@ -126,7 +126,9 @@ try {
 
 /** A person: portrait if we have one, else their initial on a soft tint. */
 export function Avatar({ name, size = 32, tint, ink }: { name: string; size?: number; tint?: string; ink?: string }) {
-  const portrait = PORTRAITS[name.trim().toLowerCase()];
+  // Keyed by first name, so a profile's full name ("Stefen Ewers") still finds its portrait.
+  const key = name.trim().toLowerCase();
+  const portrait = PORTRAITS[key] ?? PORTRAITS[key.split(/\s+/)[0] ?? ""];
   const box = { width: size, height: size, borderRadius: size / 2 };
   if (portrait) return <Texture source={portrait} style={[box, { backgroundColor: color.surfaceMuted }]} />;
   return (

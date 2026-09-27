@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { normalizeVisualization, visualizationFromDelta, type VisualizationSpec } from "@thinketh/contracts";
 import { api } from "@/api";
+import { currentUserId } from "@/lib/session";
 
-// Plans are about the topic, not about progress: keep them for the session so reopening
-// "Visualize this" is instant. The server caches too; this saves the round trip.
+// Keep plans for the session so reopening "Visualize this" is instant. Plans are framed by the
+// learner's delta, so they're kept per identity: switching accounts never shows another's plan.
 const plans = new Map<string, VisualizationSpec>();
+const planKey = (developmentId: string) => `${currentUserId() ?? "anon"}:${developmentId}`;
 
 type Result = { key: string; spec: VisualizationSpec | null; failed: boolean };
 
@@ -16,15 +18,15 @@ export function useVisualization(developmentId: string | undefined) {
   const [nonce, setNonce] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const key = `${developmentId}:${nonce}`;
-  const cached = developmentId ? plans.get(developmentId) : undefined;
+  const cached = developmentId ? plans.get(planKey(developmentId)) : undefined;
 
   useEffect(() => {
-    if (!developmentId || plans.has(developmentId)) return;
+    if (!developmentId || plans.has(planKey(developmentId))) return;
     let live = true;
     (async () => {
       try {
         const spec = normalizeVisualization(await api.visualize({ developmentId }));
-        plans.set(developmentId, spec);
+        plans.set(planKey(developmentId), spec);
         if (live) setResult({ key, spec, failed: false });
       } catch {
         try {
