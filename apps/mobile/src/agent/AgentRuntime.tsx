@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { AppState } from "react-native";
 import { router, type Href } from "expo-router";
 import { ConversationProvider, useConversationControls, useConversationInput, useConversationMode } from "@elevenlabs/react-native";
+import { AudioSession } from "@livekit/react-native";
 import { useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import type { AgentActivity, VoiceSession } from "@thinketh/contracts";
 import { api } from "@/api";
@@ -46,6 +47,13 @@ const THINKING_MAX_MS = 10_000;
  * agent not speaking, never heard anything), reconnect once for a fresh microphone.
  */
 const DEAD_MIC_MS = 4000;
+/**
+ * Before that reconnect, release leftover activations of the shared iOS audio session. Two managers
+ * activate it (LiveKit's automatic one and the SDK's per-call start/stop); if a hold is left over, iOS can
+ * drop the real session while the count still says "active", and every later call skips re-activating it.
+ * Deactivating a few times lets the count reach zero so the next call activates for real.
+ */
+const SESSION_RELEASES = 3;
 const MAX_TURNS = 20;
 
 const log = (event: string, detail: Record<string, unknown> = {}) => {
@@ -500,14 +508,24 @@ function Controller({ children }: { children: ReactNode }) {
       clearInterval(id);
       if (micRecovered.current) {
         log("mic still silent after reconnect");
-        setNotice("Thinketh can't hear your microphone. Check that no Bluetooth headset has it, or type instead.");
+        setNotice("Thinketh can't hear your microphone. Close and reopen Thinketh to reset it, or type instead.");
         return;
       }
       micRecovered.current = true;
       const again = activityRef.current;
-      log("mic silent; reconnecting for a fresh microphone", { activity: again });
+      log("mic silent; resetting the audio session and reconnecting", { activity: again });
       settle(null);
-      setTimeout(() => void connectRef.current(again), 600);
+      // After the call's own teardown has run: release leftover holds, then start a fresh call.
+      setTimeout(async () => {
+        for (let i = 0; i < SESSION_RELEASES; i++) {
+          try {
+            await AudioSession.stopAudioSession();
+          } catch {
+            break; // already fully inactive
+          }
+        }
+        void connectRef.current(again);
+      }, 800);
     }, 250);
     return () => clearInterval(id);
   }, [status, getInputVolume, settle]);
