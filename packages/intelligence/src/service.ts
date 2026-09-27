@@ -17,7 +17,7 @@ import type {
   DevelopmentDetailResponse,
   DiagnosticAnswerResponse,
   DiagnosticSelectResponse,
-  DiagramSpec,
+  VisualizationSpec,
   FeedbackKind,
   FeedbackResponse,
   KnowledgeResponse,
@@ -41,7 +41,7 @@ import { MongoSemanticStore } from "./adapters/semantic.ts";
 import { ElevenLabsVoice } from "./adapters/voice.ts";
 import type { Adapters } from "./adapters/registry.ts";
 import { lexicalScore } from "./adapters/model/deterministic.ts";
-import type { AdapterName, AskContext, LearningContext, RawSourceBundle } from "./adapters/types.ts";
+import type { AdapterName, AskContext, LearningContext, RawSourceBundle, VisualizeContext } from "./adapters/types.ts";
 import type { ThinkethConfig } from "./config.ts";
 import { buildBrief } from "./engine/brief.ts";
 import { computeDelta, focusConceptId } from "./engine/delta.ts";
@@ -111,7 +111,7 @@ export class ThinkethService {
   private readonly diagnostics = new Map<string, DiagnosticItem>();
   private readonly sharedPages = new Map<string, { at: number; p: ReturnType<typeof fetchPage> }>();
   private readonly phrasedDeltas = new Map<string, DeltaExplanation>();
-  private readonly generated = new Map<string, DiagramSpec | MemoryAid>();
+  private readonly generated = new Map<string, VisualizationSpec | MemoryAid>();
   private readonly userLocks = new Map<string, Promise<unknown>>();
   private readonly config: ThinkethConfig;
   private readonly seed: SeedCorpus;
@@ -643,15 +643,35 @@ export class ThinkethService {
     return this.learningContext(userId, conceptId, states, development);
   }
 
-  async visualize(userId: string, input: { conceptId?: string; developmentId?: string }): Promise<DiagramSpec> {
-    const ctx = await this.resolveLearningTarget(userId, input);
-    const seeded = this.seed.diagrams[ctx.concept.id];
-    if (seeded) return seeded;
-    const key = `diagram:${ctx.concept.id}:${ctx.development?.id ?? ""}`;
-    const cached = this.generated.get(key) as DiagramSpec | undefined;
+  /**
+   * "Visualize this": Claude plans the diagram for the topic (grammar, entities, relationships);
+   * curated or delta-derived plans stand in when it can't. A plan is about the topic, not the
+   * learner's progress, so a live plan is cached per development and reopening is instant.
+   */
+  async visualize(userId: string, input: { conceptId?: string; developmentId?: string }): Promise<VisualizationSpec> {
+    const learning = await this.resolveLearningTarget(userId, input);
+    const key = `visualization:${learning.development?.id ?? learning.concept.id}`;
+    const cached = this.generated.get(key) as VisualizationSpec | undefined;
     if (cached) return cached;
+    const states = await this.statesFor(userId);
+    const delta = learning.development ? this.deterministicDelta(userId, learning.development, states) : undefined;
+    const topicConcepts = learning.development?.conceptIds ?? [learning.concept.id];
+    const ctx: VisualizeContext = {
+      ...learning,
+      ...(delta
+        ? { delta: { whatHappened: delta.whatHappened, alreadyKnew: delta.alreadyKnew, whatChanged: delta.whatChanged, whyItMattersToYou: delta.whyItMattersToYou, mentalModelChange: delta.mentalModelChange } }
+        : {}),
+      known: topicConcepts.flatMap((id) => {
+        const s = states.get(id);
+        const c = this.concepts.get(id);
+        return s && c ? [{ concept: c.name, level: knowledgeLevel(s) }] : [];
+      }),
+    };
     const model = this.model();
-    const r = await guarded("claude", "visualize", model ? () => model.visualize(ctx) : undefined, () => this.adapters.fallbackModel.visualize(ctx), this.claudeTimeout());
+    // Planning a diagram measured 7-14 s live; the sheet shows a skeleton meanwhile and the plan is
+    // cached, so this one call gets the full Claude timeout rather than the 12 s request cap.
+    const r = await guarded("claude", "visualize", model ? () => model.visualize(ctx) : undefined, () => this.adapters.fallbackModel.visualize(ctx), this.config.anthropic.timeoutMs);
+    logEvent("visualize.planned", { userId, key, source: r.source, type: r.value.visualizationType, nodes: r.value.nodes.length });
     if (r.source === "live") this.generated.set(key, r.value);
     return r.value;
   }

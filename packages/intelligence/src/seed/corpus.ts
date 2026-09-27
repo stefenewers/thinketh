@@ -10,7 +10,7 @@ import { DAY_MS } from "../util.ts";
 import { DIAGNOSTICS } from "./diagnostics.ts";
 import { replayHistory } from "./history.ts";
 import { buildPersonas, PLAYGROUND_DIAGNOSTICS } from "./personas.ts";
-import { DIAGRAMS, MEMORY_AIDS } from "./learning.ts";
+import { DIAGRAMS, MEMORY_AIDS, VISUALIZATIONS } from "./learning.ts";
 import type { DevelopmentMeta, SeedCorpus } from "./types.ts";
 
 export const DEMO_DOMAIN = "AI agents";
@@ -642,6 +642,7 @@ export function buildSeed(now: Date = new Date()): SeedCorpus {
       },
     ],
     diagrams: DIAGRAMS,
+    visualizations: VISUALIZATIONS,
     memoryAids: MEMORY_AIDS,
     // Upstream ingestion run (before developments reach the brief). Matches the
     // mobile fallback fixtures and the runbook: 143 filtered in total, of which the

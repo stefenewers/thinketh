@@ -92,7 +92,7 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
 
   return {
     model,
-    fallbackModel: new DeterministicModel({ diagrams: seed.diagrams, memoryAids: seed.memoryAids }),
+    fallbackModel: new DeterministicModel({ diagrams: seed.diagrams, visualizations: seed.visualizations, memoryAids: seed.memoryAids }),
     memory,
     localMemory: new LocalMemory(seed.memories),
     semantic,

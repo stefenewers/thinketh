@@ -9,7 +9,6 @@ import type {
   Concept,
   DeltaExplanation,
   Development,
-  DiagramSpec,
   KnowledgeObservation,
   KnowledgeState,
   KnowledgeStateTransition,
@@ -18,6 +17,7 @@ import type {
   Source,
   PersonaProfile,
   VoiceSession,
+  VisualizationSpec,
 } from "../contracts.ts";
 import type { DiagnosticItem } from "../seed/types.ts";
 
@@ -87,6 +87,13 @@ export type LearningContext = {
   memories: MemoryItem[];
 };
 
+/** What the planner sees: the topic, what changed, what the learner already has, and nothing else. */
+export type VisualizeContext = LearningContext & {
+  delta?: Pick<DeltaExplanation, "whatHappened" | "alreadyKnew" | "whatChanged" | "whyItMattersToYou" | "mentalModelChange">;
+  /** The learner's level on this topic's concepts, from the knowledge state. */
+  known: { concept: string; level: string }[];
+};
+
 export type DeltaPhrasingContext = {
   delta: DeltaExplanation;
   development: Development;
@@ -133,7 +140,8 @@ export interface IntelligenceModel {
   generateTransferChallenge(input: TransferContext): Promise<TransferDraft>;
   gradeShortAnswer(input: { item: DiagnosticItem; answer: string }): Promise<ShortAnswerGrade>;
   makeItStick(input: LearningContext): Promise<MemoryAid>;
-  visualize(input: LearningContext): Promise<DiagramSpec>;
+  /** Plan a "Visualize this" diagram: choose the grammar, then the entities and relationships. */
+  visualize(input: VisualizeContext): Promise<VisualizationSpec>;
   ask(input: AskContext): Promise<AskResult>;
   /** Compare a user-supplied page with the user's knowledge. Language only; never sets knowledge state. */
   analyzeResource(input: ResourceContext): Promise<ResourceAnalysis>;

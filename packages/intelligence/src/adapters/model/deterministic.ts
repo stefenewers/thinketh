@@ -2,7 +2,18 @@
  * Deterministic IntelligenceModel: the always-available fallback. It returns
  * seeded content where it exists and simple, honest templates otherwise.
  */
-import type { Claim, Concept, DeltaExplanation, DiagramSpec, MemoryAid, Source } from "../../contracts.ts";
+import {
+  normalizeVisualization,
+  visualizationFromDelta,
+  visualizationFromDiagram,
+  type Claim,
+  type Concept,
+  type DeltaExplanation,
+  type DiagramSpec,
+  type MemoryAid,
+  type Source,
+  type VisualizationSpec,
+} from "../../contracts.ts";
 import { evaluateShortAnswerKeywords } from "../../engine/evaluation.ts";
 import { groundedFallback, TransferNotAssessableError, type TransferContext, type TransferDraft } from "../../engine/transfer.ts";
 import type { DiagnosticItem } from "../../seed/types.ts";
@@ -21,6 +32,7 @@ import type {
   DeltaPhrasingContext,
   IntelligenceModel,
   LearningContext,
+  VisualizeContext,
   NormalizedDevelopment,
   RawSourceBundle,
   ShortAnswerGrade,
@@ -47,9 +59,9 @@ function matchConcepts(text: string, concepts: Concept[]): string[] {
 export class DeterministicModel implements IntelligenceModel {
   readonly name = "deterministic" as const;
 
-  private readonly seeded: { diagrams: Record<string, DiagramSpec>; memoryAids: Record<string, MemoryAid> };
+  private readonly seeded: { diagrams: Record<string, DiagramSpec>; visualizations: Record<string, VisualizationSpec>; memoryAids: Record<string, MemoryAid> };
 
-  constructor(seeded: { diagrams: Record<string, DiagramSpec>; memoryAids: Record<string, MemoryAid> }) {
+  constructor(seeded: { diagrams: Record<string, DiagramSpec>; visualizations: Record<string, VisualizationSpec>; memoryAids: Record<string, MemoryAid> }) {
     this.seeded = seeded;
   }
 
@@ -156,19 +168,34 @@ export class DeterministicModel implements IntelligenceModel {
     };
   }
 
-  async visualize(ctx: LearningContext): Promise<DiagramSpec> {
-    const seeded = this.seeded.diagrams[ctx.concept.id];
-    if (seeded) return seeded;
-    return {
+  /**
+   * Honest fallbacks, best first: a curated plan for the concept; the concept's curated before/after
+   * diagram; the development's own delta (what you knew -> what changed); the concept among its
+   * neighbours. Never invents entities the seed doesn't contain.
+   */
+  async visualize(ctx: VisualizeContext): Promise<VisualizationSpec> {
+    const planned = this.seeded.visualizations[ctx.concept.id];
+    if (planned) return planned;
+    const diagram = this.seeded.diagrams[ctx.concept.id];
+    if (diagram) return visualizationFromDiagram(diagram);
+    if (ctx.delta && ctx.delta.alreadyKnew.length && ctx.delta.whatChanged.length) return visualizationFromDelta(ctx.delta, ctx.development?.title ?? ctx.concept.name);
+    const related = ctx.relatedConcepts.slice(0, 5);
+    return normalizeVisualization({
+      kind: "visualization",
+      visualizationType: "concept_map",
       title: `${ctx.concept.name} in context`,
-      teachingGoal: `See how ${ctx.concept.name} connects to what you already know.`,
+      subtitle: `How ${ctx.concept.name} connects to what you already know.`,
+      sections: [],
       nodes: [
-        { id: ctx.concept.id, label: ctx.concept.name, group: "shared" },
-        ...ctx.relatedConcepts.slice(0, 5).map((c) => ({ id: c.id, label: c.name, group: "before" as const })),
+        { id: ctx.concept.id, label: ctx.concept.name, emphasis: "primary" },
+        ...related.map((c) => ({ id: c.id, label: c.name, emphasis: "normal" as const })),
       ],
-      edges: ctx.relatedConcepts.slice(0, 5).map((c) => ({ from: c.id, to: ctx.concept.id, label: "relates to" })),
-      caption: ctx.concept.description,
-    };
+      edges: related.map((c) => ({ from: ctx.concept.id, to: c.id, relationship: "enables" as const, emphasis: "normal" as const })),
+      callouts: [],
+      takeawayLabel: "The idea",
+      takeaway: ctx.concept.description,
+      source: "delta",
+    });
   }
 
   async ask(ctx: AskContext): Promise<AskResult> {
@@ -194,3 +221,4 @@ export class DeterministicModel implements IntelligenceModel {
     return deterministicTeach(ctx);
   }
 }
+

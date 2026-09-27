@@ -7,7 +7,7 @@ import type {
   DiagnosticAnswerResponse,
   DiagnosticSelectRequest,
   DiagnosticSelectResponse,
-  DiagramSpec,
+  VisualizationSpec,
   FeedbackKind,
   FeedbackResponse,
   KnowledgeResponse,
@@ -32,7 +32,7 @@ export interface ThinkethApi {
   getKnowledge(): Promise<KnowledgeResponse>; // GET  /knowledge
   getConceptHistory(conceptId: string): Promise<ConceptHistoryResponse>; // GET  /knowledge/:conceptId/history
   ask(req: AskRequest): Promise<AskResponse>; // POST /ask
-  visualize(req: LearningRequest): Promise<DiagramSpec>; // POST /visualize
+  visualize(req: LearningRequest): Promise<VisualizationSpec>; // POST /visualize
   makeItStick(req: LearningRequest): Promise<MemoryAid>; // POST /make-it-stick
   createVoiceSession(): Promise<VoiceSession>; // POST /voice/session
   resetDemo(): Promise<void>; // POST /demo/reset

@@ -1,47 +1,36 @@
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from "@/lib/nav";
-import { api } from "@/api";
-import { DiagramView } from "@/components/DiagramView";
-import { T } from "@/components/Text";
-import { Button, ErrorState, Gutter, LoadingState, ModalHeader, Screen } from "@/components/ui";
-import { useApi } from "@/lib/hooks";
+import { Button, ErrorState, Gutter, ModalHeader, Screen } from "@/components/ui";
+import { VisualizationSkeleton, VisualizationView } from "@/components/visualization/VisualizationView";
+import { useVisualization } from "@/lib/visualizationCache";
 import { color, space } from "@/theme/tokens";
 
+// "Visualize this": the sheet opens at once with its header; the planner's diagram (or, if it
+// can't answer, the development's own before/after) settles in when ready. Reopening is instant.
 export default function VisualizeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: spec, error, loading, reload } = useApi(() => api.visualize({ developmentId: id }), [id]);
+  const { spec, loading, failed, retry } = useVisualization(id);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <ModalHeader title="Visualize this" onClose={() => goBack({ pathname: "/development/[id]", params: { id } })} />
-      {loading && !spec ? (
-        <LoadingState message="Drawing your old and new mental model…" />
-      ) : error || !spec ? (
-        <ErrorState onRetry={reload} />
+      {failed && !spec ? (
+        <ErrorState onRetry={retry} />
       ) : (
         <Screen topInset={false}>
           <Gutter>
-            <T variant="title" accessibilityRole="header">
-              {spec.title}
-            </T>
-            <T variant="support" style={{ marginTop: space.s }}>
-              {spec.teachingGoal}
-            </T>
-            <View style={{ marginTop: space.xxl }}>
-              <DiagramView spec={spec} />
-            </View>
-            <T variant="statement" style={{ marginTop: space.xl, fontSize: 19, lineHeight: 27 }}>
-              {spec.caption}
-            </T>
+            {loading || !spec ? <VisualizationSkeleton /> : <VisualizationView spec={spec} />}
             {/* Seeing the new model is not the same as having it: close the loop. */}
-            <Button
-              kind="decisive"
-              label="Check my understanding"
-              icon="arrow"
-              style={{ marginTop: space.xxl }}
-              onPress={() => router.replace({ pathname: "/diagnostic", params: { developmentId: id } })}
-            />
+            {spec && !loading ? (
+              <Button
+                kind="decisive"
+                label="Check my understanding"
+                icon="arrow"
+                style={{ marginTop: space.xl }}
+                onPress={() => router.replace({ pathname: "/diagnostic", params: { developmentId: id } })}
+              />
+            ) : null}
           </Gutter>
         </Screen>
       )}
