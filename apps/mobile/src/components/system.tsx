@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { BookGlyph } from "@/components/mind/world/Book";
 import { Pressable, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, G, Path } from "react-native-svg";
@@ -167,13 +168,20 @@ export function MetricStrip({ metrics, style }: { metrics: Metric[]; style?: Sty
 }
 
 /** Compact tile with a soft icon container: Your Mind · Ask Thinketh · Playground. */
-export function ActionTile({ icon, tint, ink, title, subtitle, accent, onPress }: { icon: IconName; tint: string; ink: string; title: string; subtitle: string; accent?: boolean; onPress: () => void }) {
+export function ActionTile({ icon, art, tint, ink, title, subtitle, accent, onPress }: { icon: IconName; art?: ReactNode; tint: string; ink: string; title: string; subtitle: string; accent?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}.`} style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
       <View style={styles.tileHead}>
-        <View style={[styles.tileIcon, { backgroundColor: tint }]}>
-          <Icon name={icon} size={20} color={ink} />
-        </View>
+        {/* A small picture of the destination when there is one; otherwise its icon. Decorative. */}
+        {art ? (
+          <View style={styles.tileArt} importantForAccessibility="no-hide-descendants">
+            {art}
+          </View>
+        ) : (
+          <View style={[styles.tileIcon, { backgroundColor: tint }]}>
+            <Icon name={icon} size={20} color={ink} />
+          </View>
+        )}
         <Icon name="arrow" size={14} color={color.ink3} />
       </View>
       <T style={styles.tileTitle} numberOfLines={2}>
@@ -271,11 +279,18 @@ export function SourceCard({ title, meta, thumb, onPress }: { title: string; met
   );
 }
 
-/** A concept as a quiet pill; active = coral dot (the concept in play). */
-export function ConceptChip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+/** A concept as a quiet pill; active = coral dot (the concept in play); book = it opens as a book in your Mind. */
+export function ConceptChip({ label, active, book, onPress }: { label: string; active?: boolean; book?: boolean; onPress?: () => void }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? "button" : undefined} style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={book ? `${label}. Open it in your Mind` : undefined}
+      style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
+    >
       {active ? <View style={styles.dot} /> : null}
+      {book ? <BookGlyph size={12} /> : null}
       <T style={styles.chipText}>{label}</T>
     </Pressable>
   );
@@ -375,6 +390,7 @@ const styles = StyleSheet.create({
   metricSub: { fontFamily: font.sans, fontSize: 12, lineHeight: 16, color: color.ink3 },
   tile: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 20, backgroundColor: color.canvas, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.05)", ...depth.card },
   tileHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  tileArt: { height: 42, justifyContent: "flex-end" },
   tileIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(22,22,22,0.04)" },
   tileTitle: { fontFamily: font.sansSemibold, fontSize: 14, lineHeight: 19, letterSpacing: -0.4, color: color.ink, marginTop: space.m },
   tileSub: { fontFamily: font.sans, fontSize: 12.5, lineHeight: 17, color: color.ink2, marginTop: 2, minHeight: 34 },

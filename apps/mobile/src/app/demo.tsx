@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { Redirect } from "expo-router";
+import { DEMO_CONTROLS } from "@/lib/devFlags";
 import { closeAll, goBack } from "@/lib/nav";
 import { api, API_URL, FALLBACK_TO_MOCK, USE_MOCK_API } from "@/api";
 import { adapterStatus, fetchHealth } from "@/api/devtools";
@@ -14,6 +16,12 @@ import { color, font, radius, space } from "@/theme/tokens";
 // Dev-only demo controls, opened by long-pressing the Thinketh mark on Today.
 // Not linked anywhere a judge would tap.
 export default function DemoPanel() {
+  // Dev-only controls: never in a production or presentation build unless explicitly enabled.
+  if (!DEMO_CONTROLS) return <Redirect href="/" />;
+  return <DemoControls />;
+}
+
+function DemoControls() {
   const health = useApi(() => fetchHealth(), []);
   const [resetting, setResetting] = useState(false);
   const [resetResult, setResetResult] = useState<string | null>(null);

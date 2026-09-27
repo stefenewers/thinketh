@@ -1,36 +1,36 @@
-import { Image, View } from "react-native";
-import { color, font } from "@/theme/tokens";
-import { T } from "./Text";
+// The Thinketh identity, drawn from vector outlines traced from the approved reference (docs/BRAND.md).
+// Use Wordmark where the full name helps recognition; Mark (the compact "th") in constrained places.
+import Svg, { Path } from "react-native-svg";
+import { View } from "react-native";
+import { MARK, WORDMARK, type BrandPath } from "@/components/brand/paths";
+import { brand } from "@/theme/tokens";
 
-const MARK = require("../../assets/brand/mark.png");
+type Tone = "dark" | "light";
+const FILL: Record<Tone, string> = { dark: brand.ink, light: brand.onCoral };
 
-// The Thinketh mark, the same ribbon as the app icon: charcoal (what you knew) meeting coral (what changed).
-export function Mark({ size = 22 }: { size?: number; mono?: boolean }) {
-  return <Image source={MARK} style={{ width: size * (144 / 121), height: size }} resizeMode="contain" accessibilityIgnoresInvertColors />;
-}
-
-export function Wordmark({ height = 24 }: { height?: number }) {
+function Artwork({ art, height, tone, label }: { art: BrandPath; height: number; tone: Tone; label: string | null }) {
+  const [, , w, h] = art.viewBox;
   return (
     <View
-      accessible
-      accessibilityRole="header"
-      accessibilityLabel="Thinketh"
-      style={{ flexDirection: "row", alignItems: "flex-end", gap: height * 0.25 }}
+      accessible={!!label}
+      accessibilityRole={label ? "image" : undefined}
+      accessibilityLabel={label ?? undefined}
+      importantForAccessibility={label ? "yes" : "no-hide-descendants"}
+      style={{ width: (height * w) / h, height }}
     >
-      <T
-        style={{
-          fontFamily: font.sansSemibold,
-          fontSize: height,
-          lineHeight: height * 1.15,
-          letterSpacing: -0.04 * height,
-          color: color.ink,
-        }}
-      >
-        thinketh
-      </T>
-      <View style={{ paddingBottom: height * 0.18 }}>
-        <Mark size={height * 0.78} />
-      </View>
+      <Svg width="100%" height="100%" viewBox={art.viewBox.join(" ")}>
+        <Path d={art.d} fill={FILL[tone]} fillRule="evenodd" />
+      </Svg>
     </View>
   );
+}
+
+/** The compact "th" mark. `size` is its height; decorative when a visible "Thinketh" label sits beside it. */
+export function Mark({ size = 22, tone = "dark", decorative = false }: { size?: number; tone?: Tone; decorative?: boolean }) {
+  return <Artwork art={MARK} height={size} tone={tone} label={decorative ? null : "Thinketh"} />;
+}
+
+/** The full "thinketh" wordmark. `height` is the artwork's height (ascender to descender of the letters). */
+export function Wordmark({ height = 24, tone = "dark" }: { height?: number; tone?: Tone }) {
+  return <Artwork art={WORDMARK} height={height} tone={tone} label="Thinketh" />;
 }

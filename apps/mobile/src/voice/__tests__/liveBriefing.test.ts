@@ -136,7 +136,7 @@ describe("visual state", () => {
 });
 
 describe("safety: voice visuals are presentation only", () => {
-  const files = ["LiveBriefingCanvas.tsx", "VoiceMindprint.tsx", "LiveCaption.tsx", "captionState.ts", "conceptFocus.ts", "voiceVisualState.ts"];
+  const files = ["LiveBriefingCanvas.tsx", "CatchUpScene.tsx", "LiveCaption.tsx", "captionState.ts", "conceptFocus.ts", "voiceVisualState.ts"];
   it.each(files)("%s never imports the API client (so it cannot write knowledge state)", (f) => {
     const src = readFileSync(join(__dirname, "..", f), "utf8");
     expect(src).not.toMatch(/from ["']@\/api["']/);

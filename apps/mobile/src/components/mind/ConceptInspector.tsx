@@ -225,7 +225,7 @@ export function ConceptInspector({
           {related.length ? (
             <View style={styles.chips}>
               {related.map((c) => (
-                <ConceptChip key={c.id} label={c.name} onPress={() => onSelectConcept(c.id)} />
+                <ConceptChip key={c.id} label={c.name} book onPress={() => onSelectConcept(c.id)} />
               ))}
             </View>
           ) : (

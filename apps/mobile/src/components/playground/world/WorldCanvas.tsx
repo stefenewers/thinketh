@@ -1,18 +1,19 @@
 // The Playground room: one persistent scene for the whole session. It draws the WorldView; it owns
 // no learning state. Only newly observed events on this device play their one-time motion.
-import { useCallback, useEffect, useState } from "react";
-import { AppState, Image, Platform, Pressable, StyleSheet, View, type ImageStyle } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useEffect } from "react";
+import { Image, Platform, Pressable, StyleSheet, View, type ImageStyle } from "react-native";
 import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import type { PlaygroundRoom } from "@thinketh/contracts";
+import { MuseMark } from "@/components/brand/MuseMark";
 import { Mark } from "@/components/Logo";
 import { T } from "@/components/Text";
-import { color, font } from "@/theme/tokens";
+import { color, font, pixel } from "@/theme/tokens";
 import { AGENT_SPRITES, PROPS } from "./assets";
 import { Character } from "./Character";
 import { CheckpointGate, ConceptToken, MindRing } from "./ConceptToken";
 import { sceneLayout } from "./layout";
+import { usePaused } from "./usePaused";
 import { freshEffects, PLACES, type WorldView } from "./worldState";
 
 export type WorldSelection = { kind: "agent"; userId: string } | { kind: "concept" } | { kind: "muse" };
@@ -25,23 +26,6 @@ const played = new Set<string>();
 const pixelated = (Platform.OS === "web" ? { imageRendering: "pixelated" } : {}) as ImageStyle;
 const TONE = { coral: color.coral, blue: color.partner } as const;
 const EXPLORE_ZOOM = 1.3;
-
-/** Rendering pauses when the app is backgrounded or another screen covers the Playground. */
-function usePaused() {
-  const [bg, setBg] = useState(AppState.currentState !== "active");
-  const [covered, setCovered] = useState(false);
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (s) => setBg(s !== "active"));
-    return () => sub.remove();
-  }, []);
-  useFocusEffect(
-    useCallback(() => {
-      setCovered(false);
-      return () => setCovered(true);
-    }, []),
-  );
-  return bg || covered;
-}
 
 export function WorldCanvas({
   room,
@@ -171,7 +155,7 @@ export function WorldCanvas({
 
       {world.thinketh ? (
         <View style={styles.system} accessibilityLiveRegion="polite">
-          <Mark size={14} />
+          <Mark size={12} decorative />
           <T style={styles.systemText}>{world.thinketh === "comparing" ? "Thinketh is comparing both Minds" : "Thinketh is grading the answer"}</T>
         </View>
       ) : null}
@@ -200,11 +184,11 @@ function Backdrop({ W, H, wallH }: { W: number; H: number; wallH: number }) {
   const winS = Math.min(PROPS.window.height, wallH - 26);
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
-      <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: wallH, backgroundColor: "#FFFFFF" }} />
-      <View style={{ position: "absolute", left: 0, right: 0, top: wallH - 5, height: 5, backgroundColor: "#EEE9E3" }} />
-      <View style={{ position: "absolute", left: 0, right: 0, top: wallH, bottom: 0, backgroundColor: "#F5F0EA" }} />
+      <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: wallH, backgroundColor: pixel.wall }} />
+      <View style={{ position: "absolute", left: 0, right: 0, top: wallH - 5, height: 5, backgroundColor: pixel.trim }} />
+      <View style={{ position: "absolute", left: 0, right: 0, top: wallH, bottom: 0, backgroundColor: pixel.floor }} />
       {[0.34, 0.58, 0.8].map((k) => (
-        <View key={k} style={{ position: "absolute", left: 0, right: 0, top: wallH + (H - wallH) * k, height: 1, backgroundColor: "rgba(22,22,22,0.035)" }} />
+        <View key={k} style={{ position: "absolute", left: 0, right: 0, top: wallH + (H - wallH) * k, height: 1, backgroundColor: pixel.floorLine }} />
       ))}
       <Image source={PROPS.window.source} style={[{ position: "absolute", left: W * 0.14, top: (wallH - winS) / 2 - 2, width: winS, height: winS }, pixelated]} resizeMode="stretch" />
       <Image source={PROPS.door.source} style={[{ position: "absolute", left: door.x - doorW / 2, top: wallH - doorH, width: doorW, height: doorH }, pixelated]} resizeMode="stretch" />
@@ -249,8 +233,15 @@ function MuseCue({ at, state, by, pointing, paused, reduced, onPress }: { at: { 
   return (
     <Animated.View style={[{ position: "absolute", left: 0, top: 0, width: 120, alignItems: "center" }, place]}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={choosing ? "Muse is choosing the next move. Show details" : `${by}, the conductor. Show details`} style={styles.muse}>
-        <Animated.View style={[styles.museDot, dim]}>
-          <T style={styles.museM}>{by === "Planner" ? "P" : "M"}</T>
+        {/* Muse's own mark when Muse acts; the deterministic planner keeps a plain "P". */}
+        <Animated.View style={dim}>
+          {by === "Planner" ? (
+            <View style={styles.museDot}>
+              <T style={styles.museM}>P</T>
+            </View>
+          ) : (
+            <MuseMark size={13} />
+          )}
         </Animated.View>
         <T style={styles.museText}>{text}</T>
       </Pressable>
