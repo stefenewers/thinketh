@@ -16,6 +16,7 @@ import { recordCheck } from "@/lib/lastCheck";
 import { useApi } from "@/lib/hooks";
 import { fmt2 } from "@/lib/knowledge";
 import { color, font, radius, space } from "@/theme/tokens";
+import { forgetVisualizations } from "@/lib/visualizationCache";
 
 export default function DiagnosticScreen() {
   const { developmentId, conceptId } = useLocalSearchParams<{ developmentId?: string; conceptId?: string }>();
@@ -84,6 +85,7 @@ function Diagnostic({
     if (attempt.current?.answer !== answer) attempt.current = { answer, key: `ans-${question.id.slice(-24)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`.replace(/[^\w.:-]/g, "-") };
     try {
       const res = await api.answerDiagnostic(question.id, answer, { idempotencyKey: attempt.current.key });
+      forgetVisualizations();
       Haptics.notificationAsync(
         res.answer.correctness >= 0.99 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
       ).catch(() => {});

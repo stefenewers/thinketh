@@ -864,9 +864,14 @@ export class ThinkethService {
       try {
         return await this.recordAnswer(userId, questionId, item, evaluation, answer, opKey, observationId, opts.operationId);
       } catch (err) {
-        // Nothing recorded: release the claim so the client's retry (same key) runs instead of hitting a 409.
-        if (opKey && !(await this.adapters.temporal.findTransitionByObservation(userId, observationId!).catch(() => undefined))) {
-          await this.store.remove("operations", opKey).catch(() => {});
+        // Confirmed nothing recorded: release the claim so the client's retry (same key) runs instead of a 409.
+        // If the lookup itself fails, keep the claim: claimOperation recovers it once it's stale, never twice.
+        if (opKey) {
+          const recorded = await this.adapters.temporal.findTransitionByObservation(userId, observationId!).then(
+            (t) => !!t,
+            () => true,
+          );
+          if (!recorded) await this.store.remove("operations", opKey).catch(() => {});
         }
         throw err;
       }

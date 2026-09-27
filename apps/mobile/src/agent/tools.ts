@@ -146,7 +146,8 @@ export function createAgentTools(deps: ToolDeps): Record<AgentToolName, ToolHand
     const onScreen = f && (f.kind === "concept" || f.kind === "development" || f.kind === "resource") ? { kind: f.kind, id: f.id } : null;
     if (id) {
       if (onScreen?.id === id) return onScreen;
-      return { kind: id.startsWith("dev_") ? "development" : id.startsWith("res_") ? "resource" : "concept", id };
+      // Seeded ids use hyphens (dev-evaluator-layer), generated ones underscores (dev_disc_…).
+      return { kind: /^dev[-_]/.test(id) ? "development" : /^res[-_]/.test(id) ? "resource" : "concept", id };
     }
     return onScreen;
   }

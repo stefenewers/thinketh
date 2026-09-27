@@ -11,7 +11,8 @@ export type SupportResult = { statement: string; support: "yes" | "partly" | "no
 export type SupportInput = { statements: string[]; passages: SupportPassage[] };
 
 export function statementsOf(text: string): string[] {
-  return sentences(text).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 3).slice(0, 8);
+  // Takeaways are at most 900 characters, so 16 covers every sentence: nothing saved goes unchecked.
+  return sentences(text).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 3).slice(0, 16);
 }
 
 const words = (s: string) => new Set(s.toLowerCase().match(/[a-z0-9][a-z0-9-]+/g)?.filter((w) => w.length > 3) ?? []);

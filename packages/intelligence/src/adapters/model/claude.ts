@@ -552,9 +552,17 @@ Return one result per statement, in order, with the statement text unchanged. Pa
       { statements: input.statements, passages: input.passages },
     );
     const known = new Set(input.passages.map((p) => p.ref));
-    // Keep the order and wording we asked about; drop refs that weren't given.
+    // Pair results with statements by their text, never by position: a dropped or reordered result must not
+    // lend its label to another statement. A statement without its own result counts as unsupported.
+    // Position is trusted only when Claude returned exactly one result per statement and that result wasn't
+    // already matched to another statement by its text.
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const byText = new Map(out.results.map((r, i) => [norm(r.statement ?? ""), i]));
+    const matched = input.statements.map((statement) => byText.get(norm(statement)));
+    const used = new Set(matched.filter((i): i is number => i !== undefined));
     return input.statements.map((statement, i) => {
-      const r = out.results[i];
+      const at = matched[i] ?? (out.results.length === input.statements.length && !used.has(i) ? i : undefined);
+      const r = at === undefined ? undefined : out.results[at];
       return { statement, support: r?.support ?? "no", refs: (r?.refs ?? []).filter((x) => known.has(x)) };
     });
   }

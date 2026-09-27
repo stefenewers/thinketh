@@ -137,9 +137,7 @@ export class PlaygroundService {
   // Agent exchange: start / advance / stop / close
 
   async startExchange(roomId: string, userId: string, conceptId?: string): Promise<PlaygroundRoom> {
-    await this.withRoom(roomId, (room) => {
-      if (room.challenge?.status === "running") throw new BadRequestError("Grokbot is still examining the last takeaway.");
-    });
+    // exchange.start refuses while Grokbot is running, under the same room lock.
     await this.exchange.start(roomId, userId, conceptId);
     return this.get(roomId, userId);
   }

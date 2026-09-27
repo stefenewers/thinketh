@@ -13,6 +13,7 @@ import { fmt2 } from "@/lib/knowledge";
 import { clearProfile, resetProfileCache } from "@/lib/profile";
 import { AUTH_AVAILABLE, setMode, useSession } from "@/lib/session";
 import { color, font, radius, space } from "@/theme/tokens";
+import { forgetVisualizations } from "@/lib/visualizationCache";
 
 // Dev-only demo controls, opened by long-pressing the Thinketh mark on Today.
 // Not linked anywhere a judge would tap.
@@ -33,6 +34,7 @@ function DemoControls() {
     setResetResult(null);
     try {
       await api.resetDemo();
+      forgetVisualizations();
       clearChecks();
       const h = await api.getConceptHistory("agent-memory");
       const s = h.current;

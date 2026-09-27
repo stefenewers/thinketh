@@ -253,6 +253,8 @@ export class AgentExchangeEngine {
     await this.host.withRoom(roomId, async (room, emit) => {
       if (!room.participants.some((p) => p.userId === userId)) throw new NotFoundError("Playground not found.");
       if (room.exchange?.status === "running") return; // double tap, retry or second device: the same exchange
+      // Checked under the same room lock that starts the exchange, so a challenge can't slip in between.
+      if (room.challenge?.status === "running") throw new BadRequestError("Grokbot is still examining the last takeaway.");
       const av = this.availability(room, conceptId);
       if (!av.available) throw new BadRequestError(av.reason ?? "An exchange can't start here.");
       const names = Object.fromEntries(room.participants.map((p) => [p.userId, p.displayName]));
@@ -360,7 +362,7 @@ export class AgentExchangeEngine {
         this.stopInto(
           r,
           unavailable
-            ? `Muse didn't complete the step (${this.pendingLabel(r, decision?.action ?? "finish")}): ${message.slice(0, 80)}. Nothing more was saved; the guided session still works.`
+            ? `Muse didn't complete the step (${this.pendingLabel(r, decision?.action ?? "finish")}): ${message.slice(0, 80)}. Nothing more was saved. Start the exchange again to retry.`
             : "Something went wrong during the exchange. Nothing more was saved.",
           "failed",
           ev,

@@ -116,9 +116,9 @@ export async function ensureSession(): Promise<Session | null> {
   return acquiring;
 }
 
-/** Supabase rejected the request itself (not a network failure or a server outage). */
+/** Supabase rejected the request itself (not a network failure, an outage, a timeout or a rate limit). */
 function rejected(err: unknown): boolean {
-  return err instanceof AuthError && err.status !== undefined && err.status >= 400 && err.status < 500;
+  return err instanceof AuthError && err.status !== undefined && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429;
 }
 
 async function refresh(s: Session): Promise<Session | null> {

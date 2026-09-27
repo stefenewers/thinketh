@@ -59,7 +59,9 @@ type ChallengeRecord = {
   revisions: Record<string, { text: string; whatChanged: string }>;
 };
 
-const STEP_STALE_MS = 75_000;
+/** A step claim is taken over only after the longest a turn can run: two model calls' budget plus the support check. */
+const CHECK_BUDGET_MS = 20_000;
+const staleMs = (limits: ChallengeLimits) => limits.callTimeoutMs * 2 + CHECK_BUDGET_MS + 15_000;
 const MAX_LOOKUPS = 2;
 /** Model calls in one turn. The last one offers only the ending tools, so a turn always concludes or fails. */
 const MAX_CALLS_PER_TURN = 6;
@@ -350,7 +352,7 @@ export class TakeawayChallengeEngine {
     const key = `${rec.pub.id}:${step}`;
     if (!(await this.store.create("challenge_steps", key, { at: this.now().toISOString() }))) {
       const claim = await this.store.get<{ at: string }>("challenge_steps", key);
-      if (claim && this.now().getTime() - new Date(claim.at).getTime() < STEP_STALE_MS) return; // someone is on it
+      if (claim && this.now().getTime() - new Date(claim.at).getTime() < staleMs(this.limits)) return; // someone is on it
       await this.store.put("challenge_steps", key, { at: this.now().toISOString() }); // the previous runner died
     }
     // Before any work: the deadline, the bound version, and permissions.
@@ -454,7 +456,7 @@ export class TakeawayChallengeEngine {
   async reconcile(room: StoredRoom): Promise<boolean> {
     const ch = room.challenge;
     if (!ch || ch.status !== "running") return false;
-    if (this.now().getTime() < new Date(ch.deadlineAt).getTime() + STEP_STALE_MS) return false;
+    if (this.now().getTime() < new Date(ch.deadlineAt).getTime() + staleMs(this.limits)) return false;
     const rec = await this.store.get<ChallengeRecord>("challenges", ch.id);
     if (!rec || rec.pub.status !== "running") return false;
     this.endInto(rec, "interrupted", "Interrupted before it finished (nothing advanced it before its time limit). The takeaway is unchanged.");
@@ -769,7 +771,7 @@ export class TakeawayChallengeEngine {
     if (!passages.length) results = input.statements.map((statement) => ({ statement, support: "no" as const, refs: [] }));
     else {
       const live = this.grader.live;
-      const r = await guarded("claude", "checkSupport", live ? () => live.checkSupport(input) : undefined, () => this.grader.fallback.checkSupport(input), 20_000);
+      const r = await guarded("claude", "checkSupport", live ? () => live.checkSupport(input) : undefined, () => this.grader.fallback.checkSupport(input), CHECK_BUDGET_MS);
       results = r.value;
       checkedBy = r.source === "live" ? "claude" : "deterministic";
     }
@@ -841,7 +843,13 @@ export class TakeawayChallengeEngine {
         const open = `Open challenge from Grokbot: ${f.detail.slice(0, 180)}`;
         next.unresolved = [...t.unresolved.filter((u) => u !== open), open].slice(-6);
       }
-      await this.store.put("agent_takeaways", t.id, next, t.ownerId);
+      try {
+        await this.store.put("agent_takeaways", t.id, next, t.ownerId);
+      } catch (err) {
+        // The version wasn't written: free its claim, or every later revision would be refused as "version N+1 first".
+        if (toVersion) await this.store.remove("takeaway_versions", `${t.id}@v${toVersion}`).catch(() => {});
+        throw err;
+      }
       // Only now (persisted) is the outcome shown.
       events.push({
         type: "challenge_resolved",

@@ -17,6 +17,7 @@ import { firstSentence, nuanceOf } from "@/lib/briefText";
 import { lastCheckFor } from "@/lib/lastCheck";
 import { openExternal } from "@/lib/links";
 import { color, depth, font, space, warm } from "@/theme/tokens";
+import { forgetVisualizations } from "@/lib/visualizationCache";
 
 export default function DevelopmentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,6 +67,7 @@ function DevelopmentContent({ data }: { data: DevelopmentDetailResponse }) {
     setSending(kind);
     try {
       const res = await api.sendFeedback(d.id, kind);
+      forgetVisualizations();
       // No transition: this signal was already counted for this development.
       setFeedback({ kind, ok: true, reason: res.transitions[0]?.reason ?? "Already recorded. Thinketh counts this once per development." });
     } catch {

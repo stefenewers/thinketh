@@ -8,6 +8,11 @@ import { currentUserId } from "@/lib/session";
 const plans = new Map<string, VisualizationSpec>();
 const planKey = (developmentId: string) => `${currentUserId() ?? "anon"}:${developmentId}`;
 
+/** After a knowledge change (feedback, a diagnostic, a reset): plans are framed by levels, so plan again. */
+export function forgetVisualizations(): void {
+  plans.clear();
+}
+
 type Result = { key: string; spec: VisualizationSpec | null; failed: boolean };
 
 /**
