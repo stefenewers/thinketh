@@ -5,7 +5,7 @@
  * records a real transition (or refuses to) -> shared gap -> resource.
  */
 import { PlaygroundRoomSchema, type MindSnapshot, type PlaygroundRoom } from "@thinketh/contracts";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collaborativeDelta } from "../src/engine/collaborative.ts";
 import { createThinketh } from "../src/index.ts";
 import { fallbackNext, MUSE_TOOLS, MuseConductor, validateAction, type ConductorView } from "../src/playground/conductor.ts";
@@ -133,14 +133,18 @@ describe("Playground golden path (HTTP)", () => {
     room = await ok("POST", `/playground/rooms/${room.id}/conduct`, {});
     expect(room.scene).toBe("peer_teaching");
     expect(room.teaching).toMatchObject({ teacherId: "nadani", learnerId: "demo-user", prompt: "Why shouldn't an AI always be the final judge of its own output?" });
-    expect(room.museLine).toBe("Nadani, teach Stefen how AI should check its own work.");
+    expect(room.museLine).toBe("Nadani's agent will teach Stefen's agent how AI should check its own work.");
     expect(room.conductor.mode).toBe("fallback");
-    // Stefen can't explain for Nadani unless he is the host acting for a demo persona.
-    expect((await call("POST", `/playground/rooms/${room.id}/explain`, { text: "x" })).status).toBe(403);
-    room = await ok("POST", `/playground/rooms/${room.id}/explain`, {
-      text: "A model grading its own output shares its blind spots, so a separate evaluator catches what the generator misses.",
-      asUserId: "nadani",
+    // Nobody types: Nadani's agent teaches Stefen's agent, then Thinketh asks Stefen the transfer question.
+    await vi.waitFor(async () => {
+      room = await ok("GET", `/playground/rooms/${room.id}`);
+      expect(room.scene).toBe("transfer");
     });
+    expect(room.teaching).toMatchObject({ explanationSource: "agent" });
+    expect(room.teaching!.explanation).toBeTruthy();
+    expect(room.events.find((e) => e.type === "explanation_submitted")).toMatchObject({ actor: "agent:nadani", summary: expect.stringMatching(/Nadani's agent taught Stefen's agent/) });
+    // The explanation is in: a person can't overwrite it.
+    expect((await call("POST", `/playground/rooms/${room.id}/explain`, { text: "x", asUserId: "nadani" })).status).toBe(400);
     expect(room.scene).toBe("transfer");
     expect(room.transfer!.prompt).toMatch(/approve customer refunds/);
     return room;

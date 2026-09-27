@@ -27,7 +27,6 @@ import { formatMinutes, planSummary } from "@/lib/planSummary";
 import { DEMO_LEARNER_NAME } from "@/content/demo";
 import { Dot, DotTag, MuseCard, OutcomeRow, StepRow, ThreadCard, type DotTone } from "@/components/playground/pieces";
 import { ListCard, RaisedCard, SectionHeader } from "@/components/system";
-import { SetupRow } from "@/components/setup/Setup";
 import { Button, Divider } from "@/components/ui";
 import { useRoomChannel } from "@/lib/roomChannel";
 import { DEMO_CONTROLS } from "@/lib/devFlags";
@@ -251,13 +250,7 @@ export default function PlaygroundScreen() {
           {stage?.waiting === "muse" ? <MuseWaiting /> : null}
           {room && scene === "overview" ? <Overview room={room} me={me} busy={busy === "conduct"} onStart={() => run("conduct", () => playground.conduct(room.id, "next", me))} /> : null}
           {room && scene === "peer_teaching" ? (
-            <PeerTeaching
-              room={room}
-              me={me}
-              busy={busy === "explain" || busy === "share"}
-              onExplain={(text, source) => room.teaching && run("explain", () => playground.explain(room.id, text, { asUserId: actAs(room.teaching!.teacherId), as: me, source }))}
-              onShare={(on) => room.teaching && run("share", () => playground.share(room.id, on, { asUserId: actAs(room.teaching!.teacherId), as: me }))}
-            />
+            <PeerTeaching room={room} me={me} />
           ) : null}
           {room && scene === "transfer" ? (
             <Transfer room={room} me={me} busy={busy === "answer"} onAnswer={(text) => room.transfer && run("answer", () => playground.answer(room.id, text, { asUserId: actAs(room.transfer!.learnerId), as: me }))} />
@@ -453,7 +446,7 @@ function Waiting({
       <ListCard>
         <StepRow icon="person" title="Invite someone" body="A collaborator on their phone, or Nadani on this one." />
         <StepRow icon="people" title="Thinketh compares your Minds" body="Shared strengths, teaching opportunities, shared gaps." />
-        <StepRow icon="ask" title="Teach each other" body="One explains; the other applies it somewhere new." />
+        <StepRow icon="ask" title="Your agents teach each other" body="One agent explains; the other person applies it somewhere new." />
         <StepRow icon="sparkle" title="See what moves your thinking" body="A Mind changes only after demonstration." last />
       </ListCard>
     </View>
@@ -651,115 +644,30 @@ function DeltaRow({ tag, tone, item, names, last }: { tag: string; tone: DotTone
   );
 }
 
-/** Storyboard 10 / Figma 1:216: guided teaching cards; the coral trace is live. */
-function PeerTeaching({
-  room,
-  me,
-  busy,
-  onExplain,
-  onShare,
-}: {
-  room: PlaygroundRoom;
-  me: string;
-  busy: boolean;
-  onExplain: (text: string, source: "own" | "agent" | "agent_edited") => void;
-  onShare: (savedSources: boolean) => void;
-}) {
+/**
+ * Storyboard 10 / Figma 1:216: the agents teach each other. The teacher's agent explains to the learner's
+ * agent (adapted to the learner's gap); nobody types. The learner's own answer to the check comes next,
+ * and only that can change a Mind.
+ */
+function PeerTeaching({ room, me }: { room: PlaygroundRoom; me: string }) {
   const t = room.teaching!;
-  const [text, setText] = useState("");
-  // Set when the teacher starts from their agent's draft, so what they send is labeled honestly.
-  const [fromDraft, setFromDraft] = useState(false);
-  const teacher = nameOf(room, t.teacherId);
-  const teacherP = room.participants.find((p) => p.userId === t.teacherId);
-  const canSpeak = t.teacherId === me || teacherP?.demoPersona;
-  const mine = t.teacherId === me;
-  const prepared = t.prepared;
-  const send = () => {
-    const clean = text.trim();
-    if (!clean) return;
-    onExplain(clean, fromDraft && prepared?.text ? (clean === prepared.text.trim() ? "agent" : "agent_edited") : "own");
-  };
+  const agentName = (id: string) => (id === me ? "Your agent" : `${nameOf(room, id)}'s agent`);
   return (
     <View>
-      {/* Who teaches whom and the idea are in the room's Now line above; this is the exchange itself. */}
       <View style={{ paddingHorizontal: gutter, marginTop: space.m, gap: space.m }}>
-        <MuseCard>{room.museLine ?? `${teacher}, teach this in your own words.`}</MuseCard>
-        <ThreadCard who={mine ? "You" : teacher} tone={mine ? "coral" : "partner"}>
+        <MuseCard>{room.museLine ?? `${agentName(t.teacherId)} is teaching ${agentName(t.learnerId).replace(/^Your/, "your")}.`}</MuseCard>
+        <ThreadCard who={`${agentName(t.teacherId)} → ${agentName(t.learnerId).replace(/^Your/, "your")}`} tone={t.teacherId === me ? "coral" : "partner"}>
           <T variant="meta" style={{ color: color.ink3 }}>
-            Muse asked
+            The question they&apos;re working through
           </T>
           <T variant="body" style={{ marginTop: 2, fontSize: 15.5, lineHeight: 23 }}>
             {t.prompt}
           </T>
         </ThreadCard>
-        {prepared ? <PreparedLessonCard room={room} mine={mine} teacher={teacher} /> : null}
-        {canSpeak && prepared?.status === "prepared" && prepared.text && !fromDraft ? (
-          <View style={{ flexDirection: "row", gap: space.s, flexWrap: "wrap" }}>
-            <Button label="Share this explanation" loading={busy} disabled={busy} onPress={() => onExplain(prepared.text!, "agent")} />
-            <Button
-              kind="secondary"
-              label="Edit it first"
-              disabled={busy}
-              onPress={() => {
-                setText(prepared.text!);
-                setFromDraft(true);
-              }}
-            />
-          </View>
-        ) : null}
-        {canSpeak ? (
-          <View style={styles.speak}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={mine ? "Or explain it in your own words…" : `Or type what ${teacher} says`}
-              placeholderTextColor={color.ink3}
-              multiline
-              maxLength={2000}
-              style={styles.speakInput}
-              accessibilityLabel={`${teacher}'s explanation`}
-            />
-            <Pressable
-              onPress={send}
-              disabled={busy || !text.trim()}
-              accessibilityRole="button"
-              accessibilityLabel="Done explaining"
-              style={[styles.speakBtn, (!text.trim() || busy) && { opacity: 0.35 }]}
-            >
-              {busy ? <ActivityIndicator color={color.onInk} /> : <Icon name="arrow" size={17} color={color.onInk} />}
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.speak}>
-            <T variant="body" style={{ color: color.ink3, flex: 1, paddingVertical: space.m }}>
-              Waiting for {teacher} to explain from their device…
-            </T>
-          </View>
-        )}
-        {fromDraft ? (
-          <T variant="meta" style={{ color: color.ink3 }}>
-            Starting from {mine ? "your" : `${teacher}'s`} agent&apos;s draft. It will be shown as agent-prepared{text.trim() !== prepared?.text?.trim() ? ", edited by " + (mine ? "you" : teacher) : ""}.
-          </T>
-        ) : null}
-        {canSpeak && !t.explanation ? (
-          <ListCard>
-            <SetupRow
-              icon="library"
-              title={mine ? "Let my agent use sources I saved on this" : `Let ${teacher}'s agent use sources ${teacher} saved on this`}
-              subtitle="Titles, links and summaries only. Never questions, memories or anything else."
-              checked={!!teacherP?.shares?.savedSources}
-              onPress={busy ? undefined : () => onShare(!teacherP?.shares?.savedSources)}
-              last
-            />
-          </ListCard>
-        ) : null}
-        {/* One-device mode: the host types what the seeded persona says. Her explanation isn't evidence for
-            anyone; the transfer question is. Said plainly, so it never reads as a second live phone. */}
-        {t.teacherId !== me && teacherP?.demoPersona ? (
-          <T variant="meta" style={{ color: color.ink3 }}>
-            You&apos;re typing for {teacher}, a seeded demo persona on this phone, not a second live device. The explanation is a perspective, not evidence; only the learner&apos;s answer to Thinketh&apos;s check counts.
-          </T>
-        ) : null}
+        {t.prepared ? <PreparedLessonCard room={room} mine={t.teacherId === me} teacher={nameOf(room, t.teacherId)} /> : null}
+        <T variant="meta" style={{ color: color.ink3 }}>
+          Agents teaching each other isn&apos;t evidence that anyone learned it. Next, {t.learnerId === me ? "you" : nameOf(room, t.learnerId)} will apply it somewhere new, and only that answer counts.
+        </T>
       </View>
     </View>
   );
@@ -830,7 +738,7 @@ function PreparedLessonCard({ room, mine, teacher }: { room: PlaygroundRoom; min
 
 /** Whose words the learner is reading: the teacher's own, or their agent's (as-is or edited). */
 function explainedBy(t: NonNullable<PlaygroundRoom["teaching"]>, who: string): string {
-  if (t.explanationSource === "agent") return `${who} shared ${who === "You" ? "your" : "their"} agent's explanation`;
+  if (t.explanationSource === "agent") return `${who === "You" ? "Your" : `${who}'s`} agent taught it`;
   if (t.explanationSource === "agent_edited") return `${who} edited ${who === "You" ? "your" : "their"} agent's explanation`;
   return `${who} explained`;
 }

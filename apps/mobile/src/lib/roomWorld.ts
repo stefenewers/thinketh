@@ -282,6 +282,11 @@ export function eventToVisualCue(e: RoomEvent, room: PlaygroundRoom, me: string)
       return { ...base, kind: "spotlight", actor: c, label: `${c.name} points at ${topic(concept)}` };
     }
     case "explanation_submitted":
+      // The teacher's agent taught the learner's agent (actor "agent:<id>"): a perspective, not proof yet.
+      if (e.actor.startsWith("agent:")) {
+        const teacherId = e.actor.slice("agent:".length);
+        return { ...base, kind: "explain", actor: { kind: "person", name: who(teacherId) }, label: `${whose(teacherId)} agent taught it: a perspective, not proof yet` };
+      }
       return { ...base, kind: "explain", actor: person, label: `${who(e.actor)} explained: a perspective, not proof yet` };
     case "transfer_question":
       return { ...base, kind: "checkpoint", actor: { kind: "thinketh", name: "Thinketh" }, label: `Thinketh set a checkpoint: ${applies(e.data?.learnerId)} it somewhere new` };

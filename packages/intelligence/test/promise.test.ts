@@ -219,10 +219,10 @@ async function roomToTransfer(t: T) {
   room = await req("POST", `/playground/rooms/${room.id}/compare`);
   room = await req("POST", `/playground/rooms/${room.id}/conduct`);
   expect(room.teaching).toMatchObject({ conceptId: "evaluator-architectures", teacherId: "nadani", learnerId: "demo-user" });
-  // Found -> prepared: the teacher's agent drafts in the background.
+  // Found -> prepared -> taught agent to agent -> the learner's transfer question, all in the background.
   await vi.waitFor(async () => {
     room = await req("GET", `/playground/rooms/${room.id}`);
-    expect(room.teaching!.prepared!.status).not.toBe("preparing");
+    expect(room.scene).toBe("transfer");
   });
   return { room, req };
 }
@@ -245,10 +245,10 @@ describe("playground: agent-prepared lesson, durability and exactly-once evidenc
     expect((await t.adapters.temporal.getRecentTransitions("demo-user", 500)).length).toBe(before);
     expect((await t.adapters.temporal.getRecentTransitions("nadani", 500)).length).toBe(0);
 
-    // The host (acting for the seeded teacher) shares the agent's draft as-is: labeled, not "Nadani said".
-    let room = await req("POST", `/playground/rooms/${prepared.id}/explain`, { text: lesson.text, asUserId: "nadani", source: "agent" });
-    expect(room.teaching).toMatchObject({ explanationSource: "agent" });
-    expect(room.events.find((e) => e.type === "explanation_submitted")!.summary).toMatch(/agent prepared/);
+    // Nadani's agent taught Stefen's agent directly: labeled as the agents' exchange, never "Nadani said".
+    const room = prepared;
+    expect(room.teaching).toMatchObject({ explanationSource: "agent", explanation: lesson.text });
+    expect(room.events.find((e) => e.type === "explanation_submitted")).toMatchObject({ actor: "agent:nadani", summary: expect.stringMatching(/agent taught/) });
     expect(room.scene).toBe("transfer");
 
     // Restart. The room, its order and its access checks come back from the store.
@@ -287,10 +287,9 @@ describe("playground: agent-prepared lesson, durability and exactly-once evidenc
   it("does not present a weak answer as success", async () => {
     const t = boot(tmp());
     const { room: prepared, req } = await roomToTransfer(t);
-    await req("POST", `/playground/rooms/${prepared.id}/explain`, { text: "Use a second checker.", asUserId: "nadani" });
     const room = await req("POST", `/playground/rooms/${prepared.id}/answer`, { answer: "I'm not sure." });
     expect(room.transfer!.verified).toBe(false);
-    expect(room.teaching!.explanationSource).toBe("own");
+    expect(room.teaching!.explanationSource).toBe("agent");
     expect(room.events.at(-1)!.type).toBe("transfer_not_verified");
   });
 
@@ -312,14 +311,14 @@ describe("playground: agent-prepared lesson, durability and exactly-once evidenc
     expect(open.status).toBe("prepared");
   });
 
-  it("falls back to the person's own words when nothing grounded exists", async () => {
+  it("says so, and teaches from the concept description, when nothing grounded exists", async () => {
     const t = boot(tmp());
     const fixture = corpusFixture("dev-x", "Something new", ["retrieval"], ["A claim about retrieval."]);
     fixture.newConcepts = [{ id: "unsourced-idea", name: "Unsourced Idea", description: "No source says anything about this.", domain: "AI agents", importance: 0.5 }];
     await t.service.addToCorpus(fixture, NOW.toISOString());
     const lesson = await t.service.prepareExchange({ conceptId: "unsourced-idea", teacherId: "nadani", learnerId: "demo-user", teacherName: "Nadani", learnerName: "Stefen", gap: { level: "weak", verified: false, hasMisconception: false }, shareSavedSources: false, whyRelevant: "why", corpus: "live" });
     expect(lesson.status).toBe("unavailable");
-    expect(lesson.message).toMatch(/own words/);
+    expect(lesson.message).toMatch(/concept description/);
   });
 
   it("never grounds a real account's lesson or Ask in the illustrative seed corpus", async () => {

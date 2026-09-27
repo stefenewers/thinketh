@@ -552,7 +552,7 @@ export class PlaygroundService {
         agentOf: key.teacherId,
         preparedFor: key.learnerId,
         preparedAt: this.now().toISOString(),
-        message: `${this.name(snapshotRoom, key.teacherId)}'s agent couldn't prepare this right now, so ${this.name(snapshotRoom, key.teacherId)} can explain it in their own words.`,
+        message: `${this.name(snapshotRoom, key.teacherId)}'s agent couldn't prepare this right now, so it teaches from Thinketh's concept description instead.`,
       };
     }
     await this.locked(key.roomId, async () => {
@@ -562,6 +562,7 @@ export class PlaygroundService {
       if (!room || !t || t.conceptId !== key.conceptId || t.teacherId !== key.teacherId || t.learnerId !== key.learnerId || t.explanation) return;
       t.prepared = lesson;
       const who = this.name(room, key.teacherId);
+      // The agents teach each other: the teacher's agent hands its explanation straight to the learner's agent.
       if (lesson.status === "prepared") {
         this.emit(room, "lesson_prepared", `agent:${key.teacherId}`, `${who}'s agent found sourced material and prepared an explanation for ${this.name(room, key.learnerId)}.`, {
           conceptId: key.conceptId,
@@ -571,8 +572,29 @@ export class PlaygroundService {
       } else {
         this.emit(room, "lesson_unavailable", `agent:${key.teacherId}`, lesson.message ?? `${who}'s agent couldn't prepare this.`, { conceptId: key.conceptId });
       }
+      await this.agentTeach(room).catch((err) => logEvent("playground.agent_teach_failed", { roomId: room.id, error: err instanceof Error ? err.message : String(err) }, "warn"));
       await this.commit(room);
     });
+  }
+
+  /**
+   * Agent-to-agent teaching. The teacher's agent explains to the learner's agent, which already adapted it
+   * to the learner's gap (prepared.adaptedTo); nobody is asked to type. Then Thinketh asks the LEARNER the
+   * transfer question: an exchange between agents is never evidence that a person learned anything, so
+   * only the learner's own graded answer can change their Mind.
+   */
+  private async agentTeach(room: Room): Promise<void> {
+    const t = room.teaching;
+    if (!t || t.explanation) return;
+    const concept = this.svc.conceptList().find((c) => c.id === t.conceptId);
+    const p = t.prepared;
+    // Nothing sourced to teach from: the agent falls back to Thinketh's own definition of the concept, and says so.
+    t.explanation = p?.status === "prepared" && p.text ? p.text : `From Thinketh's concept description (no sourced material yet): ${concept?.description ?? this.topic(t.conceptId)}`;
+    t.explanationSource = "agent";
+    const teacher = this.name(room, t.teacherId);
+    const learner = this.name(room, t.learnerId);
+    this.emit(room, "explanation_submitted", `agent:${t.teacherId}`, `${teacher}'s agent taught ${learner}'s agent ${this.topic(t.conceptId)}.`, { conceptId: t.conceptId, source: "agent" });
+    await this.conductIn(room);
   }
 
   /** The learner's device has fetched the room with the explanation in front of them: encountered, not yet understood. */

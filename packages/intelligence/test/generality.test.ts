@@ -44,6 +44,17 @@ const GOOD_TOOL_DRAFT: TransferDraft = {
   expectedConcepts: ["agent-tool-use"],
 };
 
+
+/** The agents teach each other in the background; wait until Thinketh has asked the learner's transfer question. */
+async function untilTransfer(t: { app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> } }, roomId: string): Promise<PlaygroundRoom> {
+  let room!: PlaygroundRoom;
+  await vi.waitFor(async () => {
+    room = (await (await t.app.request(`/playground/rooms/${roomId}`, { headers: { "x-thinketh-user": "demo-user" } })).json()) as PlaygroundRoom;
+    expect(room.scene).toBe("transfer");
+  });
+  return room;
+}
+
 beforeEach(() => resetCircuits());
 afterEach(() => vi.unstubAllGlobals());
 
@@ -127,7 +138,7 @@ describe("dynamic transfer in a room: the second peer teaching (Stefen -> Nadani
     room = await call("POST", `/playground/rooms/${room.id}/compare`);
     expect(room.plan!.items.map((i) => i.id)).toEqual(["peer:evaluator-architectures:nadani", "peer:agent-tool-use:demo-user", "gap:memory-consolidation"]);
     room = await call("POST", `/playground/rooms/${room.id}/conduct`, { intent: "next" });
-    room = await call("POST", `/playground/rooms/${room.id}/explain`, { text: "A separate evaluator catches what the generator misses.", asUserId: "nadani" });
+    room = await untilTransfer(t, room.id);
     room = await call("POST", `/playground/rooms/${room.id}/answer`, { answer: "separate independent evaluator, bias, commit test ci checkpoints, retry fix feedback" });
     expect(room.transfer!.verified).toBe(true);
     // Next in the plan: Stefen teaches Nadani.
@@ -140,10 +151,11 @@ describe("dynamic transfer in a room: the second peer teaching (Stefen -> Nadani
 
   const nadaniToolUse = async (t: T) => (await t.service.statesFor("nadani")).get("agent-tool-use")!;
 
-  it("the teacher's explanation alone changes nothing; the grounded challenge is shown and graded as the same item", async () => {
+  it("the agents' exchange alone changes nothing; the grounded challenge is shown and graded as the same item", async () => {
     const { t, call, room: r0 } = await secondTeaching();
     const before = await nadaniToolUse(t);
-    let room = await call("POST", `/playground/rooms/${r0.id}/explain`, { text: "An agent emits a structured call with arguments and reads the result back." });
+    let room = await untilTransfer(t, r0.id);
+    expect(room.teaching).toMatchObject({ explanationSource: "agent" });
     expect(await nadaniToolUse(t)).toEqual(before);
     expect(room.scene).toBe("transfer");
     expect(room.transfer).toMatchObject({ conceptId: "agent-tool-use", learnerId: "nadani", source: "fallback" });
@@ -167,7 +179,7 @@ describe("dynamic transfer in a room: the second peer teaching (Stefen -> Nadani
 
   it("a weak answer to a generated/fallback challenge verifies nothing", async () => {
     const { t, call, room: r0 } = await secondTeaching();
-    let room = await call("POST", `/playground/rooms/${r0.id}/explain`, { text: "Tools are useful." });
+    let room = await untilTransfer(t, r0.id);
     room = await call("POST", `/playground/rooms/${room.id}/answer`, { answer: "It just works I guess.", asUserId: "nadani" });
     expect(room.transfer!.verified).toBe(false);
     expect(room.transfer!.transition!.observation.kind).not.toBe("diagnostic_correct");
@@ -244,7 +256,7 @@ describe("the plan is a budget, not a countdown", () => {
     expect(room.teaching).toMatchObject({ conceptId: first.conceptId, teacherId: first.teacherId, learnerId: first.learnerId });
     // Nothing in the room is time-based.
     expect(JSON.stringify(room)).not.toMatch(/countdown|endsAt|remaining|deadline/i);
-    room = await call("POST", `/playground/rooms/${room.id}/explain`, { text: "A separate evaluator catches what the generator misses.", asUserId: "nadani" });
+    room = await untilTransfer(t, room.id);
     room = await call("POST", `/playground/rooms/${room.id}/answer`, { answer: "separate independent evaluator, bias, commit test ci checkpoints, retry fix feedback" });
     expect(room.scene).toBe("knowledge_moved");
     room = await call("POST", `/playground/rooms/${room.id}/conduct`, { intent: "end" });

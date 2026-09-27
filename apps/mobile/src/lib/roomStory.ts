@@ -132,7 +132,7 @@ export function railSteps(room: PlaygroundRoom, pending: Pending): RailStep[] {
     {
       key: "explained",
       actor: teacher,
-      label: explained ? "Explained" : "Explains",
+      label: explained ? "Agent taught it" : "Agent teaches",
       state: explained ? "done" : assigned ? "current" : "pending",
       detail: t?.explanation ? `“${t.explanation}” A perspective, not proof of learning.` : undefined,
     },
@@ -172,7 +172,9 @@ export function railSteps(room: PlaygroundRoom, pending: Pending): RailStep[] {
 /** The next human action, in plain words (who acts, and what). */
 export function nextHumanAction(room: PlaygroundRoom, me: string): string | null {
   const name = (id: string | undefined) => (id === me ? "You" : (room.participants.find((p) => p.userId === id)?.displayName ?? "Someone"));
-  if (room.scene === "peer_teaching" && room.teaching) return `${name(room.teaching.teacherId)}: explain it in your own words`;
+  // Nobody acts while the agents teach each other: say what is happening instead.
+  const agent = (id: string) => (id === me ? "your agent" : `${name(id)}'s agent`);
+  if (room.scene === "peer_teaching" && room.teaching) return `${agent(room.teaching.teacherId).replace(/^y/, "Y")} is teaching ${agent(room.teaching.learnerId)}`;
   if (room.scene === "transfer" && room.transfer) return `${name(room.transfer.learnerId)}: apply it to the new case`;
   if (room.scene === "overview") return "Start the session when you're ready";
   if (room.scene === "knowledge_moved") return "Choose the next move below";

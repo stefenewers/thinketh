@@ -167,7 +167,7 @@ export function EvidenceSheet({ room, world, me, selection, cue, onClose }: { ro
       title = `${name(selection.userId)}${selection.userId === me ? "r Mind" : "'s Mind"}`.replace("Your Mind", "Your Mind");
       body = (
         <>
-          {who?.demoPersona ? <T variant="support">A seeded demo persona on this phone: her explanations are typed here. Explaining isn&apos;t evidence for anyone; the learner&apos;s answer to Thinketh&apos;s check is.</T> : null}
+          {who?.demoPersona ? <T variant="support">A seeded demo persona on this phone: her agent teaches for her. Agents teaching isn&apos;t evidence for anyone; the learner&apos;s answer to Thinketh&apos;s check is.</T> : null}
           {snap ? (
             <>
               {row("Shared", `${snap.concepts.length} concepts, knowledge state only`)}

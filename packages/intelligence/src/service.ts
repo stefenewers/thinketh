@@ -1770,7 +1770,7 @@ export class ThinkethService {
     const base = { agentOf: input.teacherId, preparedFor: input.learnerId, adaptedTo, whyRelevant: input.whyRelevant, context, preparedAt: this.now().toISOString() };
     if (materials.length === 0) {
       logEvent("playground.lesson_unavailable", { conceptId: concept.id, teacherId: input.teacherId, reason: "no sourced material" });
-      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent found no sourced material on ${concept.name} to prepare from, so ${input.teacherName} can explain it in their own words.` };
+      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent found no sourced material on ${concept.name} to prepare from, so it teaches from Thinketh's concept description instead.` };
     }
     const ctx: ExchangeContext = { concept, teacherName: input.teacherName, learnerName: input.learnerName, learnerGap: g, materials };
     const model = this.model();
@@ -1789,7 +1789,7 @@ export class ThinkethService {
     );
     const checked = validateExchange(r.value, ctx);
     if ("problem" in checked) {
-      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent couldn't ground an explanation in its sources, so ${input.teacherName} can explain it in their own words.` };
+      return { status: "unavailable", ...base, message: `${input.teacherName}'s agent couldn't ground an explanation in its sources, so it teaches from Thinketh's concept description instead.` };
     }
     const byRef = new Map(materials.map((m) => [m.ref, m.sourceId]));
     const points = checked.draft.points.map((p) => ({ text: p.text, sourceIds: [...new Set(p.refs.map((ref) => byRef.get(ref)!))] }));

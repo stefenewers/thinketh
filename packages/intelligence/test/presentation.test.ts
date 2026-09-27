@@ -130,7 +130,7 @@ describe("Muse speaks in plain language", () => {
   it("names the teaching by its topic, not its technical name", () => {
     const a = fallbackNext(view);
     expect(a.tool).toBe("assign_peer_teacher");
-    expect(a.args.say).toBe("Nadani, teach Stefen how AI should check its own work.");
+    expect(a.args.say).toBe("Nadani's agent will teach Stefen's agent how AI should check its own work.");
   });
 
   it("the shared gap line uses plain wording too", () => {
