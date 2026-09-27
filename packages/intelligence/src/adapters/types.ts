@@ -127,6 +127,7 @@ export type AskResult = { thinkethInfers: string[] };
 
 import type { TransferContext, TransferDraft } from "../engine/transfer.ts";
 import type { ExchangeContext, ExchangeDraft } from "../engine/exchange.ts";
+import type { SupportInput, SupportResult } from "../engine/grounding.ts";
 
 export type ShortAnswerGrade = { coveredIdeaIndices: number[]; misconception?: string; feedback: string };
 
@@ -155,6 +156,8 @@ export interface IntelligenceModel {
    * materials only. Validated (every point must cite a material) before anyone sees it.
    */
   prepareExchange(input: ExchangeContext): Promise<ExchangeDraft>;
+  /** For each statement: do the given passages support it? Judged only against those passages. */
+  checkSupport(input: SupportInput): Promise<SupportResult[]>;
 }
 
 export type VoiceContext = { userId: string; displayName: string; script: string[]; briefDate: string; minutes: number };

@@ -94,6 +94,7 @@ export const LearningSceneSchema = z.enum([
   "knowledge_moved",
   "shared_gap",
   "resource",
+  "agent_exchange",
   "ended",
 ]);
 export type LearningScene = z.infer<typeof LearningSceneSchema>;
@@ -157,6 +158,17 @@ export const RoomEventTypeSchema = z.enum([
   "lesson_prepared",
   "lesson_unavailable",
   "sharing_changed",
+  "exchange_started",
+  "retrieval_started",
+  "retrieval_completed",
+  "agent_message",
+  "clarification_requested",
+  "explanation_revised",
+  "takeaway_checked",
+  "takeaway_saved",
+  "exchange_completed",
+  "exchange_stopped",
+  "exchange_failed",
 ]);
 export type RoomEventType = z.infer<typeof RoomEventTypeSchema>;
 
@@ -276,7 +288,10 @@ export const SessionPlanItemSchema = z.object({
   rationale: z.string(),
   /** 1 = first. */
   priority: z.number(),
+  /** Only when understanding was verified (a peer teaching) or the move itself happened (gap, source). */
   done: z.boolean(),
+  /** Tried, but the learner's answer didn't verify it: not complete, and not offered again this session. */
+  attempted: z.boolean().optional(),
 });
 export type SessionPlanItem = z.infer<typeof SessionPlanItemSchema>;
 
@@ -314,6 +329,132 @@ export const RoomResourceSchema = z.object({
   chosenBecause: z.string().optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Agent exchange: two participants' agents (separate contexts) retrieve permitted material, teach,
+// question, revise and retain a sourced takeaway. Everything here is agent activity: none of it is
+// evidence of a person's understanding.
+
+export const ExchangeSourceSchema = z.object({
+  /** Handle agents cite ("S1"). */
+  ref: z.string(),
+  sourceId: z.string(),
+  title: z.string(),
+  url: z.string().optional(),
+  publisher: z.string().optional(),
+  publishedAt: z.string().optional(),
+  /** corpus: Thinketh's source corpus. shared_resource: a source a participant chose to share. agent_takeaway: an agent's earlier saved takeaway. */
+  via: z.enum(["corpus", "shared_resource", "agent_takeaway"]),
+  /** What was actually read: an extracted claim, a saved summary, or an agent takeaway. Never the full source. */
+  kind: z.enum(["claim", "summary", "takeaway"]),
+  text: z.string(),
+  /** Whose agent retrieved it. */
+  retrievedBy: z.string(),
+});
+export type ExchangeSource = z.infer<typeof ExchangeSourceSchema>;
+
+export const ExchangeMessageSchema = z.object({
+  id: z.string(),
+  at: z.string(),
+  /** The participant whose agent sent it. */
+  from: z.string(),
+  to: z.string(),
+  kind: z.enum(["explanation", "answer", "revision", "clarification", "evidence_request", "application", "takeaway"]),
+  text: z.string(),
+  sourceRefs: z.array(z.string()),
+});
+export type ExchangeMessage = z.infer<typeof ExchangeMessageSchema>;
+
+/** A concise, visible record of what was done (never model reasoning). */
+export const ExchangeActionSchema = z.object({
+  id: z.string(),
+  at: z.string(),
+  /** "coordinator", or the participant whose agent acted. */
+  actor: z.string(),
+  summary: z.string(),
+  /** Who did it: Muse, the deterministic planner, Thinketh's code, or Claude (grounding check). */
+  by: z.enum(["muse", "planner", "thinketh", "claude", "deterministic"]),
+});
+export type ExchangeAction = z.infer<typeof ExchangeActionSchema>;
+
+export const TakeawayCheckSchema = z.object({
+  verdict: z.enum(["supported", "partial", "unsupported"]),
+  supported: z.array(z.string()),
+  unsupported: z.array(z.string()),
+  note: z.string(),
+  checkedBy: z.enum(["claude", "deterministic"]),
+  at: z.string(),
+});
+export type TakeawayCheck = z.infer<typeof TakeawayCheckSchema>;
+
+export const AgentExchangeSchema = z.object({
+  id: z.string(),
+  status: z.enum(["running", "completed", "insufficient", "stopped", "failed", "interrupted"]),
+  /** teach: one side has defensible evidence to teach. explore: neither does; both agents explore available sources. */
+  mode: z.enum(["teach", "explore"]),
+  conceptId: z.string(),
+  conceptName: z.string(),
+  teacherId: z.string(),
+  learnerId: z.string(),
+  /** Why this direction, from the shared evidence. */
+  reason: z.string(),
+  startedBy: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  /** Increments once per applied step; a client advances "step N" and a stale N is ignored. */
+  step: z.number(),
+  /** The work actually in flight (only while it is). */
+  pending: z.object({ actor: z.string(), label: z.string() }).optional(),
+  budgets: z.object({ maxMessages: z.number(), maxToolCalls: z.number(), deadlineAt: z.string() }),
+  used: z.object({ messages: z.number(), toolCalls: z.number(), modelCalls: z.number() }),
+  messages: z.array(ExchangeMessageSchema),
+  actions: z.array(ExchangeActionSchema),
+  sources: z.array(ExchangeSourceSchema),
+  takeaway: z.object({ text: z.string(), sourceRefs: z.array(z.string()), unresolved: z.array(z.string()) }).optional(),
+  check: TakeawayCheckSchema.optional(),
+  savedTakeawayId: z.string().optional(),
+  /** One honest sentence on how it ended. */
+  outcome: z.string().optional(),
+  /** Human application checks offered after the exchange (bounded). */
+  humanChecks: z.number(),
+});
+export type AgentExchange = z.infer<typeof AgentExchangeSchema>;
+
+export const ExchangeAvailabilitySchema = z.object({
+  available: z.boolean(),
+  /** Why not (no participant, no eligible topic, Muse not configured, one already running). */
+  reason: z.string().optional(),
+  mode: z.enum(["teach", "explore"]).optional(),
+  conceptId: z.string().optional(),
+  conceptName: z.string().optional(),
+  teacherId: z.string().optional(),
+  learnerId: z.string().optional(),
+});
+export type ExchangeAvailability = z.infer<typeof ExchangeAvailabilitySchema>;
+
+/** A takeaway an agent retained: agent-acquired material in its owner's library, not verified understanding. */
+export const AgentTakeawaySchema = z.object({
+  id: z.string(),
+  /** The person whose agent retained it. */
+  ownerId: z.string(),
+  /** The participant whose agent taught it. */
+  fromId: z.string(),
+  fromName: z.string(),
+  conceptId: z.string(),
+  conceptName: z.string(),
+  exchangeId: z.string(),
+  roomId: z.string(),
+  text: z.string(),
+  sources: z.array(ExchangeSourceSchema.omit({ retrievedBy: true })),
+  grounding: z.enum(["supported", "partial"]),
+  unresolved: z.array(z.string()),
+  checkedBy: z.enum(["claude", "deterministic"]),
+  transcript: z.array(z.object({ from: z.string(), name: z.string(), kind: ExchangeMessageSchema.shape.kind, text: z.string(), sourceRefs: z.array(z.string()) })),
+  createdAt: z.string(),
+});
+export type AgentTakeaway = z.infer<typeof AgentTakeawaySchema>;
+export const AgentTakeawayListResponseSchema = z.object({ takeaways: z.array(AgentTakeawaySchema) });
+
+
 export const PlaygroundRoomSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -331,6 +472,10 @@ export const PlaygroundRoomSchema = z.object({
   plan: SessionPlanSchema.optional(),
   sharedGap: z.object({ conceptId: z.string(), conceptName: z.string(), lesson: TeachDeltaResponseSchema.shape.sections.optional() }).optional(),
   resource: RoomResourceSchema.optional(),
+  /** The current (or last) agent exchange in this room. */
+  exchange: AgentExchangeSchema.optional(),
+  /** Whether "Let our agents exchange" can start now, and on what. */
+  exchangeAvailability: ExchangeAvailabilitySchema.optional(),
   /** Last thing the conductor said. */
   museLine: z.string().optional(),
   conductor: z.object({ mode: z.enum(["muse", "fallback"]), detail: z.string() }),
@@ -362,3 +507,6 @@ export const RoomConductRequestSchema = z.object({ intent: z.enum(["next", "shar
 
 
 
+
+export const StartExchangeRequestSchema = z.object({ conceptId: z.string().max(120).optional() });
+export const AdvanceExchangeRequestSchema = z.object({ step: z.number().int().min(0) });

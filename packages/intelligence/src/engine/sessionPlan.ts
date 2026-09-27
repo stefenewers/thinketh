@@ -111,4 +111,5 @@ export function planSession(input: {
 }
 
 /** The next plan item still to do, in order. */
-export const nextPlanItem = (plan: SessionPlan | undefined) => plan?.items.find((i) => !i.done);
+/** The next move: not done, and not already attempted without verification this session. */
+export const nextPlanItem = (plan: SessionPlan | undefined) => plan?.items.find((i) => !i.done && !i.attempted);
