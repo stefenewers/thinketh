@@ -44,7 +44,7 @@ export function GrokbotLayer({
         sprite={GROKBOT_SPRITE}
         to={at}
         from={fresh && !reduced ? layout.at(PLACES.door) : undefined}
-        facing="left"
+        facing="right"
         tone={color.ink}
         label="Grokbot"
         tag="visiting challenger"

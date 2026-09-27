@@ -153,7 +153,7 @@ export function Outcome({ ch, agent }: { ch: TakeawayChallenge; agent: Names }) 
         </T>
       ) : null}
       <T variant="meta" style={{ marginTop: space.s, color: color.ink3 }}>
-        {o.state === "no_issue" ? "No clear issue isn't proof it's right. " : ""}Agent activity only: nobody&apos;s understanding changed.
+        Agent activity only: nobody&apos;s understanding changed.
       </T>
     </RaisedCard>
   );

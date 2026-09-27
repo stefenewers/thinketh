@@ -86,9 +86,6 @@ function Preview() {
         <GrokbotLayer view={view} layout={L} defenderAt={spots[room.challenge!.defenderId]} width={width} paused={false} reduced={false} />
       </View>
       <Gutter>
-        <T variant="meta" style={{ marginTop: space.m, color: color.ink3 }}>
-          {view.status}
-        </T>
         <ChallengePanel room={room} me={ME} busy={false} onStart={() => force((n) => n + 1)} onStop={() => force((n) => n + 1)} />
         <View style={{ height: 60 }} />
       </Gutter>
