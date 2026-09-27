@@ -19,6 +19,7 @@ export const READ_VIA_COPY: Record<NonNullable<Resource["readVia"]>, string> = {
   pdf: "Read from the PDF.",
   transcript: "Read from the video's transcript.",
   description: "This video has no transcript, so Thinketh read its title and description only.",
+  abstract: "Only the abstract is public here, so Thinketh read the title and abstract.",
   "reader-service": "This site blocks direct reading, so it was read through a reader service.",
 };
 

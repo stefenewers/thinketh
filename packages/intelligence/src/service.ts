@@ -65,7 +65,7 @@ import {
   type ConceptView,
   type TeachContext,
 } from "./resources/analyze.ts";
-import { fetchPage, ResourceReadError, validateUrl, youtubeId } from "./resources/fetchPage.ts";
+import { fetchPage, ResourceReadError, validateUrl, youtubeId, type Page } from "./resources/fetchPage.ts";
 
 /** Background analysis of a saved resource: nobody waits on it, so Claude gets room. */
 const RESOURCE_ANALYSIS_TIMEOUT_MS = 50_000;
@@ -77,6 +77,8 @@ const READ_FAILED = "Thinketh couldn't reliably read this source yet.";
 
 export class NotFoundError extends Error {}
 export class BadRequestError extends Error {}
+/** The link is fine but its content can't be read: the source is not added. */
+export class UnreadableSourceError extends Error {}
 export { InvalidAnswerError };
 
 const MEMORY_TIMEOUT_MS = 2000;
@@ -974,6 +976,15 @@ export class ThinkethService {
     const q = this.queue(userId);
     const existing = [...q.values()].find((r) => r.url === url.toString() && r.status !== "failed");
     if (existing) return existing;
+    // Read before saving: a source Thinketh can't read is never added to the queue.
+    let page: Page;
+    const started = Date.now();
+    try {
+      page = await this.fetchShared(url.toString());
+    } catch (err) {
+      logEvent("resource.unreadable", { userId, url: url.toString(), ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) }, "warn");
+      throw new UnreadableSourceError(err instanceof ResourceReadError ? err.message : READ_FAILED);
+    }
     if (q.size >= MAX_QUEUE) {
       const oldest = this.listResources(userId).at(-1);
       if (oldest) q.delete(oldest.id);
@@ -985,7 +996,7 @@ export class ThinkethService {
       sourceType: inferSourceType(url.toString()),
       createdAt: this.now().toISOString(),
       status: "processing",
-      stage: "reading",
+      stage: "mapping",
       extractedConcepts: [],
       matchedConceptIds: [],
       alreadyUnderstood: [],
@@ -993,8 +1004,9 @@ export class ThinkethService {
       relevantConnections: [],
     };
     q.set(resource.id, resource);
-    runInBackground("resource.analyze", this.processResource(userId, resource.id));
-    return resource;
+    this.applyPage(userId, resource.id, page);
+    runInBackground("resource.analyze", this.processResource(userId, resource.id, page, started));
+    return this.getResource(userId, resource.id);
   }
 
   /**
@@ -1029,25 +1041,28 @@ export class ThinkethService {
     });
   }
 
-  private async processResource(userId: string, id: string): Promise<void> {
-    const started = Date.now();
-    try {
-      const page = await this.fetchShared(this.getResource(userId, id).url);
-      const readMin = page.durationMinutes ?? readMinutes(page.words);
-      this.updateResource(userId, id, {
-        title: page.title ?? this.getResource(userId, id).title,
-        ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
-        ...((page.publisher ?? publisherFromUrl(page.url)) ? { publisher: page.publisher ?? publisherFromUrl(page.url)! } : {}),
-        ...(page.author ? { author: page.author } : {}),
-        ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
-        fetchedAt: this.now().toISOString(),
-        estimatedReadMinutes: readMin,
-        readVia: page.readVia,
-        // PDFs and videos are typed by what they are; web pages keep the URL-based class.
-        ...(page.kind === "video" ? { sourceType: "video" as const } : page.kind === "pdf" && this.getResource(userId, id).sourceType === "article" ? { sourceType: "document" as const } : {}),
-        url: page.url,
-        stage: "mapping",
+  /** What reading the page established: title, publisher, length, how it was read. */
+  private applyPage(userId: string, id: string, page: Page): void {
+    const readMin = page.durationMinutes ?? readMinutes(page.words);
+    this.updateResource(userId, id, {
+      title: page.title ?? this.getResource(userId, id).title,
+      ...(page.canonicalUrl ? { canonicalUrl: page.canonicalUrl } : {}),
+      ...((page.publisher ?? publisherFromUrl(page.url)) ? { publisher: page.publisher ?? publisherFromUrl(page.url)! } : {}),
+      ...(page.author ? { author: page.author } : {}),
+      ...(page.publishedAt ? { publishedAt: page.publishedAt } : {}),
+      fetchedAt: this.now().toISOString(),
+      estimatedReadMinutes: readMin,
+      readVia: page.readVia,
+      // PDFs and videos are typed by what they are; web pages keep the URL-based class.
+      ...(page.kind === "video" ? { sourceType: "video" as const } : page.kind === "pdf" && this.getResource(userId, id).sourceType === "article" ? { sourceType: "document" as const } : {}),
+      url: page.url,
+      stage: "mapping",
       });
+  }
+
+  private async processResource(userId: string, id: string, page: Page, started: number): Promise<void> {
+    try {
+      const readMin = page.durationMinutes ?? readMinutes(page.words);
       const concepts = await this.conceptViews(userId);
       const excerpt = page.text.slice(0, MAX_EXCERPT_CHARS);
       this.resourceText.set(id, { excerpt });

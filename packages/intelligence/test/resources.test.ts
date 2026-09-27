@@ -132,11 +132,40 @@ describe("links beyond web pages", () => {
     const viaService = await fetchPage("https://example.com/post", blocked as unknown as typeof fetch, { readerBase: "https://r.jina.ai/" });
     expect(viaService).toMatchObject({ readVia: "reader-service", title: "Rendered title", publishedAt: "2026-01-01" });
     expect(viaService.text).not.toMatch(/\]\(|#/);
-    await expect(fetchPage("https://example.com/post", blocked as unknown as typeof fetch, { readerBase: null })).rejects.toThrow(/403/);
+    await expect(fetchPage("https://example.com/post", blocked as unknown as typeof fetch, { readerBase: null })).rejects.toThrow(/example\.com blocks automated reading/);
 
     const spa = vi.fn(async (u: string | URL) => (String(u).startsWith("https://r.jina.ai/") ? new Response(reader) : html("<title>App</title><div id=root></div>")));
     expect(await fetchPage("https://example.com/app", spa as unknown as typeof fetch, { readerBase: "https://r.jina.ai/" })).toMatchObject({ readVia: "reader-service" });
     expect(blocked.mock.calls.every(([u]) => !String(u).includes("r.jina.ai") || String(u) === "https://r.jina.ai/https://example.com/post")).toBe(true);
+  });
+
+  it("reads a publisher's declared abstract when the page body is only navigation (IEEE Xplore)", async () => {
+    // The shape of an IEEE Xplore document page as served: the paper is rendered by script, but the
+    // abstract is in the meta tags; the static body is account menus, phone numbers and a footer.
+    const abstract = `Needle insertion procedures are commonly performed in current clinical practice. ${WORDS(190)}`;
+    const menu = ["Change Username/Password", "Update Address", "Payment Options", "Order History", "View Purchased Documents", "Communications Preferences", "Profession and Education", "Technical Interests", "Contact & Support", "About IEEE Xplore", "Terms of Use", "Sitemap", "Privacy & Opting Out of Cookies"];
+    const ieee = `<title>Steering an actuated-tip needle | IEEE Conference Publication | IEEE Xplore</title>
+      <meta name="Description" content="${abstract}"><meta property="og:title" content="Steering an actuated-tip needle in biological tissue">
+      <script>window.app = { huge: "bundle" }</script>
+      <div>IEEE Account<ul>${menu.map((m) => `<li><a href="#">${m}</a></li>`).join("")}</ul></div>
+      <div>Need Help?<ul><li>US &amp; Canada: +1 800 678 4333</li><li>Worldwide: +1 732 981 0060</li></ul></div>
+      <p>A not-for-profit organization, IEEE is the world's largest technical professional organization dedicated to advancing technology for the benefit of humanity.</p>
+      <p>© Copyright 2026 IEEE - All rights reserved. Use of this web site signifies your agreement to the terms and conditions.</p>`;
+    const reader = vi.fn(async () => new Response("should not be needed"));
+    const f = vi.fn(async (u: string | URL) => (String(u).includes("r.jina.ai") ? reader() : html(ieee)));
+    const page = await fetchPage("https://ieeexplore.ieee.org/abstract/document/7487644", f as unknown as typeof fetch, { readerBase: "https://r.jina.ai/" });
+    expect(page.readVia).toBe("abstract");
+    expect(page.title).toBe("Steering an actuated-tip needle in biological tissue");
+    expect(page.text).toMatch(/^Steering an actuated-tip needle in biological tissue\n\nNeedle insertion procedures/);
+    expect(page.text).not.toMatch(/Order History|Copyright/);
+    expect(reader).not.toHaveBeenCalled();
+  });
+
+  it("still reads ordinary articles as pages, and doesn't mistake a short teaser for an abstract", async () => {
+    const article = `<meta name="description" content="A short teaser."><nav><a>Home</a></nav><article><p>${WORDS(200)}</p></article>`;
+    expect(await fetchPage("https://example.com/post", vi.fn(async () => html(article)) as unknown as typeof fetch, { readerBase: null })).toMatchObject({ readVia: "page" });
+    const menusOnly = `<meta name="description" content="A short teaser."><ul>${Array.from({ length: 60 }, (_, i) => `<li>Menu item ${i}</li>`).join("")}</ul>`;
+    await expect(fetchPage("https://example.com/menu", vi.fn(async () => html(menusOnly)) as unknown as typeof fetch, { readerBase: null })).rejects.toThrow(/couldn't reliably read/);
   });
 });
 
@@ -239,7 +268,8 @@ describe("Learning Queue API", () => {
     const added = await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://example.com/posts/1" }) });
     expect(added.status).toBe(200);
     const created = (await added.json()) as { id: string; status: string; stage: string };
-    expect(created).toMatchObject({ status: "processing", stage: "reading" });
+    // Read before it's saved: the entry already carries the page's title and moves on to mapping.
+    expect(created).toMatchObject({ status: "processing", stage: "mapping", title: "Agents that remember & learn" });
 
     const ready = (await settle(app, created.id)) as Record<string, unknown>;
     expect(ready).toMatchObject({ status: "ready", stage: "done", title: "Agents that remember & learn", publisher: "Example Research", analyzedBy: "deterministic" });
@@ -265,16 +295,25 @@ describe("Learning Queue API", () => {
     expect(a.url).toBe("https://www.youtube.com/watch?v=zjkBMFhNj_g");
   });
 
-  it("reports unreadable sources honestly, rejects bad URLs, and reset clears the queue", async () => {
+  it("never adds a source it can't read, says why, rejects bad URLs, and reset clears the queue", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => html("<p>Just a spinner</p>")));
     const { app } = createThinketh({ config: offlineConfig(), now: () => NOW });
     const bad = await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "http://localhost/admin" }) });
     expect(bad.status).toBe(400);
 
-    const r = (await (await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://example.com/spa" }) })).json()) as { id: string };
-    const failed = await settle(app, r.id);
-    expect(failed).toMatchObject({ status: "failed", error: "Thinketh couldn't reliably read this source yet." });
-    expect((await app.request(`/resources/${r.id}/teach`, { method: "POST" })).status).toBe(400);
+    const spa = await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://example.com/spa" }) });
+    expect(spa.status).toBe(422);
+    expect(await spa.json()).toEqual({ error: { code: "unreadable", message: "Thinketh couldn't reliably read this source yet." } });
+    // A bot wall is named as one.
+    vi.stubGlobal("fetch", vi.fn(async (u: string | URL) => (String(u).includes("r.jina.ai") ? new Response("Title: Just a moment...\n\nPerforming security verification") : html("denied", 403))));
+    const walled = await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://journals.sagepub.com/doi/abs/10.1111/x" }) });
+    expect(walled.status).toBe(422);
+    expect(((await walled.json()) as { error: { message: string } }).error.message).toMatch(/^journals\.sagepub\.com blocks automated reading/);
+    // Neither was saved.
+    expect(((await (await app.request("/resources")).json()) as { resources: unknown[] }).resources).toEqual([]);
+
+    vi.stubGlobal("fetch", vi.fn(async () => html(ARTICLE_HTML)));
+    await app.request("/resources", { method: "POST", headers: json, body: JSON.stringify({ url: "https://example.com/posts/1" }) });
 
     await app.request("/demo/reset", { method: "POST" });
     expect(((await (await app.request("/resources")).json()) as { resources: unknown[] }).resources).toEqual([]);

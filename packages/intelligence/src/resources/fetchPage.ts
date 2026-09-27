@@ -28,10 +28,14 @@ const MAX_REDIRECTS = 3;
 const MIN_WORDS = 120;
 /** A video with no transcript still has a title and description worth comparing, if there's enough of it. */
 const MIN_DESCRIPTION_WORDS = 30;
+/** A declared description this long is an abstract, not a teaser: enough to compare on its own. */
+const MIN_ABSTRACT_WORDS = 60;
+/** A line of real prose, as opposed to a menu entry, a button label or a footer link. */
+const PROSE_LINE_WORDS = 8;
 const MAX_TEXT_CHARS = 400_000;
 
 /** How the text was obtained, so the app can say so. */
-export type ReadVia = "page" | "pdf" | "transcript" | "description" | "reader-service";
+export type ReadVia = "page" | "pdf" | "transcript" | "description" | "abstract" | "reader-service";
 
 export type PageMeta = {
   url: string;
@@ -50,6 +54,8 @@ export type Page = PageMeta & {
   readVia: ReadVia;
   /** Videos: running time, shown as "full watch". */
   durationMinutes?: number;
+  /** Pages: the abstract the page declares in its metadata (citation_abstract / description), in full. */
+  abstract?: string;
 };
 
 export type PdfText = { text: string; title?: string; author?: string; publishedAt?: string };
@@ -177,9 +183,13 @@ export async function fetchPage(rawUrl: string, fetchImpl: typeof fetch = fetch,
     got = await safeGet(url, fetchImpl, "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.8");
   } catch (err) {
     // Sites that turn away automated readers can often still be read through the reader service.
-    if (err instanceof HttpStatusError && BLOCKED.has(err.status) && opts.readerBase) {
-      const rendered = await readViaService(err.url, opts.readerBase, fetchImpl).catch(() => undefined);
-      if (rendered && rendered.words >= MIN_WORDS) return rendered;
+    if (err instanceof HttpStatusError && BLOCKED.has(err.status)) {
+      if (opts.readerBase) {
+        const rendered = await readViaService(err.url, opts.readerBase, fetchImpl).catch(() => undefined);
+        if (rendered && rendered.words >= MIN_WORDS) return rendered;
+      }
+      // Said plainly: the site refused a reader (often a bot check), not "the page is broken".
+      throw new ResourceReadError(`${err.url.hostname.replace(/^www\./, "")} blocks automated reading, so Thinketh can't open it. A public copy, like a preprint or PDF, may work.`);
     }
     throw err;
   }
@@ -187,6 +197,7 @@ export async function fetchPage(rawUrl: string, fetchImpl: typeof fetch = fetch,
   const type = (res.headers.get("content-type") ?? "").toLowerCase();
   const looksPdf = type.includes("pdf") || (/\.pdf$/i.test(finalUrl.pathname) && (!type || type.includes("octet-stream")));
   let page: Page;
+  const isHtml = !looksPdf && !type.includes("text/plain");
   if (looksPdf) {
     page = await readPdf(finalUrl, await readCapped(res, MAX_PDF_BYTES), fetchImpl, opts);
   } else if (type && !type.includes("html") && !type.includes("text/plain")) {
@@ -195,7 +206,14 @@ export async function fetchPage(rawUrl: string, fetchImpl: typeof fetch = fetch,
     const body = decode(await readCapped(res));
     page = type.includes("text/plain") ? plainPage(finalUrl.toString(), body) : extractPage(finalUrl.toString(), body);
   }
-  if (page.words >= MIN_WORDS) return page;
+  // Count prose, not chrome: a script-rendered page can still carry 100+ words of menus and footer.
+  if ((isHtml ? proseWords(page.text) : page.words) >= MIN_WORDS) return page;
+  // Publisher pages (IEEE, ACM, …) render the paper with script but declare its abstract in their
+  // metadata. Read that, and say so, rather than a page of navigation.
+  if (isHtml && page.abstract && countWords(page.abstract) >= MIN_ABSTRACT_WORDS) {
+    const text = [page.title, page.abstract].filter(Boolean).join("\n\n");
+    return { ...page, text, words: countWords(text), readVia: "abstract" };
+  }
   // Script-rendered pages come back nearly empty; a reader service can render them.
   if (page.kind === "page" && opts.readerBase) {
     const rendered = await readViaService(finalUrl, opts.readerBase, fetchImpl).catch(() => undefined);
@@ -402,7 +420,8 @@ export function extractPage(url: string, html: string): Page {
     description: clean(meta(html, "og:description", "description", "citation_abstract"), 600),
   };
   const text = readableText(html);
-  return { ...stripUndefined(m), text, words: countWords(text), kind: "page", readVia: "page" };
+  const abstract = clean(meta(html, "citation_abstract", "dc.description", "og:description", "description", "twitter:description"), 6000);
+  return { ...stripUndefined(m), text, words: countWords(text), kind: "page", readVia: "page", ...(abstract ? { abstract } : {}) };
 }
 
 function plainPage(url: string, body: string): Page {
@@ -425,6 +444,16 @@ function stripUndefined<T extends object>(o: T): T {
 
 export function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
+}
+
+/** Words in lines of real prose: menus, list links, labels and one-line footers don't count. */
+export function proseWords(text: string): number {
+  return text
+    .split("\n")
+    .filter((l) => !l.startsWith("- ") || countWords(l) >= PROSE_LINE_WORDS * 2)
+    .map(countWords)
+    .filter((n) => n >= PROSE_LINE_WORDS)
+    .reduce((a, b) => a + b, 0);
 }
 
 /** Main readable text: prefer <article>/<main>, drop chrome and code-like noise. */

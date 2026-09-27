@@ -44,7 +44,7 @@ import type { ThinkethConfig } from "../config.ts";
 import { env } from "../config.ts";
 import { logEvent } from "../log.ts";
 import { MAX_ANSWER_CHARS, MAX_BODY_BYTES, MAX_QUESTION_CHARS, rateLimit, requireAppKey, safeEqual } from "./protect.ts";
-import { BadRequestError, InvalidAnswerError, NotFoundError, type ThinkethService } from "../service.ts";
+import { BadRequestError, InvalidAnswerError, NotFoundError, UnreadableSourceError, type ThinkethService } from "../service.ts";
 import { ForbiddenError, type PlaygroundService } from "../playground/room.ts";
 
 type Vars = { Variables: { userId: string } };
@@ -236,6 +236,8 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     if (err instanceof BadRequestError || err instanceof InvalidAnswerError) {
       return c.json({ error: { code: "bad_request", message: err.message } }, 400);
     }
+    // The link was fine; its content can't be read (bot wall, paywall, script-only page). Not saved.
+    if (err instanceof UnreadableSourceError) return c.json({ error: { code: "unreadable", message: err.message } }, 422);
     if (err instanceof ForbiddenError) return c.json({ error: { code: "forbidden", message: err.message } }, 403);
     if (err instanceof UnauthorizedError) return c.json({ error: { code: "unauthorized", message: err.message } }, 401);
     logEvent("api.error", { path: c.req.path, error: err instanceof Error ? (err.stack ?? err.message) : String(err) }, "error");
