@@ -57,6 +57,36 @@ export type VoiceSession = z.infer<typeof VoiceSessionSchema>;
 export const KnowledgeLevelSchema = z.enum(["strong", "intermediate", "developing", "weak"]);
 export type KnowledgeLevel = z.infer<typeof KnowledgeLevelSchema>;
 
+// ---------------------------------------------------------------------------
+// Discovery accounting: what a recorded pipeline run actually did. Source items
+// and developments are different units: several items can group into one
+// development, and most items are filtered before any development exists.
+
+export const DiscoveryAccountingSchema = z.object({
+  /** live: a recorded discovery run. demo_fixture: the seeded demo's illustrative counts. none: no run yet. */
+  mode: z.enum(["live", "demo_fixture", "none"]),
+  runId: z.string().optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  status: z.enum(["succeeded", "partial", "failed"]).optional(),
+  sourcesChecked: z.number(),
+  sourcesFailed: z.number(),
+  /** Source items read in the last successful run. */
+  itemsInspected: z.number(),
+  /** Of those, items filtered before becoming a development, by reason. */
+  itemsFiltered: z.number(),
+  filteredBreakdown: z.record(z.string(), z.number()),
+  /** Developments the last successful run produced (after grouping overlapping items). */
+  developmentsProduced: z.number(),
+  /** Developments in the stored corpus that briefs can draw on. */
+  developmentsAvailable: z.number(),
+  /** In this brief, for this person. */
+  developmentsSelected: z.number(),
+  /** Left out of this brief because this person's knowledge state already covers them. */
+  developmentsAlreadyUnderstood: z.number(),
+});
+export type DiscoveryAccounting = z.infer<typeof DiscoveryAccountingSchema>;
+
 // GET /brief/today
 export const BriefResponseSchema = z.object({
   brief: DailyBriefSchema,
@@ -72,6 +102,8 @@ export const BriefResponseSchema = z.object({
   understoodDevelopmentIds: z.array(z.string()).optional(),
   /** Optional: newest first, primary transitions only (no "propagated:" side effects). */
   recentTransitions: z.array(KnowledgeStateTransitionSchema).optional(),
+  /** Optional: where this brief's numbers come from (a recorded discovery run, or demo fixtures). */
+  pipeline: DiscoveryAccountingSchema.optional(),
 });
 export type BriefResponse = z.infer<typeof BriefResponseSchema>;
 
@@ -200,8 +232,8 @@ export type AppConfigResponse = z.infer<typeof AppConfigResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Learning Queue: "save to learn". A user-supplied URL, read and compared with
-// the user's knowledge state. Analysis never changes knowledge state; the
-// diagnostic remains the only path that does.
+// the user's knowledge state. Reading and analysis never change knowledge
+// state; a check (diagnostic) is the strong evidence, self-reports a weak capped signal.
 
 /** What the URL is, judged only from where it lives (no claims beyond that). */
 export const ResourceSourceTypeSchema = z.enum(["primary", "documentation", "research", "preprint", "repository", "reporting", "article", "video", "document"]);
@@ -267,3 +299,44 @@ export const TeachDeltaResponseSchema = z.object({
   generatedBy: z.enum(["claude", "deterministic"]),
 });
 export type TeachDeltaResponse = z.infer<typeof TeachDeltaResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Learner profile (onboarding). Preferences frame what Thinketh shows and how it
+// explains; they are never evidence of knowledge. Choosing an interest does not
+// establish mastery.
+
+const profileItem = z.string().trim().min(1).max(80);
+
+export const LearnerProfileSchema = z.object({
+  displayName: z.string().trim().min(1).max(40),
+  interests: z.array(profileItem).max(12),
+  goals: z.array(profileItem).max(12),
+  /** How Thinketh should teach ("Concise explanations", "Systems analogies", …). */
+  teaching: z.array(profileItem).max(12),
+  completedAt: z.string().nullable(),
+});
+export type LearnerProfile = z.infer<typeof LearnerProfileSchema>;
+
+export const IdentityKindSchema = z.enum([
+  /** A verified Supabase session. */
+  "account",
+  /** An explicit, seeded demo persona (resettable, fixed profile). */
+  "demo",
+  /** A development identity (only when the server trusts the user header). */
+  "dev",
+]);
+export type IdentityKind = z.infer<typeof IdentityKindSchema>;
+
+// GET /profile, PUT /profile
+export const ProfileResponseSchema = z.object({
+  /** Null until this identity has saved a profile. */
+  profile: LearnerProfileSchema.nullable(),
+  identity: z.object({ userId: z.string(), kind: IdentityKindSchema, displayName: z.string().optional() }),
+  /** False for demo personas: their profile is part of the seeded demo. */
+  editable: z.boolean(),
+  /** Which concepts each interest maps to today; an empty list means Thinketh doesn't cover it yet. */
+  coverage: z.array(z.object({ interest: z.string(), conceptIds: z.array(z.string()) })),
+});
+export type ProfileResponse = z.infer<typeof ProfileResponseSchema>;
+export const ProfileUpdateRequestSchema = LearnerProfileSchema.extend({ completedAt: z.string().nullable().optional() });
+export type ProfileUpdateRequest = z.infer<typeof ProfileUpdateRequestSchema>;

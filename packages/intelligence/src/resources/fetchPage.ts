@@ -166,6 +166,17 @@ async function safeGet(start: URL, fetchImpl: typeof fetch, accept: string): Pro
   }
 }
 
+/**
+ * Fetch a feed or API response as text with the same protections as a page read: URL validation,
+ * public-address checks on every redirect hop, a timeout and a byte cap. XML/JSON/text only.
+ */
+export async function fetchText(rawUrl: string, fetchImpl: typeof fetch = fetch, maxBytes = MAX_BYTES): Promise<{ text: string; url: string; contentType: string }> {
+  const { res, url } = await safeGet(validateUrl(rawUrl), fetchImpl, "application/rss+xml,application/atom+xml,application/xml,text/xml,application/json;q=0.9,*/*;q=0.5");
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (contentType && !/xml|rss|atom|json|text\/plain/.test(contentType)) throw new ResourceReadError(`Unexpected content type ${contentType.split(";")[0]}`);
+  return { text: decode(await readCapped(res, maxBytes)), url: url.toString(), contentType };
+}
+
 /** Read any supported link: a web page, a PDF, or a YouTube video. */
 export async function fetchPage(rawUrl: string, fetchImpl: typeof fetch = fetch, opts: ReadOptions = {}): Promise<Page> {
   const url = validateUrl(rawUrl);

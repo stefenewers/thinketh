@@ -18,7 +18,8 @@ import {
   TeachDeltaResponseSchema,
   VoiceSessionSchema,
 } from "@thinketh/contracts";
-import { DEMO_USER_ID, type ThinkethApi } from "./client";
+import { type ThinkethApi } from "./client";
+import { authHeaders, currentMode, SignInRequired } from "@/lib/session";
 
 const TIMEOUT_MS = 8000;
 /** Ask, Visualize and Make it stick may be written by Claude; the server falls back well before this. */
@@ -51,11 +52,16 @@ export function rejectedInputReason(err: unknown): string | undefined {
 
 /** Shared app key the demo API requires (x-thinketh-app-key). Ships in the bundle: a gate, not a user credential. */
 const APP_KEY = process.env.EXPO_PUBLIC_THINKETH_APP_KEY;
-const baseHeaders = (): Record<string, string> => ({
+/** Who this is (the demo persona, or a verified session) plus the shared app gate. */
+export const baseHeaders = async (extra: Record<string, string> = {}): Promise<Record<string, string>> => ({
   "Content-Type": "application/json",
-  "x-thinketh-user-id": DEMO_USER_ID,
+  ...(await authHeaders()),
   ...(APP_KEY ? { "x-thinketh-app-key": APP_KEY } : {}),
+  ...extra,
 });
+
+/** One stable key per submit, reused by retries, so the server records the answer once. */
+const newIdempotencyKey = () => `ans-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Talks to the Thinketh API (packages/intelligence). Every response is
 // validated against the canonical contract. With a fallback, failures are
@@ -71,13 +77,14 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     body: unknown,
     fallbackCall: (api: ThinkethApi) => Promise<z.infer<S>>,
     timeoutMs = TIMEOUT_MS,
+    extraHeaders: Record<string, string> = {},
   ): Promise<z.infer<S>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(`${base}${path}`, {
         method,
-        headers: baseHeaders(),
+        headers: await baseHeaders(extraHeaders),
         body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
         signal: controller.signal,
       });
@@ -95,7 +102,9 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
       console.warn(`[thinketh-api] ${method} ${path} failed`, err);
       // Seeded data stands in for an unreachable server, never for the server saying "no".
       const rejected = err instanceof ApiError && !!err.status && REJECTED_INPUT.has(err.status);
-      if (fallback && !rejected) return fallbackCall(fallback);
+      // Only the demo persona may be stood in for by seeded data: a person's own Mind is never
+      // replaced with Stefen's, and a failure is shown as a failure.
+      if (fallback && !rejected && currentMode() === "demo" && !(err instanceof SignInRequired)) return fallbackCall(fallback);
       throw err;
     } finally {
       clearTimeout(timer);
@@ -112,9 +121,15 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
       call(FeedbackResponseSchema, "POST", `/developments/${id(devId)}/feedback`, { kind }, (a) => a.sendFeedback(devId, kind)),
     selectDiagnostic: (req) =>
       call(DiagnosticSelectResponseSchema, "POST", "/diagnostics/select", req, (a) => a.selectDiagnostic(req)),
-    answerDiagnostic: (questionId, answer) =>
-      call(DiagnosticAnswerResponseSchema, "POST", `/diagnostics/${id(questionId)}/answer`, { answer }, (a) =>
-        a.answerDiagnostic(questionId, answer),
+    answerDiagnostic: (questionId, answer, opts) =>
+      call(
+        DiagnosticAnswerResponseSchema,
+        "POST",
+        `/diagnostics/${id(questionId)}/answer`,
+        { answer },
+        (a) => a.answerDiagnostic(questionId, answer),
+        TIMEOUT_MS,
+        { "Idempotency-Key": opts?.idempotencyKey ?? newIdempotencyKey() },
       ),
     getKnowledge: () => call(KnowledgeResponseSchema, "GET", "/knowledge", undefined, (a) => a.getKnowledge()),
     getConceptHistory: (conceptId) =>
@@ -134,7 +149,7 @@ export function createHttpApi(baseUrl: string, fallback: ThinkethApi | null): Th
     resetDemo: async () => {
       const res = await fetch(`${base}/demo/reset`, {
         method: "POST",
-        headers: baseHeaders(),
+        headers: await baseHeaders(),
         body: "{}",
       });
       if (!res.ok) throw new ApiError(`POST /demo/reset -> ${res.status}`);

@@ -15,6 +15,7 @@ switches that one integration to live.
 npm install
 npm run dev:api            # http://localhost:8787 (also reachable on your LAN IP)
 npm test                   # unit + API tests
+npm run discover -w @thinketh/intelligence   # one bounded discovery run (idempotent)
 npm run typecheck
 ```
 
@@ -29,9 +30,10 @@ Copy `.env.example` to `.env` at the repo root to turn on sponsor integrations.
 Paths are identical on both.
 
 **Auth**
-- Send `Authorization: Bearer <supabase access token>` when signed in.
-- With no token, requests act as the seeded demo persona (`demo-user`).
-- `X-Thinketh-User: <any id>` picks a separate user (what the mobile client sends). Every new user starts from the demo persona. A `userId` in POST bodies is accepted and ignored.
+- `Authorization: Bearer <supabase access token>`: the verified user. An invalid or expired token is a 401.
+- `x-thinketh-user-id: demo-user | nadani`: a seeded demo persona (explicit and resettable). Any other id is a 401 unless `THINKETH_TRUST_USER_HEADER=true` (development only).
+- No identity at all: the demo persona, while `THINKETH_DEMO_IDENTITIES` is on (the default).
+- New users start with no evidence (every concept uncertain), no seeded history and no seeded memories. A `userId` in POST bodies is ignored.
 
 **Types**: the canonical request/response envelopes live in `@thinketh/contracts`
 (`packages/contracts/src/index.ts`, section "Canonical API envelopes"). Every
@@ -57,7 +59,9 @@ No stack traces are ever returned.
 | 10 | `POST /voice/session` | `VoiceSession` |
 | – | `POST /developments/:id/feedback` | `FeedbackResponse` (Got it / I already knew this / Explain deeper / saved / viewed) |
 | – | `GET /config` | `AppConfigResponse`: feature flags. Hide anything that is `false`. |
-| – | `POST /demo/reset` | `{ ok: true }`: resets the current user to the seeded persona (for rehearsals). |
+| – | `GET` / `PUT /profile` | `ProfileResponse`: learner preferences for the verified identity. Preferences are not evidence. |
+| – | `POST /demo/reset` | `{ ok: true }`: resets a seeded demo persona for rehearsals. Any other identity gets a 403. |
+| – | `POST /admin/discovery/run`, `GET /discovery/runs` | Run the discovery pipeline (admin token); trace recent runs. |
 | – | `GET /health` | Adapter `status` (`live` / `degraded` / `unverified` / `fallback`) and last error. `?probe=1` checks sponsors first. |
 
 ### Examples (real responses from the seeded demo, trimmed with …)
@@ -195,7 +199,9 @@ message in the ElevenLabs dashboard should reference `{{brief_script}}` and `{{u
 | Backboard (memory) | `BACKBOARD_API_KEY` | in-process memory seeded with persona preferences |
 | MongoDB Atlas (corpus + search) | `MONGODB_URI` (+ `VOYAGE_API_KEY` for vectors) | seeded corpus + lexical search |
 | Tiger Data (temporal history) | `TIGER_DATABASE_URL` | in-process store (writes always go local too) |
-| Supabase (auth, flags, integration ids) | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | demo persona, env-derived flags |
+| Supabase (auth, profiles, flags, integration ids) | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | demo persona, env-derived flags; profiles in the local store |
+| App state (resources, rooms, profiles, runs, corpus) | `MONGODB_URI` (collections `app_*`) | JSON files in `THINKETH_DATA_DIR` (always written as a mirror) |
+| Discovery (5 official feeds/APIs) | always (network) | a failed source is recorded; the stored corpus is kept |
 | ElevenLabs (voice) | `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` | transcript |
 
 Every sponsor call goes through `adapters/guard.ts`: timeout → error mapping →

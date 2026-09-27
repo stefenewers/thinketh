@@ -69,7 +69,7 @@ describe("dynamic transfer challenges", () => {
     expect(ctx.concept.id).toBe("agent-tool-use");
     expect(ctx.teacherExplanation).toMatch(/structured call/);
     // Registered server-side: the same item is what answerDiagnostic grades.
-    expect(t.service.diagnosticPrompt(ch.item.id)).toEqual({ conceptId: "agent-tool-use", prompt: GOOD_TOOL_DRAFT.prompt });
+    expect(await t.service.diagnosticPrompt(ch.item.id)).toEqual({ conceptId: "agent-tool-use", prompt: GOOD_TOOL_DRAFT.prompt });
   });
 
   it("falls back to a grounded challenge when the generated one fails validation", async () => {
@@ -148,7 +148,7 @@ describe("dynamic transfer in a room: the second peer teaching (Stefen -> Nadani
     expect(room.scene).toBe("transfer");
     expect(room.transfer).toMatchObject({ conceptId: "agent-tool-use", learnerId: "nadani", source: "fallback" });
     const qid = room.transfer!.questionId;
-    expect(t.service.diagnosticPrompt(qid)!.prompt).toBe(room.transfer!.prompt);
+    expect((await t.service.diagnosticPrompt(qid))!.prompt).toBe(room.transfer!.prompt);
     // Re-conducting never regenerates: the question on screen is the one that will be graded.
     const again = await t.app.request(`/playground/rooms/${room.id}`, { headers: { "x-thinketh-user": "demo-user" } });
     expect(((await again.json()) as PlaygroundRoom).transfer!.questionId).toBe(qid);
@@ -339,7 +339,7 @@ describe("arbitrary shared Playground source", () => {
     expect(s1!.status).toBe("ready");
     expect(s2!.status).toBe("ready");
     // Each side is that person's own resource, analyzed against their own Mind.
-    expect(t.service.getResource("demo-user", s1!.resourceId).url).toBe(t.service.getResource("nadani", s2!.resourceId).url);
+    expect((await t.service.getResource("demo-user", s1!.resourceId)).url).toBe((await t.service.getResource("nadani", s2!.resourceId)).url);
   });
 
   it("fails honestly on a blocked source and the session survives", async () => {

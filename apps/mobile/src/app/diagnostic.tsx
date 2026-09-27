@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { closeAll, goBack } from "@/lib/nav";
@@ -74,12 +74,16 @@ function Diagnostic({
   const concept = concepts.find((c) => c.id === question.conceptId);
   const answer = question.type === "multiple_choice" ? selected : text.trim() || null;
 
+  // One key per question and answer: retrying the same submit after a timeout can't record it twice.
+  const attempt = useRef<{ answer: string; key: string } | null>(null);
+
   const submit = async () => {
     if (!answer) return;
     setSubmitting(true);
     setSubmitError(false);
+    if (attempt.current?.answer !== answer) attempt.current = { answer, key: `ans-${question.id.slice(-24)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`.replace(/[^\w.:-]/g, "-") };
     try {
-      const res = await api.answerDiagnostic(question.id, answer);
+      const res = await api.answerDiagnostic(question.id, answer, { idempotencyKey: attempt.current.key });
       Haptics.notificationAsync(
         res.answer.correctness >= 0.99 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
       ).catch(() => {});

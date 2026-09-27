@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
 function ArrivalNote({ from }: { from: string }) {
   const text: Record<string, string> = {
     ask: "Opened from Ask: Thinketh used this concept in its answer. Asking adds context; a check is what changes the book.",
-    source: "Opened from a source: reading adds information. This book changes only when you show understanding in a check.",
+    source: "Opened from a source: reading adds context, not evidence. Saying you got it counts a little, within a cap; a check provides stronger evidence.",
     check: "Opened from your check: the change and its reason are recorded below.",
     playground: "Opened from the Playground: your transfer answer was graded, and the recorded result is below.",
     today: "Opened from Today: the latest recorded change is below.",

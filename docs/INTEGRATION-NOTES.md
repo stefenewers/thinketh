@@ -38,6 +38,74 @@ This follows JOINT-INTEGRATION-CHECKLIST.md step 2: "Move response envelopes int
   - Status is shown as FALLBACK (not configured), LIVE · untested (no calls yet), DEGRADED (the last call fell back), or LIVE.
 - **Reset contract used by the panel:** after `POST /demo/reset`, `GET /knowledge/agent-memory/history` → `current` should be about 0.42 mastery and 0.44 uncertainty, with the `memory-equals-context-window` misconception flag. That's verified against the local API.
 
+## 2026-09-27: real identity, server profiles, durable state, discovery, agent-prepared lessons
+
+Branch `stefen-earn-the-promise`. Contract changes are additive (commit `5e20ee0`, plus `PreparedLesson.status: "preparing"` in the backend commit).
+
+### Identity (breaking for anything that relied on arbitrary user headers)
+- `Authorization: Bearer <Supabase access token>` → the verified auth user id (`kind: "account"`). A token that fails verification is **401**, never downgraded.
+- `x-thinketh-user-id` selects only a **seeded demo persona** (`demo-user`, `nadani`) while `THINKETH_DEMO_IDENTITIES` is on (default). Any other id is **401** unless `THINKETH_TRUST_USER_HEADER=true` (development only).
+- No identity → `demo-user` (demo identities on), so the current app and the golden check keep working unchanged.
+- `THINKETH_DEMO_ALIAS_PREFIX` (e.g. `audit-`): rehearsal clones of the demo persona with isolated history. `scripts/demo-audit/preflight.mjs` sets it.
+- `POST /demo/reset` resets **only** seeded personas and aliases; any other identity gets 403.
+
+### New users start empty
+- Every concept starts at the no-evidence prior: mastery 0.20, uncertainty 0.70, and no evidence.
+- There is no seeded history and there are no seeded memories.
+- Each new user gets their own Backboard assistant; the pinned `BACKBOARD_ASSISTANT_ID` now belongs to `demo-user` only.
+- Briefs for accounts use only **discovered** developments, never the illustrative seed corpus.
+- Ask and lessons for accounts are grounded only in discovered claims.
+
+### Profiles
+- `GET /profile` returns `{ profile | null, identity, editable, coverage }`. `PUT /profile` takes `{ displayName, interests, goals, teaching }`.
+- Storage:
+  - Verified users go to Supabase `public.profiles`: `display_name`, `interests` (jsonb list of topics), `goals`, and `explanation_preferences` (the teaching choices). No migration was needed.
+  - The same profile is also written to the durable store.
+- Demo personas keep their fixed profile (PUT returns 403).
+- What the profile drives:
+  - Brief ordering: each interest maps to concepts.
+  - Delta depth: "Concise explanations" keeps two items per section.
+  - The default Ask mode.
+  - Resource analysis and teaching preferences.
+  - The voice script.
+- It never changes knowledge state.
+
+### Durable state
+- `store/docStore.ts` writes to the MongoDB Atlas collections `app_*`, mirrored to local JSON in `THINKETH_DATA_DIR`. The in-process Maps are caches.
+- What is stored:
+  - Resources, with their excerpts and lessons, scoped to their owner.
+  - Generated and transfer diagnostics.
+  - Playground rooms.
+  - Operation records.
+  - Profiles.
+  - The discovered corpus and discovery runs.
+- Without Tiger, the local knowledge history is stored too.
+- A resource left "processing" by a restart resumes once. After that it fails with "Reading was interrupted. Save it again to retry.", and saving it again retries it in place under the same id.
+- `POST /diagnostics/:id/answer` accepts an **`Idempotency-Key`** header: a retry returns the recorded result. The app sends one per submit.
+- Playground answers use operation `room:<id>:<questionId>` and run under a per-room lock. Concurrent submissions give one 200 and one 400, and exactly one transition.
+
+### Discovery
+- Sources: OpenAI News, Google DeepMind, Hugging Face, the arXiv API, and MCP releases (`src/discovery/sources.ts`).
+- How to run it:
+  - `npm run discover -w @thinketh/intelligence`
+  - `POST /admin/discovery/run` (needs `x-thinketh-admin-token`)
+  - `GET /discovery/runs`
+- `BriefResponse.pipeline` is new:
+  - `mode: "live"` carries the recorded run's accounting. For live briefs, `skippedCount`/`skippedBreakdown` are the run's **source items**, and `developmentsAlreadyUnderstood` is reported separately.
+  - `mode: "demo_fixture"` carries the demo's illustrative counts (unchanged numbers, now labeled).
+  - `mode: "none"` means no run has happened yet.
+- New skip keys: `outdated`, `undated`, `over_budget`.
+- `Development.discoveredAt` is new; `happenedAt` stays the publication time.
+
+### Playground
+- On `teacher_assigned`, the teacher's agent prepares `teaching.prepared`:
+  - `status` is `preparing`, then `prepared` or `unavailable`.
+  - Each point cites sources. It also carries `whyRelevant`, `adaptedTo`, and `context` (what the agent was allowed to use).
+  - Events: `lesson_prepared` / `lesson_unavailable`, with actor `agent:<teacherId>`.
+- `POST /playground/rooms/:id/explain` takes `source: "own" | "agent" | "agent_edited"`, recorded as `teaching.explanationSource`.
+- `POST /playground/rooms/:id/share { savedSources }` is the one sharing choice beyond the snapshot. When on, the agent may use the titles, links and summaries of the teacher's saved sources on that concept. It is off by default and emits the `sharing_changed` event.
+- `teaching.deliveredAt` is set when the learner's device has the explanation in front of it. That means encountered, not understood; only `transfer.verified` means demonstrated.
+
 ## Backend behaviours the mobile app now relies on
 
 If you change any of these, the app needs a matching change:
@@ -47,7 +115,7 @@ If you change any of these, the app needs a matching change:
 3. **`knowledgeLevel()` thresholds (0.75 / 0.55 / 0.40)** are mirrored in `apps/mobile/src/lib/knowledge.ts` → `levelOf()`. The app uses it only for transitions, which don't carry a `level`. Elsewhere it uses the server's `level`.
 4. **`skippedBreakdown` keys** are mapped to labels. The known keys are `duplicate`, `low_signal`, `already_understood`, `minor_update`, and `low_confidence`. Any other key is shown humanized.
 5. **Diagnostic feedback** may start with a short verdict ("Right.", "Not quite."). The app turns it into the heading. Keep it short.
-6. **User header:** the app sends `x-thinketh-user-id: demo-user`.
+6. **User header:** in demo mode the app sends `x-thinketh-user-id: demo-user`; in personal mode it sends `Authorization: Bearer <Supabase access token>` instead (see 2026-09-27).
 7. **`POST /demo/reset`** is used by the golden check. Keep `THINKETH_ALLOW_RESET` on in dev.
 
 ## Check your changes against the app

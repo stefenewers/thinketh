@@ -70,7 +70,7 @@ if (listening(API_PORT).length) pre.started.api = "already running";
 else {
   const p = spawn("npm", ["run", "start", "--workspace", "@thinketh/intelligence"], {
     cwd: ROOT, detached: true, stdio: ["ignore", logFile("api"), logFile("api")],
-    env: { ...process.env, PORT: String(API_PORT), THINKETH_REQUIRE_AUTH: "false", THINKETH_ALLOW_RESET: "true" },
+    env: { ...process.env, PORT: String(API_PORT), THINKETH_REQUIRE_AUTH: "false", THINKETH_ALLOW_RESET: "true", THINKETH_DEMO_ALIAS_PREFIX: "audit-" },
   });
   p.unref(); pids.api = p.pid; pre.started.api = "started";
 }

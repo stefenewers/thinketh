@@ -10,6 +10,7 @@ import { ThinkethService } from "./service.ts";
 import { createConductor } from "./playground/conductor.ts";
 import { PollingOnly, SupabaseBroadcast } from "./playground/realtime.ts";
 import { PlaygroundService } from "./playground/room.ts";
+import { DiscoveryRunner } from "./discovery/run.ts";
 
 export function createThinketh(overrides: { config?: ThinkethConfig; now?: () => Date } = {}) {
   const config = overrides.config ?? loadConfig();
@@ -18,9 +19,10 @@ export function createThinketh(overrides: { config?: ThinkethConfig; now?: () =>
   const service = new ThinkethService(config, seed, adapters, overrides.now);
   const { url, serviceRoleKey, anonKey } = config.supabase;
   const realtime = url && serviceRoleKey ? new SupabaseBroadcast(url, serviceRoleKey) : new PollingOnly();
-  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, overrides.now, url && anonKey ? { url, key: anonKey } : undefined);
-  const app = createApp({ service, config, supabase: adapters.supabase, playground });
-  return { config, seed, adapters, service, playground, app };
+  const playground = new PlaygroundService(service, createConductor(config.muse), realtime, adapters.store, overrides.now, url && anonKey ? { url, key: anonKey } : undefined);
+  const discovery = new DiscoveryRunner({ service, store: adapters.store, config, ...(overrides.now ? { now: overrides.now } : {}) });
+  const app = createApp({ service, config, supabase: adapters.supabase, playground, discovery });
+  return { config, seed, adapters, service, playground, discovery, app };
 }
 
 export { ThinkethService } from "./service.ts";
