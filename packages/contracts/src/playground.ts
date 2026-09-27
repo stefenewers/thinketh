@@ -105,6 +105,11 @@ export const RoomParticipantSchema = z.object({
   joinedAt: z.string(),
   /** A seeded demo persona the host device can act for (one-device mode). */
   demoPersona: z.boolean(),
+  /**
+   * What this person lets their agent use beyond the knowledge snapshot. Off unless they turn it
+   * on: saved sources means the titles, links and summaries of sources they saved on the topic being taught.
+   */
+  shares: z.object({ savedSources: z.boolean() }).optional(),
 });
 export type RoomParticipant = z.infer<typeof RoomParticipantSchema>;
 
@@ -149,6 +154,9 @@ export const RoomEventTypeSchema = z.enum([
   "resource_ready",
   "scene_advanced",
   "session_ended",
+  "lesson_prepared",
+  "lesson_unavailable",
+  "sharing_changed",
 ]);
 export type RoomEventType = z.infer<typeof RoomEventTypeSchema>;
 
@@ -164,6 +172,44 @@ export const RoomEventSchema = z.object({
 });
 export type RoomEvent = z.infer<typeof RoomEventSchema>;
 
+/**
+ * An explanation the teacher's agent drafted for the learner's gap. It is agent-prepared material,
+ * never presented as something the teacher said, and preparing it changes nobody's knowledge state.
+ */
+export const PreparedLessonSchema = z.object({
+  status: z.enum(["prepared", "unavailable"]),
+  /** The participant whose agent prepared it (the teacher). */
+  agentOf: z.string(),
+  preparedFor: z.string(),
+  by: z.enum(["claude", "deterministic"]).optional(),
+  text: z.string().optional(),
+  /** Each point is backed by at least one listed source. */
+  points: z.array(z.object({ text: z.string(), sourceIds: z.array(z.string()) })).optional(),
+  /** The learner's gap it was adapted to, stated from the shared snapshot. */
+  adaptedTo: z.string().optional(),
+  /** Why this exchange is worth the time. */
+  whyRelevant: z.string().optional(),
+  sources: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.string().optional(),
+        publisher: z.string().optional(),
+        publishedAt: z.string().optional(),
+        /** corpus: Thinketh's shared world-state corpus. shared_resource: a source the teacher chose to share. */
+        via: z.enum(["corpus", "shared_resource"]),
+      }),
+    )
+    .optional(),
+  /** What the agent was permitted to use, in plain words. */
+  context: z.array(z.string()).optional(),
+  /** Why nothing grounded could be prepared (status "unavailable"). */
+  message: z.string().optional(),
+  preparedAt: z.string(),
+});
+export type PreparedLesson = z.infer<typeof PreparedLessonSchema>;
+
 export const RoomTeachingSchema = z.object({
   conceptId: z.string(),
   conceptName: z.string(),
@@ -172,7 +218,15 @@ export const RoomTeachingSchema = z.object({
   /** "Why should an evaluator sometimes be separate from the generating model?" */
   prompt: z.string(),
   explanation: z.string().optional(),
+  /** Whose words the explanation is: the teacher's own, their agent's draft, or the draft edited by the teacher. */
+  explanationSource: z.enum(["own", "agent", "agent_edited"]).optional(),
+  /** When the explanation reached the learner (shown to them). Encountering is not understanding. */
+  deliveredAt: z.string().optional(),
+  /** What the teacher's agent prepared for this exchange. */
+  prepared: PreparedLessonSchema.optional(),
 });
+
+
 
 export const RoomTransferSchema = z.object({
   conceptId: z.string(),
@@ -294,7 +348,13 @@ export type PlaygroundRoom = z.infer<typeof PlaygroundRoomSchema>;
 // Requests
 export const CreateRoomRequestSchema = z.object({ displayName: z.string().trim().min(1).max(40) });
 export const JoinRoomRequestSchema = z.object({ code: z.string().trim().min(4).max(12), displayName: z.string().trim().min(1).max(40) });
-export const RoomExplainRequestSchema = z.object({ text: z.string().trim().min(1).max(2000), asUserId: z.string().max(64).optional() });
+export const RoomExplainRequestSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+  asUserId: z.string().max(64).optional(),
+  /** Defaults to "own". "agent"/"agent_edited" only when the agent actually prepared a lesson. */
+  source: z.enum(["own", "agent", "agent_edited"]).optional(),
+});
+export const RoomShareRequestSchema = z.object({ savedSources: z.boolean(), asUserId: z.string().max(64).optional() });
 export const RoomAnswerRequestSchema = z.object({ answer: z.string().trim().min(1).max(2000), asUserId: z.string().max(64).optional() });
 export const RoomResourceRequestSchema = z.object({ url: z.string().trim().min(1).max(2048) });
 export const RoomConductRequestSchema = z.object({ intent: z.enum(["next", "shared_gap", "resource", "end"]).optional() });
