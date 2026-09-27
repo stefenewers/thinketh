@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { Concept, Development, KnowledgeLevel, KnowledgeResponse, KnowledgeState, KnowledgeStateTransition, Source } from "@thinketh/contracts";
 import { api } from "@/api";
 import { PLAYGROUND_AVAILABLE } from "@/api/playground";
@@ -25,6 +25,9 @@ export default function MindScreen() {
   const { data, error, loading, reload } = useApi(() => api.getKnowledge(), [], { refetchOnFocus: true });
   // Developments and sources for "What's changed for you" and the Sources tab. Optional: Mind never waits on it.
   const brief = useApi(() => api.getTodayBrief(), []);
+  // Leaving Mind resets it, like Today: coming back starts from the top. Done on leave, so it's never seen.
+  const [visit, setVisit] = useState(0);
+  useFocusEffect(useCallback(() => () => setVisit((v) => v + 1), []));
 
   if ((loading && !data) || error || !data) {
     return (
@@ -35,7 +38,7 @@ export default function MindScreen() {
     );
   }
   // Mind is a tab now: a new deep link (?concept=) remounts it with that concept selected.
-  return <Mind key={`${concept ?? "mind"}:${tab ?? ""}`} data={data} initialConceptId={concept} initialTab={tab === "sources" ? "sources" : undefined} from={from} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
+  return <Mind key={`${concept ?? "mind"}:${tab ?? ""}:${visit}`} data={data} initialConceptId={concept} initialTab={tab === "sources" ? "sources" : undefined} from={from} developments={brief.data?.developments ?? []} sources={brief.data?.sources ?? []} />;
 }
 
 const BANDS: KnowledgeLevel[] = ["strong", "intermediate", "developing", "weak"];

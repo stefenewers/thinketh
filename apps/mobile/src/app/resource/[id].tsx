@@ -202,7 +202,8 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
 
   return (
     <Screen topInset={false} contentStyle={{ paddingTop: 0 }}>
-      <ArtHeader conceptIds={r.matchedConceptIds} fallback="document" onBack={goBack} />
+      {/* A saved source opens on its title: no decorative tile above it. */}
+      <ArtHeader conceptIds={r.matchedConceptIds} fallback="document" onBack={goBack} art={false} />
       <Gutter>
         <T style={styles.typeLabel}>{SOURCE_TYPE_LABEL[r.sourceType]}</T>
         <T style={styles.title} accessibilityRole="header">
@@ -264,9 +265,7 @@ function Ready({ resource: r, concepts }: { resource: Resource; concepts: Concep
             </BriefSection>
             {r.whyNow ? (
               <BriefSection title="Why this matters">
-                <T variant="statement" style={{ fontSize: 18, lineHeight: 26 }}>
-                  {r.whyNow}
-                </T>
+                <T variant="body">{r.whyNow}</T>
               </BriefSection>
             ) : null}
             {!lesson && !nothingNew ? <View style={{ marginTop: space.xxl }}>{teachBlock}</View> : null}

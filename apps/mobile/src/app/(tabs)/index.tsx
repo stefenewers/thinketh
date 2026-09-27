@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAgentScreen } from "@/agent/screenContext";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Wordmark } from "@/components/Logo";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useFocusEffect } from "expo-router";
 import { narrativeLabel, type BriefResponse, type Concept, type Development, type KnowledgeResponse } from "@thinketh/contracts";
 import { api } from "@/api";
 import { PLAYGROUND_AVAILABLE } from "@/api/playground";
@@ -51,6 +51,10 @@ export default function Today() {
     [session.mode, session.session?.userId],
     { refetchOnFocus: true },
   );
+  // Leaving Today resets it: coming back is a fresh page from the top (the data refetches on focus).
+  // Done on leave, not on return, so the reset is never seen.
+  const [visit, setVisit] = useState(0);
+  useFocusEffect(useCallback(() => () => setVisit((v) => v + 1), []));
   const lead = data ? data.today.developments.find((d) => d.id === data.today.brief.heroDevelopmentId) : undefined;
   useAgentScreen({
     screen: "today",
@@ -77,7 +81,7 @@ export default function Today() {
       </Screen>
     );
   }
-  return <TodayContent today={data.today} knowledge={data.knowledge} name={session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME} />;
+  return <TodayContent key={visit} today={data.today} knowledge={data.knowledge} name={session.mode === "personal" ? (profile?.displayName ?? "You") : DEMO_LEARNER_NAME} />;
 }
 
 /** "Last run 3h ago" style freshness for the discovery run behind a live brief. */
