@@ -12,6 +12,7 @@ import { LocalSemanticStore, MongoSemanticStore } from "./semantic.ts";
 import { SupabaseBackend } from "./supabase.ts";
 import { LocalTemporalStore, ResilientTemporalStore, TigerTemporalStore } from "./temporal.ts";
 import type { IntelligenceModel, MemoryProvider, SemanticStore, VoiceProvider } from "./types.ts";
+import { FileDocStore, MemoryDocStore, MongoDocStore, ResilientDocStore, type DocStore } from "../store/docStore.ts";
 import { ElevenLabsVoice, TranscriptVoice } from "./voice.ts";
 
 export type Adapters = {
@@ -25,6 +26,8 @@ export type Adapters = {
   voice: VoiceProvider | undefined;
   transcriptVoice: TranscriptVoice;
   supabase: SupabaseBackend | undefined;
+  /** Durable app state (resources, rooms, profiles, operations, discovered corpus). */
+  store: DocStore;
 };
 
 export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapters {
@@ -51,7 +54,7 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
     ? new BackboardMemory({
         apiKey: config.backboard.apiKey,
         baseUrl: config.backboard.baseUrl,
-        ...(config.backboard.assistantId ? { assistantId: config.backboard.assistantId } : {}),
+        ...(config.backboard.assistantId ? { assistantId: config.backboard.assistantId, pinnedUserId: config.demoUserId } : {}),
         ...(config.backboard.llmProvider ? { llmProvider: config.backboard.llmProvider } : {}),
         ...(config.backboard.modelName ? { modelName: config.backboard.modelName } : {}),
         ...(supabase
@@ -73,8 +76,12 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
       })
     : undefined;
 
+  const local = config.dataDir ? new FileDocStore(config.dataDir) : new MemoryDocStore();
+  const store: DocStore = semantic ? new ResilientDocStore(local, new MongoDocStore(() => semantic.db())) : local;
+
   const temporal = new ResilientTemporalStore(
-    new LocalTemporalStore(),
+    // With Tiger, local is a cache that covers outages; without it, local is the (durable) record.
+    new LocalTemporalStore(config.tiger.url ? undefined : store),
     config.tiger.url ? new TigerTemporalStore(config.tiger.url, { tlsInsecure: config.tiger.tlsInsecure }) : undefined,
   );
 
@@ -94,12 +101,13 @@ export function buildAdapters(config: ThinkethConfig, seed: SeedCorpus): Adapter
     model,
     fallbackModel: new DeterministicModel({ diagrams: seed.diagrams, visualizations: seed.visualizations, memoryAids: seed.memoryAids }),
     memory,
-    localMemory: new LocalMemory(seed.memories),
+    localMemory: new LocalMemory(seed.memories, [config.demoUserId]),
     semantic,
     localSemantic: new LocalSemanticStore(seed),
     temporal,
     voice,
     transcriptVoice: new TranscriptVoice(),
     supabase,
+    store,
   };
 }

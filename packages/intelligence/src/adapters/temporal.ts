@@ -9,43 +9,73 @@ import { KnowledgeStateTransitionSchema } from "../contracts.ts";
 import { logEvent } from "../log.ts";
 import { guarded } from "./guard.ts";
 import type { TemporalStore } from "./types.ts";
+import type { DocStore } from "../store/docStore.ts";
 
 export class LocalTemporalStore implements TemporalStore {
   readonly name = "local" as const;
   private readonly observations: KnowledgeObservation[] = [];
   private readonly transitions: KnowledgeStateTransition[] = [];
+  /** Without Tiger, the local history is the record: keep it in the durable doc store so a restart keeps it. */
+  private readonly persist: DocStore | undefined;
+  private loaded: Promise<void> | undefined;
+
+  constructor(persist?: DocStore) {
+    this.persist = persist;
+  }
+
+  private ready(): Promise<void> {
+    this.loaded ??= (async () => {
+      if (!this.persist) return;
+      const stored = await this.persist.list<KnowledgeStateTransition>("local_transitions", undefined, 100_000);
+      const known = new Set(this.transitions.map((t) => t.id));
+      this.transitions.unshift(...stored.filter((t) => !known.has(t.id)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+    })();
+    return this.loaded;
+  }
 
   async appendObservation(input: KnowledgeObservation): Promise<void> {
     this.observations.push(input);
   }
 
   async appendTransition(input: KnowledgeStateTransition): Promise<void> {
+    await this.ready();
     this.transitions.push(input);
+    await this.persist?.put("local_transitions", input.id, input, input.userId);
   }
 
   async getConceptHistory(userId: string, conceptId: string): Promise<KnowledgeStateTransition[]> {
+    await this.ready();
     return this.transitions.filter((t) => t.userId === userId && t.conceptId === conceptId);
   }
 
   async getLatestStates(userId: string): Promise<KnowledgeState[]> {
+    await this.ready();
     const latest = new Map<string, KnowledgeState>();
     for (const t of this.transitions) if (t.userId === userId) latest.set(t.conceptId, t.after);
     return [...latest.values()];
   }
 
   async getRecentTransitions(userId: string, limit: number): Promise<KnowledgeStateTransition[]> {
+    await this.ready();
     return this.transitions.filter((t) => t.userId === userId).slice(-limit).reverse();
+  }
+
+  async findTransitionByObservation(userId: string, observationId: string): Promise<KnowledgeStateTransition | undefined> {
+    await this.ready();
+    return this.transitions.find((t) => t.userId === userId && t.observation.id === observationId);
   }
 
   async appendInteraction(): Promise<void> {}
 
   async reset(userId: string): Promise<void> {
+    await this.ready();
     const keep = <T extends { userId: string }>(list: T[]) => {
       const kept = list.filter((x) => x.userId !== userId);
       list.splice(0, list.length, ...kept);
     };
     keep(this.observations);
     keep(this.transitions);
+    await this.persist?.removeOwned("local_transitions", userId);
   }
 }
 
@@ -136,6 +166,15 @@ export class TigerTemporalStore implements TemporalStore {
       order by created_at desc
       limit ${limit}`;
     return rows.map((r) => KnowledgeStateTransitionSchema.parse(r.payload));
+  }
+
+  async findTransitionByObservation(userId: string, observationId: string): Promise<KnowledgeStateTransition | undefined> {
+    const sql = await this.sql();
+    const rows = await sql`
+      select payload from knowledge_state_transitions
+      where user_id = ${userId} and observation_id = ${observationId}
+      limit 1`;
+    return rows[0] ? KnowledgeStateTransitionSchema.parse(rows[0].payload) : undefined;
   }
 
   async appendInteraction(input: { userId: string; kind: string; refId?: string; payload?: Record<string, unknown>; at: string }): Promise<void> {
@@ -234,6 +273,13 @@ export class ResilientTemporalStore implements TemporalStore {
       this.read("getRecentTransitions", (r) => r.getRecentTransitions(userId, limit), [] as KnowledgeStateTransition[]),
     ]);
     return this.merge(remote, local).reverse().slice(0, limit);
+  }
+
+  async findTransitionByObservation(userId: string, observationId: string): Promise<KnowledgeStateTransition | undefined> {
+    return (
+      (await this.local.findTransitionByObservation(userId, observationId)) ??
+      (await this.read("findTransitionByObservation", (r) => r.findTransitionByObservation(userId, observationId), undefined as KnowledgeStateTransition | undefined))
+    );
   }
 
   async reset(userId: string): Promise<void> {

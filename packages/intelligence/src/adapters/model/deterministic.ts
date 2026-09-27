@@ -2,6 +2,7 @@
  * Deterministic IntelligenceModel: the always-available fallback. It returns
  * seeded content where it exists and simple, honest templates otherwise.
  */
+import { deterministicExchange, type ExchangeContext, type ExchangeDraft } from "../../engine/exchange.ts";
 import {
   normalizeVisualization,
   visualizationFromDelta,
@@ -219,6 +220,10 @@ export class DeterministicModel implements IntelligenceModel {
 
   async teachDelta(ctx: TeachContext): Promise<TeachResult> {
     return deterministicTeach(ctx);
+  }
+
+  async prepareExchange(input: ExchangeContext): Promise<ExchangeDraft> {
+    return deterministicExchange(input);
   }
 }
 

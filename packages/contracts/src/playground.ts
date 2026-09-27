@@ -177,7 +177,8 @@ export type RoomEvent = z.infer<typeof RoomEventSchema>;
  * never presented as something the teacher said, and preparing it changes nobody's knowledge state.
  */
 export const PreparedLessonSchema = z.object({
-  status: z.enum(["prepared", "unavailable"]),
+  /** preparing: the agent is drafting. prepared: a sourced draft is ready. unavailable: nothing grounded could be prepared. */
+  status: z.enum(["preparing", "prepared", "unavailable"]),
   /** The participant whose agent prepared it (the teacher). */
   agentOf: z.string(),
   preparedFor: z.string(),

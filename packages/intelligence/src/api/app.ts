@@ -34,6 +34,10 @@ import {
   RoomConductRequestSchema,
   RoomExplainRequestSchema,
   RoomResourceRequestSchema,
+  RoomShareRequestSchema,
+  ProfileResponseSchema,
+  ProfileUpdateRequestSchema,
+  type IdentityKind,
 } from "../contracts.ts";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
@@ -44,12 +48,16 @@ import type { ThinkethConfig } from "../config.ts";
 import { env } from "../config.ts";
 import { logEvent } from "../log.ts";
 import { MAX_ANSWER_CHARS, MAX_BODY_BYTES, MAX_QUESTION_CHARS, rateLimit, requireAppKey, safeEqual } from "./protect.ts";
-import { BadRequestError, InvalidAnswerError, NotFoundError, type ThinkethService } from "../service.ts";
-import { ForbiddenError, type PlaygroundService } from "../playground/room.ts";
+import { BadRequestError, ConflictError, ForbiddenError, InvalidAnswerError, NotFoundError, type ThinkethService } from "../service.ts";
+import type { PlaygroundService } from "../playground/room.ts";
+import type { DiscoveryRunner } from "../discovery/run.ts";
 
-type Vars = { Variables: { userId: string } };
+type Vars = { Variables: { userId: string; identityKind: IdentityKind } };
 
 class UnauthorizedError extends Error {}
+
+/** Idempotency-Key header: letters, digits and - _ : . only, bounded. */
+const IDEMPOTENCY_KEY = /^[\w.:-]{8,128}$/;
 
 const IngestRequestSchema = z.object({
   sources: z
@@ -77,8 +85,14 @@ async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
   return parsed.data;
 }
 
-export function createApp(deps: { service: ThinkethService; config: ThinkethConfig; supabase?: SupabaseBackend | undefined; playground?: PlaygroundService }) {
-  const { service, config, supabase, playground } = deps;
+export function createApp(deps: {
+  service: ThinkethService;
+  config: ThinkethConfig;
+  supabase?: SupabaseBackend | undefined;
+  playground?: PlaygroundService;
+  discovery?: DiscoveryRunner;
+}) {
+  const { service, config, supabase, playground, discovery } = deps;
   const requireAuth = env("THINKETH_REQUIRE_AUTH") === "true";
   const app = new Hono<Vars>();
 
@@ -88,21 +102,47 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   app.use("*", requireAppKey(env("THINKETH_APP_KEY")));
 
   /**
-   * User resolution:
-   *  1. Supabase access token (Authorization: Bearer) when Supabase is configured
-   *  2. X-Thinketh-User header (x-thinketh-user-id also accepted)
-   *  3. the demo persona
+   * Identity. A header is never proof of who someone is:
+   *  1. A Supabase access token (Authorization: Bearer) -> the verified auth user ("account").
+   *     A token that fails verification is rejected, never downgraded to another identity.
+   *  2. x-thinketh-user-id naming a seeded demo persona (demo-user, nadani) -> that persona ("demo"),
+   *     while THINKETH_DEMO_IDENTITIES is on. The personas are explicit, seeded and resettable.
+   *  3. Any other x-thinketh-user-id -> only with THINKETH_TRUST_USER_HEADER (development, "dev").
+   *  4. Nothing -> the demo persona while demo identities are on; otherwise sign-in is required.
+   * The shared app key is a gate against scanners, not a user credential, and is never used here.
    */
   app.use("*", async (c, next) => {
-    let userId: string | undefined;
-    const auth = c.req.header("authorization");
-    const token = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
-    if (token && supabase && token !== config.supabase.anonKey) {
-      userId = await supabase.verifyUser(token).catch(() => undefined);
-      if (!userId && requireAuth) throw new UnauthorizedError("Invalid or expired session");
+    if (c.req.path.replace(/^\/api(?=\/)/, "") === "/health") {
+      c.set("userId", config.demoUserId);
+      c.set("identityKind", "demo");
+      return next();
     }
-    if (!userId && requireAuth && c.req.path !== "/health") throw new UnauthorizedError("Sign in required");
-    c.set("userId", userId ?? c.req.header("x-thinketh-user") ?? c.req.header("x-thinketh-user-id") ?? config.demoUserId);
+    const auth = c.req.header("authorization");
+    const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : undefined;
+    const claimed = c.req.header("x-thinketh-user") ?? c.req.header("x-thinketh-user-id");
+    let userId: string | undefined;
+    let kind: IdentityKind = "demo";
+    if (token && token !== config.supabase.anonKey) {
+      if (!supabase) throw new UnauthorizedError("This server can't verify sign-ins.");
+      userId = await supabase.verifyUser(token).catch(() => undefined);
+      if (!userId) throw new UnauthorizedError("Your session has expired. Sign in again.");
+      kind = "account";
+    } else if (requireAuth) {
+      throw new UnauthorizedError("Sign in required");
+    } else if (claimed) {
+      if (config.identity.demoIdentities && service.isDemoIdentity(claimed)) userId = claimed;
+      else if (config.identity.trustUserHeader && /^[\w.@:-]{1,64}$/.test(claimed)) {
+        userId = claimed;
+        kind = "dev";
+      } else throw new UnauthorizedError("Sign in to use your own Mind.");
+    } else if (config.identity.demoIdentities) {
+      userId = config.demoUserId;
+    } else {
+      throw new UnauthorizedError("Sign in required");
+    }
+    c.set("userId", userId);
+    c.set("identityKind", kind);
+    await service.prepareUser(userId);
     await next();
   });
 
@@ -115,6 +155,14 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   });
 
   app.get("/config", async (c) => c.json(AppConfigResponseSchema.parse({ flags: await service.featureFlags() })));
+
+  // Learner profile: who this is and how they want to learn. Preferences, never evidence.
+  app.get("/profile", async (c) => c.json(ProfileResponseSchema.parse(await service.profileResponse(c.get("userId"), c.get("identityKind")))));
+  app.put("/profile", async (c) => {
+    const input = await body(c, ProfileUpdateRequestSchema);
+    await service.saveProfile(c.get("userId"), input);
+    return c.json(ProfileResponseSchema.parse(await service.profileResponse(c.get("userId"), c.get("identityKind"))));
+  });
 
   app.get("/brief/today", async (c) => c.json(BriefResponseSchema.parse(await service.brief(c.get("userId")))));
 
@@ -137,7 +185,11 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   app.post("/diagnostics/:id/answer", async (c) => {
     const { answer } = await body(c, DiagnosticAnswerRequestSchema);
     if (answer.length > MAX_ANSWER_CHARS) throw new BadRequestError(`answer: keep it under ${MAX_ANSWER_CHARS} characters`);
-    return c.json(DiagnosticAnswerResponseSchema.parse(await service.answerDiagnostic(c.get("userId"), c.req.param("id"), answer)));
+    // A retried submit carries the same Idempotency-Key and gets the recorded result, not a second update.
+    const key = c.req.header("idempotency-key");
+    if (key !== undefined && !IDEMPOTENCY_KEY.test(key)) throw new BadRequestError("Idempotency-Key: 8-128 letters, digits or - _ : .");
+    const operationId = key ? `answer:${c.req.param("id")}:${key}` : undefined;
+    return c.json(DiagnosticAnswerResponseSchema.parse(await service.answerDiagnostic(c.get("userId"), c.req.param("id"), answer, operationId ? { operationId } : {})));
   });
 
   app.get("/knowledge", async (c) => c.json(KnowledgeResponseSchema.parse(await service.knowledge(c.get("userId")))));
@@ -164,7 +216,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
   });
 
   // Learning Queue: save a URL to learn from. Reading runs in the background; poll GET /resources/:id.
-  app.get("/resources", (c) => c.json(ResourceListResponseSchema.parse({ resources: service.listResources(c.get("userId")) })));
+  app.get("/resources", async (c) => c.json(ResourceListResponseSchema.parse({ resources: await service.listResources(c.get("userId")) })));
 
   app.post("/resources", async (c) => {
     const { url } = await body(c, AddResourceRequestSchema);
@@ -172,7 +224,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     return c.json(ResourceSchema.parse(await service.addResource(c.get("userId"), url)));
   });
 
-  app.get("/resources/:id", (c) => c.json(ResourceSchema.parse(service.getResource(c.get("userId"), c.req.param("id")))));
+  app.get("/resources/:id", async (c) => c.json(ResourceSchema.parse(await service.getResource(c.get("userId"), c.req.param("id")))));
 
   app.post("/resources/:id/teach", async (c) =>
     c.json(TeachDeltaResponseSchema.parse(await service.teachResource(c.get("userId"), c.req.param("id")))),
@@ -185,7 +237,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     const room = (r: unknown) => PlaygroundRoomSchema.parse(r);
     app.post("/playground/rooms", async (c) => {
       const { displayName } = await body(c, CreateRoomRequestSchema);
-      return c.json(room(playground.create(c.get("userId"), displayName)));
+      return c.json(room(await playground.create(c.get("userId"), displayName)));
     });
     app.post("/playground/join", async (c) => {
       const { code, displayName } = await body(c, JoinRoomRequestSchema);
@@ -199,8 +251,8 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
       return c.json(room(await playground.conduct(c.req.param("id"), c.get("userId"), intent)));
     });
     app.post("/playground/rooms/:id/explain", async (c) => {
-      const { text, asUserId } = await body(c, RoomExplainRequestSchema);
-      return c.json(room(await playground.explain(c.req.param("id"), c.get("userId"), text, asUserId)));
+      const { text, asUserId, source } = await body(c, RoomExplainRequestSchema);
+      return c.json(room(await playground.explain(c.req.param("id"), c.get("userId"), text, asUserId, source)));
     });
     app.post("/playground/rooms/:id/answer", async (c) => {
       const { answer, asUserId } = await body(c, RoomAnswerRequestSchema);
@@ -211,11 +263,16 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
       const { url } = await body(c, RoomResourceRequestSchema);
       return c.json(room(await playground.resource(c.req.param("id"), c.get("userId"), url)));
     });
-    app.post("/playground/rooms/:id/leave", (c) => c.json(room(playground.leave(c.req.param("id"), c.get("userId")))));
+    app.post("/playground/rooms/:id/share", async (c) => {
+      const { savedSources, asUserId } = await body(c, RoomShareRequestSchema);
+      return c.json(room(await playground.share(c.req.param("id"), c.get("userId"), { savedSources }, asUserId)));
+    });
+    app.post("/playground/rooms/:id/leave", async (c) => c.json(room(await playground.leave(c.req.param("id"), c.get("userId")))));
   }
 
   app.post("/demo/reset", async (c) => {
     if (!config.allowReset) return c.json({ error: { code: "forbidden", message: "Reset disabled" } }, 403);
+    // Only a seeded demo persona can be reset; a real account's history is never deleted here.
     await service.reset(c.get("userId"));
     return c.json({ ok: true });
   });
@@ -229,6 +286,19 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
     return c.json({ development: await service.ingest(input) });
   });
 
+  // Discovery: run the bounded pipeline now (idempotent; a run already in progress is reported, not doubled).
+  app.post("/admin/discovery/run", async (c) => {
+    const adminToken = env("THINKETH_ADMIN_TOKEN");
+    if (!adminToken || !safeEqual(c.req.header("x-thinketh-admin-token"), adminToken)) {
+      return c.json({ error: { code: "forbidden", message: "Admin token required" } }, 403);
+    }
+    if (!discovery) return c.json({ error: { code: "not_found", message: "Discovery is not configured" } }, 404);
+    return c.json(await discovery.run("admin"));
+  });
+
+  // The latest discovery runs, for tracing a brief back to what was read and why items were filtered.
+  app.get("/discovery/runs", async (c) => c.json({ runs: discovery ? await discovery.recentRuns(5) : [] }));
+
   app.notFound((c) => c.json({ error: { code: "not_found", message: `No route for ${c.req.method} ${c.req.path}` } }, 404));
 
   app.onError((err, c) => {
@@ -237,6 +307,7 @@ export function createApp(deps: { service: ThinkethService; config: ThinkethConf
       return c.json({ error: { code: "bad_request", message: err.message } }, 400);
     }
     if (err instanceof ForbiddenError) return c.json({ error: { code: "forbidden", message: err.message } }, 403);
+    if (err instanceof ConflictError) return c.json({ error: { code: "conflict", message: err.message } }, 409);
     if (err instanceof UnauthorizedError) return c.json({ error: { code: "unauthorized", message: err.message } }, 401);
     logEvent("api.error", { path: c.req.path, error: err instanceof Error ? (err.stack ?? err.message) : String(err) }, "error");
     // Never expose a stack trace to the client (or to judges).

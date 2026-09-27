@@ -10,7 +10,9 @@ import { adapterHealth } from "../adapters/guard.ts";
 import { createThinketh } from "../index.ts";
 import { logEvent } from "../log.ts";
 
-const { app, config } = createThinketh();
+const { app, config, discovery } = createThinketh();
+// Opt-in: THINKETH_DISCOVERY_EVERY_MINUTES > 0 runs the bounded discovery pipeline on this process.
+discovery.schedule(config.discovery.everyMinutes);
 const root = new Hono().route("/api", app).route("/", app);
 
 serve({ fetch: root.fetch, port: config.port, hostname: "0.0.0.0" }, (info) => {

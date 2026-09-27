@@ -22,15 +22,18 @@ export class LocalMemory implements MemoryProvider {
   readonly name = "local" as const;
   private readonly items = new Map<string, MemoryItem[]>();
   private readonly seed: MemoryItem[];
+  private readonly seededUsers: Set<string>;
 
-  constructor(seed: MemoryItem[]) {
+  /** Seeded memories belong to the demo persona only; everyone else starts with none. */
+  constructor(seed: MemoryItem[], seededUsers: Iterable<string>) {
     this.seed = seed;
+    this.seededUsers = new Set(seededUsers);
   }
 
   private forUser(userId: string): MemoryItem[] {
     let list = this.items.get(userId);
     if (!list) {
-      list = this.seed.map((m) => ({ ...m }));
+      list = this.seededUsers.has(userId) ? this.seed.map((m) => ({ ...m })) : [];
       this.items.set(userId, list);
     }
     return list;
@@ -76,6 +79,8 @@ type BackboardOptions = {
   baseUrl: string;
   /** Use one pre-created assistant (e.g. for the demo persona). */
   assistantId?: string;
+  /** The only user the pinned assistant belongs to; everyone else gets their own assistant. */
+  pinnedUserId?: string;
   /** Optional model for thread messages (Backboard's default otherwise), e.g. provider "anthropic". */
   llmProvider?: string;
   modelName?: string;
@@ -140,7 +145,8 @@ export class BackboardMemory implements MemoryProvider {
   }
 
   async assistantFor(userId: string): Promise<string> {
-    if (this.opts.assistantId) return this.opts.assistantId;
+    // The pinned assistant holds the demo persona's memories: never hand it to anyone else.
+    if (this.opts.assistantId && (!this.opts.pinnedUserId || userId === this.opts.pinnedUserId)) return this.opts.assistantId;
     const cached = this.assistants.get(userId) ?? (await this.opts.lookupAssistant?.(userId));
     if (cached) {
       this.assistants.set(userId, cached);

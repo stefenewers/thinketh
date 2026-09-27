@@ -29,6 +29,34 @@ export function loadConfig() {
     /** Time zone for the brief's calendar date (HackGT is in Atlanta). */
     timeZone: env("THINKETH_TZ") ?? "America/New_York",
     allowReset: flag("THINKETH_ALLOW_RESET", true),
+    /**
+     * Durable app state on this host (resources, rooms, profiles, discovery runs), mirrored to
+     * MongoDB Atlas when MONGODB_URI is set. "off" keeps it in memory (tests).
+     */
+    dataDir: env("THINKETH_DATA_DIR") === "off" ? undefined : (env("THINKETH_DATA_DIR") ?? ".thinketh-data"),
+    identity: {
+      /**
+       * Seeded demo personas (demo-user, nadani) may be selected with the x-thinketh-user-id header
+       * and are used when a request carries no identity. Off: every request needs a verified session.
+       */
+      demoIdentities: flag("THINKETH_DEMO_IDENTITIES", true),
+      /**
+       * DEVELOPMENT ONLY: accept any x-thinketh-user-id as the identity. Never enable on a shared
+       * server: a header is not proof of who someone is.
+       */
+      trustUserHeader: flag("THINKETH_TRUST_USER_HEADER", false),
+    },
+    discovery: {
+      /** In-process scheduler; 0 = off (run `npm run discover` or POST /admin/discovery/run). */
+      everyMinutes: Number(env("THINKETH_DISCOVERY_EVERY_MINUTES") ?? 0),
+      maxItemsPerSource: Number(env("THINKETH_DISCOVERY_ITEMS_PER_SOURCE") ?? 8),
+      /** Claude normalizations per run: the cost bound. */
+      maxDevelopments: Number(env("THINKETH_DISCOVERY_MAX_DEVELOPMENTS") ?? 4),
+      /** Items published before this are filtered as outdated. */
+      maxAgeDays: Number(env("THINKETH_DISCOVERY_MAX_AGE_DAYS") ?? 21),
+      /** Whole-run wall-clock budget. */
+      budgetMs: Number(env("THINKETH_DISCOVERY_BUDGET_MS") ?? 180_000),
+    },
     /** Claude phrasing of deterministic delta output. Off => deterministic text only. */
     claudeDeltaPhrasing: flag("THINKETH_CLAUDE_DELTA", true),
     anthropic: {
