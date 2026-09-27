@@ -89,7 +89,7 @@ Grokbot never sees:
 
 ### Mocked tests (no network)
 
-- `packages/intelligence/test/challenge.test.ts`: 20 tests. They cover:
+- `packages/intelligence/test/challenge.test.ts`: 19 tests. They cover:
   - the outcome rule;
   - no clear issue;
   - an overbroad takeaway that gets revised;
