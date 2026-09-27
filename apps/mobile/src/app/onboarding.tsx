@@ -116,7 +116,7 @@ function OnboardingForm({ start, personal, fromDevice }: { start: LearnerProfile
               <SetupHeader title="Let's learn about you" note="This helps Thinketh personalize what it reads for you and how it thinks with you." />
               {fromDevice ? (
                 <T variant="support" style={{ marginTop: space.m }}>
-                  Your earlier answers from this phone are filled in. They're saved to your account only when you finish.
+                  Your earlier answers from this phone are filled in. They&apos;re saved to your account only when you finish.
                 </T>
               ) : null}
               <ListCard style={styles.list}>
