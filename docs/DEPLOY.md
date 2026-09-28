@@ -1,6 +1,6 @@
 # Run the public demo API
 
-The demo API is the **Node server** (`packages/intelligence/src/server/node.ts`), running as one persistent process and exposed through a Cloudflare quick tunnel. It is **not** the Supabase Edge Function. Stefen's `docs/NADANI-ACTION-ITEMS.md` has the verification (Tiger, Mongo, Backboard, Supabase live; golden loop 23/23; answer ~590 ms).
+The demo API is the **Node server** (`packages/intelligence/src/server/node.ts`), running as one persistent process and exposed through a Cloudflare quick tunnel. It is **not** the Supabase Edge Function.
 
 ## Start it
 

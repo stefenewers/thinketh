@@ -46,7 +46,7 @@ export function loadConfig() {
        */
       trustUserHeader: flag("THINKETH_TRUST_USER_HEADER", false),
       /**
-       * Rehearsal clones of the demo persona (e.g. "audit-" for scripts/demo-audit): ids with this
+       * Rehearsal clones of the demo persona (e.g. "audit-" for rehearsal runs): ids with this
        * prefix get the demo persona's seeded Mind with their own isolated, resettable history.
        * Unset by default.
        */

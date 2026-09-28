@@ -1,7 +1,7 @@
 /**
  * Mindprint layout: a deterministic, semantic composition of a knowledge graph.
  *
- * Pipeline (see docs/PLAYGROUND-PLAN.md):
+ * Pipeline:
  *   clusters (from real edges) -> stable cluster anchors -> focal gravity ->
  *   constrained node placement (bounded relaxation, run once, never on screen) ->
  *   label placement (measured boxes, 8 anchors, greedy by priority) ->

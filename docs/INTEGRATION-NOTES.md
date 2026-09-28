@@ -66,7 +66,7 @@ Branch `stefen-earn-the-promise`. Contract changes are additive (commit `5e20ee0
 - `Authorization: Bearer <Supabase access token>` → the verified auth user id (`kind: "account"`). A token that fails verification is **401**, never downgraded.
 - `x-thinketh-user-id` selects only a **seeded demo persona** (`demo-user`, `nadani`) while `THINKETH_DEMO_IDENTITIES` is on (default). Any other id is **401** unless `THINKETH_TRUST_USER_HEADER=true` (development only).
 - No identity → `demo-user` (demo identities on), so the current app and the golden check keep working unchanged.
-- `THINKETH_DEMO_ALIAS_PREFIX` (e.g. `audit-`): rehearsal clones of the demo persona with isolated history. `scripts/demo-audit/preflight.mjs` sets it.
+- `THINKETH_DEMO_ALIAS_PREFIX` (e.g. `audit-`): rehearsal clones of the demo persona with isolated history (used by rehearsal runs during HackGT).
 - `POST /demo/reset` resets **only** seeded personas and aliases; any other identity gets 403.
 
 ### New users start empty

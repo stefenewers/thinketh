@@ -60,7 +60,6 @@ npm --workspace mobile run check:golden   # the golden loop against a running AP
 ## Docs
 
 - [docs/PLAYGROUND.md](docs/PLAYGROUND.md): Playground architecture, the collaborative delta, Muse's boundary, evidence and realtime
-- [docs/PLAYGROUND-REPORT.md](docs/PLAYGROUND-REPORT.md): this sprint's deliverable report
 - [docs/INTEGRATION-NOTES.md](docs/INTEGRATION-NOTES.md): contracts and backend behaviours the app depends on
 - [docs/DEPLOY.md](docs/DEPLOY.md): running the public demo API
 - [docs/PROVENANCE.md](docs/PROVENANCE.md): where every claim on screen comes from

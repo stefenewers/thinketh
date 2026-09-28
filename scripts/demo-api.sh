@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the public demo API: the Node/Hono server plus a Cloudflare quick tunnel.
 # Supabase Edge can't hold Thinketh's state (instances recycle, Tiger TLS fails there),
-# so the demo runs on one persistent Node process. See docs/NADANI-ACTION-ITEMS.md.
+# so the demo runs on one persistent Node process. See docs/DEPLOY.md.
 #
 #   brew install cloudflared      (once)
 #   ./scripts/demo-api.sh         (Ctrl-C stops both)
